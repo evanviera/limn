@@ -1,4 +1,6 @@
 import { useEffect, useMemo, useRef, useState } from "react";
+import type { MouseEvent as ReactMouseEvent } from "react";
+import type { PointerEvent as ReactPointerEvent } from "react";
 import { listen } from "./ipc";
 import {
   addActivity,
@@ -41,7 +43,6 @@ export default function App() {
   const [activeBoardId, setActiveBoardId] = useState("");
   const [view, setView] = useState<View>("board");
   const [selectedCardId, setSelectedCardId] = useState<string | null>(null);
-  const [draggingCardId, setDraggingCardId] = useState<string | null>(null);
   const [error, setError] = useState("");
   const [notice, setNotice] = useState("");
   const [isLoading, setIsLoading] = useState(true);
@@ -256,18 +257,27 @@ export default function App() {
   }
 
   async function archiveCard(card: Card) {
-    const archived = addActivity({ ...card, archived: true }, "archived", "Archived card");
-    await persistCard(archived, card);
-    setSelectedCardId(null);
+    try {
+      const archived = addActivity({ ...card, archived: true }, "archived", "Archived card");
+      await persistCard(archived, card);
+      setSelectedCardId(null);
+    } catch (reason) {
+      setError(`Archive failed: ${String(reason)}`);
+    }
   }
 
   async function removeCard(card: Card) {
     if (!workspacePath || !window.confirm(`Delete card "${card.title}"? This removes the card file from disk.`)) {
       return;
     }
-    await deleteCard(workspacePath, card);
-    setCards((current) => current.filter((item) => item.id !== card.id));
-    setSelectedCardId(null);
+
+    try {
+      await deleteCard(workspacePath, card);
+      setCards((current) => current.filter((item) => item.id !== card.id));
+      setSelectedCardId(null);
+    } catch (reason) {
+      setError(`Delete failed: ${String(reason)}`);
+    }
   }
 
   async function moveCard(cardId: string, listId: string) {
@@ -277,11 +287,15 @@ export default function App() {
     }
     const list = activeBoard.lists.find((item) => item.id === listId);
     const previousList = activeBoard.lists.find((item) => item.id === card.listId);
-    const moved = addActivity({ ...card, listId }, "moved", `Moved from ${previousList?.name ?? "Unknown"} to ${list?.name ?? "Unknown"}`);
-    const result = await persistCard(moved, card);
+    try {
+      const moved = addActivity({ ...card, listId }, "moved", `Moved from ${previousList?.name ?? "Unknown"} to ${list?.name ?? "Unknown"}`);
+      const result = await persistCard(moved, card);
 
-    if (result && !result.conflict && list?.name.trim().toLowerCase() === "done") {
-      await sendSlack(`➡️ Card moved to Done: ${moved.title}\nBoard: ${activeBoard.name}`);
+      if (result && !result.conflict && list?.name.trim().toLowerCase() === "done") {
+        await sendSlack(`➡️ Card moved to Done: ${moved.title}\nBoard: ${activeBoard.name}`);
+      }
+    } catch (reason) {
+      setError(`Move failed: ${String(reason)}`);
     }
   }
 
@@ -457,8 +471,6 @@ export default function App() {
             onAddCard={addCard}
             onMoveCard={moveCard}
             onOpenCard={setSelectedCardId}
-            draggingCardId={draggingCardId}
-            onDragCard={setDraggingCardId}
           />
         )}
         {view === "board" && !activeBoard && (
@@ -514,11 +526,216 @@ interface BoardViewProps {
   onAddCard: (listId: string) => Promise<void>;
   onMoveCard: (cardId: string, listId: string) => Promise<void>;
   onOpenCard: (cardId: string) => void;
-  draggingCardId: string | null;
-  onDragCard: (cardId: string | null) => void;
 }
 
 function BoardView(props: BoardViewProps) {
+  type DragState = {
+    cardId: string;
+    startX: number;
+    startY: number;
+    didMove: boolean;
+    offsetX: number;
+    offsetY: number;
+    width: number;
+    height: number;
+  };
+
+  const pointerDragRef = useRef<{
+    pointerId: number;
+    state: DragState;
+  } | null>(null);
+  const mouseDragRef = useRef<DragState | null>(null);
+  const [dragPreview, setDragPreview] = useState<{
+    cardId: string;
+    left: number;
+    top: number;
+    width: number;
+    height: number;
+  } | null>(null);
+  const mouseDragCleanupRef = useRef<(() => void) | null>(null);
+  const suppressCardClickRef = useRef<string | null>(null);
+  const dragThreshold = 6;
+
+  useEffect(
+    () => () => {
+      mouseDragCleanupRef.current?.();
+      document.body.classList.remove("is-card-dragging");
+    },
+    []
+  );
+
+  function createDragState(element: HTMLElement, cardId: string, clientX: number, clientY: number): DragState {
+    const rect = element.getBoundingClientRect();
+    return {
+      cardId,
+      startX: clientX,
+      startY: clientY,
+      didMove: false,
+      offsetX: clientX - rect.left,
+      offsetY: clientY - rect.top,
+      width: rect.width,
+      height: rect.height
+    };
+  }
+
+  function updateDragPreview(drag: DragState, clientX: number, clientY: number) {
+    document.body.classList.add("is-card-dragging");
+    setDragPreview({
+      cardId: drag.cardId,
+      left: clientX - drag.offsetX,
+      top: clientY - drag.offsetY,
+      width: drag.width,
+      height: drag.height
+    });
+  }
+
+  function clearDragPreview() {
+    document.body.classList.remove("is-card-dragging");
+    setDragPreview(null);
+  }
+
+  function dropCardAtPoint(cardId: string, clientX: number, clientY: number) {
+    suppressCardClickRef.current = cardId;
+    window.setTimeout(() => {
+      if (suppressCardClickRef.current === cardId) {
+        suppressCardClickRef.current = null;
+      }
+    }, 0);
+    clearDragPreview();
+
+    const dropTarget = document.elementFromPoint(clientX, clientY)?.closest<HTMLElement>("[data-list-id]");
+    const listId = dropTarget?.dataset.listId;
+    if (listId) {
+      void props.onMoveCard(cardId, listId);
+    }
+  }
+
+  function beginPointerDrag(event: ReactPointerEvent<HTMLElement>, cardId: string) {
+    if (event.pointerType === "mouse") {
+      return;
+    }
+
+    if (event.button !== 0) {
+      return;
+    }
+
+    event.preventDefault();
+    pointerDragRef.current = {
+      pointerId: event.pointerId,
+      state: createDragState(event.currentTarget, cardId, event.clientX, event.clientY)
+    };
+    event.currentTarget.setPointerCapture(event.pointerId);
+  }
+
+  function updatePointerDrag(event: ReactPointerEvent<HTMLElement>) {
+    const drag = pointerDragRef.current;
+    if (!drag || drag.pointerId !== event.pointerId) {
+      return;
+    }
+
+    const moved = Math.hypot(event.clientX - drag.state.startX, event.clientY - drag.state.startY) >= dragThreshold;
+    if (!drag.state.didMove && moved) {
+      drag.state.didMove = true;
+    }
+
+    if (drag.state.didMove) {
+      event.preventDefault();
+      updateDragPreview(drag.state, event.clientX, event.clientY);
+    }
+  }
+
+  function finishPointerDrag(event: ReactPointerEvent<HTMLElement>) {
+    const drag = pointerDragRef.current;
+    if (!drag || drag.pointerId !== event.pointerId) {
+      return;
+    }
+
+    pointerDragRef.current = null;
+    if (event.currentTarget.hasPointerCapture(event.pointerId)) {
+      event.currentTarget.releasePointerCapture(event.pointerId);
+    }
+
+    if (!drag.state.didMove) {
+      clearDragPreview();
+      return;
+    }
+
+    event.preventDefault();
+    event.stopPropagation();
+    dropCardAtPoint(drag.state.cardId, event.clientX, event.clientY);
+  }
+
+  function cancelPointerDrag(event: ReactPointerEvent<HTMLElement>) {
+    const drag = pointerDragRef.current;
+    if (!drag || drag.pointerId !== event.pointerId) {
+      return;
+    }
+
+    pointerDragRef.current = null;
+    clearDragPreview();
+  }
+
+  function beginMouseDrag(event: ReactMouseEvent<HTMLElement>, cardId: string) {
+    if (event.button !== 0 || pointerDragRef.current) {
+      return;
+    }
+
+    event.preventDefault();
+    mouseDragCleanupRef.current?.();
+    mouseDragRef.current = createDragState(event.currentTarget, cardId, event.clientX, event.clientY);
+
+    const handleMouseMove = (nativeEvent: MouseEvent) => {
+      const drag = mouseDragRef.current;
+      if (!drag) {
+        return;
+      }
+
+      const moved = Math.hypot(nativeEvent.clientX - drag.startX, nativeEvent.clientY - drag.startY) >= dragThreshold;
+      if (!drag.didMove && moved) {
+        drag.didMove = true;
+      }
+
+      if (drag.didMove) {
+        nativeEvent.preventDefault();
+        updateDragPreview(drag, nativeEvent.clientX, nativeEvent.clientY);
+      }
+    };
+
+    const handleMouseUp = (nativeEvent: MouseEvent) => {
+      mouseDragCleanupRef.current?.();
+      const drag = mouseDragRef.current;
+      mouseDragRef.current = null;
+      if (!drag?.didMove) {
+        clearDragPreview();
+        return;
+      }
+
+      nativeEvent.preventDefault();
+      dropCardAtPoint(drag.cardId, nativeEvent.clientX, nativeEvent.clientY);
+    };
+
+    const cleanup = () => {
+      window.removeEventListener("mousemove", handleMouseMove);
+      window.removeEventListener("mouseup", handleMouseUp);
+      mouseDragCleanupRef.current = null;
+    };
+
+    window.addEventListener("mousemove", handleMouseMove);
+    window.addEventListener("mouseup", handleMouseUp);
+    mouseDragCleanupRef.current = cleanup;
+  }
+
+  function openCard(cardId: string) {
+    if (suppressCardClickRef.current === cardId) {
+      suppressCardClickRef.current = null;
+      return;
+    }
+
+    props.onOpenCard(cardId);
+  }
+
+  const dragPreviewCard = dragPreview ? props.cards.find((card) => card.id === dragPreview.cardId) : null;
+
   return (
     <section className="board-view">
       <header className="content-header">
@@ -547,21 +764,6 @@ function BoardView(props: BoardViewProps) {
               data-list-id={list.id}
               data-testid={`list-${list.id}`}
               key={list.id}
-              onDragOver={(event) => event.preventDefault()}
-              onDrop={(event) => {
-                event.preventDefault();
-                const cardId = event.dataTransfer.getData("text/plain");
-                if (cardId) {
-                  void props.onMoveCard(cardId, list.id);
-                }
-                props.onDragCard(null);
-              }}
-              onPointerUp={() => {
-                if (props.draggingCardId) {
-                  void props.onMoveCard(props.draggingCardId, list.id);
-                  props.onDragCard(null);
-                }
-              }}
             >
               <header className="column-header">
                 <h2>{list.name}</h2>
@@ -577,31 +779,18 @@ function BoardView(props: BoardViewProps) {
                 {listCards.length === 0 && <p className="empty-list">Drop cards here.</p>}
                 {listCards.map((card) => (
                   <article
-                    className={`task-card ${card.completed ? "completed" : ""}`}
+                    className={`task-card ${card.completed ? "completed" : ""} ${dragPreview?.cardId === card.id ? "drag-source" : ""}`}
                     data-card-id={card.id}
                     data-testid={`card-${card.id}`}
-                    draggable
                     key={card.id}
-                    onClick={() => props.onOpenCard(card.id)}
-                    onDragEnd={() => props.onDragCard(null)}
-                    onDragStart={(event) => {
-                      props.onDragCard(card.id);
-                      event.dataTransfer.setData("text/plain", card.id);
-                    }}
-                    onPointerDown={() => props.onDragCard(card.id)}
+                    onClick={() => openCard(card.id)}
+                    onPointerCancel={cancelPointerDrag}
+                    onPointerDown={(event) => beginPointerDrag(event, card.id)}
+                    onPointerMove={updatePointerDrag}
+                    onPointerUp={finishPointerDrag}
+                    onMouseDown={(event) => beginMouseDrag(event, card.id)}
                   >
-                    <h3>{card.title}</h3>
-                    {card.labels.length > 0 && (
-                      <div className="label-row">
-                        {card.labels.map((label) => (
-                          <span key={label}>{label}</span>
-                        ))}
-                      </div>
-                    )}
-                    <footer>
-                      <span>{card.due || "No due date"}</span>
-                      <MemberDots members={props.members.filter((member) => card.assignees.includes(member.id))} />
-                    </footer>
+                    <TaskCardBody card={card} members={props.members} />
                   </article>
                 ))}
               </div>
@@ -612,7 +801,39 @@ function BoardView(props: BoardViewProps) {
           );
         })}
       </div>
+      {dragPreview && dragPreviewCard && (
+        <article
+          className={`task-card drag-preview ${dragPreviewCard.completed ? "completed" : ""}`}
+          data-testid="card-drag-preview"
+          style={{
+            height: dragPreview.height,
+            transform: `translate3d(${dragPreview.left}px, ${dragPreview.top}px, 0)`,
+            width: dragPreview.width
+          }}
+        >
+          <TaskCardBody card={dragPreviewCard} members={props.members} />
+        </article>
+      )}
     </section>
+  );
+}
+
+function TaskCardBody({ card, members }: { card: Card; members: Member[] }) {
+  return (
+    <>
+      <h3>{card.title}</h3>
+      {card.labels.length > 0 && (
+        <div className="label-row">
+          {card.labels.map((label) => (
+            <span key={label}>{label}</span>
+          ))}
+        </div>
+      )}
+      <footer>
+        <span>{card.due || "No due date"}</span>
+        <MemberDots members={members.filter((member) => card.assignees.includes(member.id))} />
+      </footer>
+    </>
   );
 }
 

@@ -504,6 +504,8 @@ label {
   border: 1px solid var(--border-soft);
   border-radius: 6px;
   cursor: grab;
+  user-select: none;
+  -webkit-user-select: none;
 }
 
 .task-card:hover {
@@ -513,6 +515,29 @@ label {
 
 .task-card:active {
   cursor: grabbing;
+}
+
+.task-card.drag-source {
+  opacity: 0.38;
+}
+
+.task-card.drag-preview {
+  position: fixed;
+  top: 0;
+  left: 0;
+  z-index: 40;
+  pointer-events: none;
+  cursor: grabbing;
+  background: var(--surface-hover);
+  border-color: var(--accent-border);
+  box-shadow: 0 18px 42px rgba(0, 0, 0, 0.34), 0 0 0 1px var(--accent-border);
+}
+
+body.is-card-dragging,
+body.is-card-dragging * {
+  cursor: grabbing !important;
+  user-select: none !important;
+  -webkit-user-select: none !important;
 }
 
 .task-card.completed {
