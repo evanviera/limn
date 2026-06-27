@@ -54,7 +54,9 @@ export default function App() {
   const [selectedCardId, setSelectedCardId] = useState<string | null>(null);
   const [error, setError] = useState("");
   const [notice, setNotice] = useState("");
+  const [noticeKind, setNoticeKind] = useState<"info" | "warning">("info");
   const [isLoading, setIsLoading] = useState(true);
+  const [opening, setOpening] = useState(false);
   const [textDialog, setTextDialog] = useState<TextDialogState | null>(null);
   const [confirmDialog, setConfirmDialog] = useState<ConfirmDialogState | null>(null);
 
@@ -101,17 +103,23 @@ export default function App() {
     }
 
     setError("");
-    const data = await loadWorkspace(selectedPath);
-    setWorkspacePath(selectedPath);
-    settingsRef.current = data.settings;
-    setSettings(data.settings);
-    setMembers(data.membersFile.members);
-    setBoards(data.boards);
-    setCards(data.cards);
-    setActiveBoardId((current) => selectActiveBoardId(current, data.boards));
-    setSelectedCardId((current) => (current && data.cards.some((card) => card.id === current) ? current : null));
-    setNotice(data.diagnostics.length > 0 ? data.diagnostics.join(" ") : "");
-    await saveLastWorkspace(selectedPath);
+    setOpening(true);
+    try {
+      const data = await loadWorkspace(selectedPath);
+      setWorkspacePath(selectedPath);
+      settingsRef.current = data.settings;
+      setSettings(data.settings);
+      setMembers(data.membersFile.members);
+      setBoards(data.boards);
+      setCards(data.cards);
+      setActiveBoardId((current) => selectActiveBoardId(current, data.boards));
+      setSelectedCardId((current) => (current && data.cards.some((card) => card.id === current) ? current : null));
+      setNotice(data.diagnostics.length > 0 ? data.diagnostics.join(" ") : "");
+      setNoticeKind(data.diagnostics.length > 0 ? "warning" : "info");
+      await saveLastWorkspace(selectedPath);
+    } finally {
+      setOpening(false);
+    }
   }
 
   async function refreshWorkspace(showNotice = true) {
@@ -128,8 +136,10 @@ export default function App() {
     setSelectedCardId((current) => (current && data.cards.some((card) => card.id === current) ? current : null));
     if (showNotice) {
       setNotice(data.diagnostics.length > 0 ? `Workspace reloaded with warnings. ${data.diagnostics.join(" ")}` : "Workspace reloaded from disk.");
+      setNoticeKind(data.diagnostics.length > 0 ? "warning" : "info");
     } else if (data.diagnostics.length > 0) {
       setNotice(data.diagnostics.join(" "));
+      setNoticeKind("warning");
     }
   }
 
@@ -150,6 +160,7 @@ export default function App() {
     setCards((current) => upsertById(current, nextCard));
     if (result.conflict) {
       setNotice(`Conflict copy written to ${result.relative_path}. Reloading disk state.`);
+      setNoticeKind("warning");
       await refreshWorkspace(false);
     }
     return result;
@@ -435,7 +446,12 @@ export default function App() {
   }
 
   if (isLoading) {
-    return <div className="center-screen">Opening Limn…</div>;
+    return (
+      <div className="center-screen">
+        <Spinner />
+        Opening Limn…
+      </div>
+    );
   }
 
   if (!workspacePath || !settings) {
@@ -445,8 +461,14 @@ export default function App() {
           <p className="eyebrow">Limn</p>
           <h1>Local-first boards for a small trusted team.</h1>
           <p className="muted">Choose a folder to create or open a workspace. Limn writes boards and cards as readable files.</p>
-          <button className="primary" data-testid="welcome-open-workspace" onClick={() => void openWorkspace()}>
-            Open workspace folder
+          <button className="primary" data-testid="welcome-open-workspace" disabled={opening} onClick={() => void openWorkspace()}>
+            {opening ? (
+              <>
+                <Spinner /> Opening…
+              </>
+            ) : (
+              "Open workspace folder"
+            )}
           </button>
           {error && <p className="error">{error}</p>}
         </section>
@@ -461,13 +483,19 @@ export default function App() {
           <strong>Limn</strong>
           <span>{settings.workspaceName}</span>
         </div>
-        <button className="sidebar-action" data-testid="open-workspace" onClick={() => void openWorkspace()}>
-          Open workspace
+        <button className="sidebar-action" data-testid="open-workspace" disabled={opening} onClick={() => void openWorkspace()}>
+          {opening ? (
+            <>
+              <Spinner /> Opening…
+            </>
+          ) : (
+            "Open workspace"
+          )}
         </button>
         <nav className="board-nav">
           <div className="nav-heading">
             <span>Boards</span>
-            <button title="Create board" data-testid="create-board" onClick={() => void addBoard()}>
+            <button aria-label="Create board" title="Create board" data-testid="create-board" onClick={() => void addBoard()}>
               +
             </button>
           </div>
@@ -498,7 +526,11 @@ export default function App() {
 
       <main className="workspace">
         {(error || notice) && (
-          <div className={error ? "banner error-banner" : "banner"}>
+          <div
+            aria-live={error ? "assertive" : "polite"}
+            className={`banner ${error ? "banner-error" : noticeKind === "warning" ? "banner-warning" : ""}`}
+            role={error ? "alert" : "status"}
+          >
             <span>{error || notice}</span>
             <button
               data-testid="dismiss-banner"
@@ -849,11 +881,20 @@ function BoardView(props: BoardViewProps) {
                 {listCards.length === 0 && <p className="empty-list">Drop cards here.</p>}
                 {listCards.map((card) => (
                   <article
+                    aria-label={`${card.title}${card.completed ? " (completed)" : ""}`}
                     className={`task-card ${card.completed ? "completed" : ""} ${dragPreview?.cardId === card.id ? "drag-source" : ""}`}
                     data-card-id={card.id}
                     data-testid={`card-${card.id}`}
                     key={card.id}
+                    role="button"
+                    tabIndex={0}
                     onClick={() => openCard(card.id)}
+                    onKeyDown={(event) => {
+                      if (event.key === "Enter" || event.key === " ") {
+                        event.preventDefault();
+                        props.onOpenCard(card.id);
+                      }
+                    }}
                     onPointerCancel={cancelPointerDrag}
                     onPointerDown={(event) => beginPointerDrag(event, card.id)}
                     onPointerMove={updatePointerDrag}
@@ -900,7 +941,15 @@ function TaskCardBody({
   const doneCount = card.subtasks.filter((subtask) => subtask.completed).length;
   return (
     <>
-      <h3>{card.title}</h3>
+      <h3>
+        {card.completed && (
+          <>
+            <span className="sr-only">Completed: </span>
+            <span className="done-check" aria-hidden="true">✓ </span>
+          </>
+        )}
+        {card.title}
+      </h3>
       {card.labels.length > 0 && (
         <div className="label-row">
           {card.labels.map((label) => (
@@ -1040,6 +1089,8 @@ function SettingsView({
   onReload: () => Promise<void>;
 }) {
   const [draft, setDraft] = useState(settings);
+  const [reloading, setReloading] = useState(false);
+  const [saving, setSaving] = useState(false);
 
   useEffect(() => setDraft(settings), [settings]);
 
@@ -1050,7 +1101,22 @@ function SettingsView({
           <p className="eyebrow">Workspace</p>
           <h1>Settings</h1>
         </div>
-        <button data-testid="reload-workspace" onClick={() => void onReload()}>Reload from disk</button>
+        <button
+          data-testid="reload-workspace"
+          disabled={reloading}
+          onClick={() => {
+            setReloading(true);
+            void onReload().finally(() => setReloading(false));
+          }}
+        >
+          {reloading ? (
+            <>
+              <Spinner /> Reloading…
+            </>
+          ) : (
+            "Reload from disk"
+          )}
+        </button>
       </header>
       <div className="settings-grid">
         <label>
@@ -1071,8 +1137,22 @@ function SettingsView({
           <input value={workspacePath} readOnly />
         </label>
       </div>
-      <button className="primary" data-testid="save-settings" onClick={() => void onSave(draft)}>
-        Save settings
+      <button
+        className="primary"
+        data-testid="save-settings"
+        disabled={saving}
+        onClick={() => {
+          setSaving(true);
+          void onSave(draft).finally(() => setSaving(false));
+        }}
+      >
+        {saving ? (
+          <>
+            <Spinner /> Saving…
+          </>
+        ) : (
+          "Save settings"
+        )}
       </button>
     </section>
   );
@@ -1096,9 +1176,12 @@ function CardEditor({
   onDelete: (card: Card) => Promise<void>;
 }) {
   const [draft, setDraft] = useState(card);
+  const [saving, setSaving] = useState(false);
+  const editorRef = useRef<HTMLElement>(null);
   const board = boards.find((item) => item.id === draft.boardId) ?? boards[0];
 
   useEffect(() => setDraft(card), [card]);
+  useModalKeys(editorRef, onClose);
 
   function updateAssignee(memberId: string, checked: boolean) {
     setDraft((current) => ({
@@ -1130,10 +1213,17 @@ function CardEditor({
 
   return (
     <div className="modal-backdrop" onMouseDown={onClose}>
-      <aside className="card-editor" onMouseDown={(event) => event.stopPropagation()}>
+      <aside
+        aria-label="Edit card"
+        aria-modal="true"
+        className="card-editor"
+        ref={editorRef}
+        role="dialog"
+        onMouseDown={(event) => event.stopPropagation()}
+      >
         <header>
           <h2>Edit card</h2>
-          <button onClick={onClose}>Close</button>
+          <button disabled={saving} onClick={onClose}>Close</button>
         </header>
         <label>
           Title
@@ -1243,6 +1333,7 @@ function CardEditor({
               />
               {subtask.url.trim() && (
                 <button
+                  aria-label="Open link"
                   className="subtask-open"
                   data-testid={`subtask-${subtask.id}-open`}
                   title="Open link"
@@ -1252,6 +1343,7 @@ function CardEditor({
                 </button>
               )}
               <button
+                aria-label="Remove sub-task"
                 className="subtask-remove"
                 data-testid={`subtask-${subtask.id}-remove`}
                 title="Remove sub-task"
@@ -1278,21 +1370,31 @@ function CardEditor({
         </section>
         <footer>
           <div className="destructive-actions">
-            <button data-testid="archive-card" onClick={() => void onArchive(draft)}>
+            <button data-testid="archive-card" disabled={saving} onClick={() => void onArchive(draft)}>
               Archive
             </button>
-            <button data-testid="delete-card" onClick={() => void onDelete(draft)}>
+            <button data-testid="delete-card" disabled={saving} onClick={() => void onDelete(draft)}>
               Delete
             </button>
           </div>
           <button
             className="primary"
             data-testid="save-card"
+            disabled={saving}
             onClick={() => {
-              void onSave(draft).then(onClose);
+              setSaving(true);
+              void onSave(draft)
+                .then(onClose)
+                .catch(() => setSaving(false));
             }}
           >
-            Save card
+            {saving ? (
+              <>
+                <Spinner /> Saving…
+              </>
+            ) : (
+              "Save card"
+            )}
           </button>
         </footer>
       </aside>
@@ -1325,11 +1427,13 @@ function TextDialog({
 }) {
   const [validation, setValidation] = useState("");
   const inputRef = useRef<HTMLInputElement>(null);
+  const formRef = useRef<HTMLFormElement>(null);
 
   useEffect(() => {
     inputRef.current?.focus();
     inputRef.current?.select();
   }, [dialog.title]);
+  useModalKeys(formRef, onCancel);
 
   return (
     <div className="dialog-backdrop" onMouseDown={onCancel}>
@@ -1337,6 +1441,7 @@ function TextDialog({
         aria-modal="true"
         className="text-dialog"
         noValidate
+        ref={formRef}
         onMouseDown={(event) => event.stopPropagation()}
         onSubmit={(event) => {
           event.preventDefault();
@@ -1392,16 +1497,27 @@ function ConfirmDialog({
   onConfirm: () => Promise<void>;
 }) {
   const confirmRef = useRef<HTMLButtonElement>(null);
+  const cancelRef = useRef<HTMLButtonElement>(null);
+  const dialogRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
-    confirmRef.current?.focus();
-  }, [dialog.title]);
+    // For destructive actions, default focus to Cancel so a reflexive Enter
+    // doesn't immediately confirm; otherwise focus the confirm button.
+    if (dialog.destructive) {
+      cancelRef.current?.focus();
+    } else {
+      confirmRef.current?.focus();
+    }
+  }, [dialog.title, dialog.destructive]);
+  useModalKeys(dialogRef, onCancel);
 
   return (
     <div className="dialog-backdrop" onMouseDown={onCancel}>
       <div
+        aria-describedby="confirm-dialog-message"
         aria-modal="true"
         className="text-dialog"
+        ref={dialogRef}
         onMouseDown={(event) => event.stopPropagation()}
         role="dialog"
       >
@@ -1409,9 +1525,9 @@ function ConfirmDialog({
           <h2>{dialog.title}</h2>
           <button type="button" onClick={onCancel}>Cancel</button>
         </header>
-        <p>{dialog.message}</p>
+        <p id="confirm-dialog-message">{dialog.message}</p>
         <footer>
-          <button type="button" onClick={onCancel}>Cancel</button>
+          <button ref={cancelRef} type="button" onClick={onCancel}>Cancel</button>
           <button
             className={dialog.destructive ? "danger" : "primary"}
             data-testid="confirm-dialog-submit"
@@ -1440,6 +1556,49 @@ function MemberDots({ members }: { members: Member[] }) {
       ))}
     </span>
   );
+}
+
+function Spinner() {
+  return <span className="spinner" aria-hidden="true" />;
+}
+
+function useModalKeys(containerRef: { readonly current: HTMLElement | null }, onClose: () => void) {
+  useEffect(() => {
+    function handleKeyDown(event: KeyboardEvent) {
+      if (event.key === "Escape") {
+        event.preventDefault();
+        onClose();
+        return;
+      }
+      if (event.key !== "Tab") {
+        return;
+      }
+      const node = containerRef.current;
+      if (!node) {
+        return;
+      }
+      const focusable = Array.from(
+        node.querySelectorAll<HTMLElement>(
+          'a[href], button, input, select, textarea, [tabindex]:not([tabindex="-1"])'
+        )
+      ).filter((element) => !element.hasAttribute("disabled") && element.tabIndex !== -1);
+      if (focusable.length === 0) {
+        return;
+      }
+      const first = focusable[0];
+      const last = focusable[focusable.length - 1];
+      const active = document.activeElement;
+      if (event.shiftKey && (active === first || !node.contains(active))) {
+        event.preventDefault();
+        last.focus();
+      } else if (!event.shiftKey && active === last) {
+        event.preventDefault();
+        first.focus();
+      }
+    }
+    document.addEventListener("keydown", handleKeyDown);
+    return () => document.removeEventListener("keydown", handleKeyDown);
+  }, [containerRef, onClose]);
 }
 
 function initials(name: string) {
