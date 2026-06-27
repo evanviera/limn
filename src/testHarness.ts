@@ -1,0 +1,281 @@
+import type { Board, Card, MembersFile, WorkspaceFiles, WorkspaceSettings, WriteResult } from "./types";
+
+type Handler = () => void;
+
+interface HarnessFile {
+  file_name: string;
+  content: string;
+}
+
+interface HarnessSnapshot {
+  settings: WorkspaceSettings;
+  members: MembersFile;
+  boards: HarnessFile[];
+  cards: HarnessFile[];
+  lastWorkspace: string | null;
+  slack: Array<{ webhookUrl: string; message: string }>;
+}
+
+const workspacePath = "/mock/limn-e2e-workspace";
+const now = "2026-06-27T12:00:00.000Z";
+const settings: WorkspaceSettings = {
+  schemaVersion: 1,
+  workspaceName: "limn-e2e-workspace",
+  slackWebhookUrl: "",
+  createdAt: now,
+  updatedAt: now
+};
+
+const members: MembersFile = { schemaVersion: 1, members: [] };
+const boards = new Map<string, string>();
+const cards = new Map<string, string>();
+const listeners = new Map<string, Set<Handler>>();
+const slack: Array<{ webhookUrl: string; message: string }> = [];
+const promptQueue: Array<string | null> = [];
+const confirmQueue: boolean[] = [];
+let lastWorkspace: string | null = null;
+
+if (new URLSearchParams(window.location.search).has("resetLimnE2e")) {
+  sessionStorage.removeItem("limn-e2e-state");
+} else {
+  const saved = sessionStorage.getItem("limn-e2e-state");
+  if (saved) {
+    const restored = JSON.parse(saved) as HarnessSnapshot;
+    Object.assign(settings, restored.settings);
+    members.members = restored.members.members;
+    boards.clear();
+    cards.clear();
+    for (const file of restored.boards) {
+      boards.set(file.file_name, file.content);
+    }
+    for (const file of restored.cards) {
+      cards.set(file.file_name, file.content);
+    }
+    slack.splice(0, slack.length, ...restored.slack);
+    lastWorkspace = restored.lastWorkspace;
+  }
+}
+
+function emit(event: string) {
+  updateDebugState();
+  for (const handler of listeners.get(event) ?? []) {
+    handler();
+  }
+}
+
+function snapshot(): HarnessSnapshot {
+  return {
+    settings: JSON.parse(JSON.stringify(settings)) as WorkspaceSettings,
+    members: JSON.parse(JSON.stringify(members)) as MembersFile,
+    boards: [...boards.entries()].sort().map(([file_name, content]) => ({ file_name, content })),
+    cards: [...cards.entries()].sort().map(([file_name, content]) => ({ file_name, content })),
+    lastWorkspace,
+    slack: [...slack]
+  };
+}
+
+function loadFiles(): WorkspaceFiles {
+  return {
+    settings: `${JSON.stringify(settings, null, 2)}\n`,
+    members: `${JSON.stringify(members, null, 2)}\n`,
+    boards: [...boards.entries()].sort().map(([file_name, content]) => ({ file_name, content })),
+    cards: [...cards.entries()].sort().map(([file_name, content]) => ({ file_name, content })),
+    warnings: []
+  };
+}
+
+function updateDebugState() {
+  sessionStorage.setItem("limn-e2e-state", JSON.stringify(snapshot()));
+  let element = document.getElementById("limn-e2e-snapshot");
+  if (!element) {
+    element = document.createElement("script") as HTMLScriptElement;
+    element.id = "limn-e2e-snapshot";
+    (element as HTMLScriptElement).type = "application/json";
+    document.body.appendChild(element);
+  }
+  element.textContent = JSON.stringify(snapshot());
+}
+
+function fileNameArg(args: Record<string, unknown> | undefined): string {
+  const fileName = args?.fileName;
+  if (typeof fileName !== "string") {
+    throw new Error("Missing fileName");
+  }
+  return fileName;
+}
+
+function contentArg(args: Record<string, unknown> | undefined): string {
+  const content = args?.content;
+  if (typeof content !== "string") {
+    throw new Error("Missing content");
+  }
+  return content;
+}
+
+function updatedAt(content: string): string | null {
+  const match = content.match(/^updatedAt:\s*(.+)$/m);
+  return match?.[1]?.trim().replace(/^"|"$/g, "") ?? null;
+}
+
+window.__LIMN_TEST_IPC__ = {
+  async invoke<T>(command: string, args?: Record<string, unknown>): Promise<T> {
+    switch (command) {
+      case "pick_workspace_folder":
+        return workspacePath as T;
+      case "get_last_workspace":
+        return lastWorkspace as T;
+      case "save_last_workspace":
+        lastWorkspace = typeof args?.path === "string" ? args.path : null;
+        return undefined as T;
+      case "watch_workspace":
+        return undefined as T;
+      case "load_workspace":
+        return loadFiles() as T;
+      case "write_workspace_settings": {
+        Object.assign(settings, JSON.parse(contentArg(args)) as WorkspaceSettings);
+        emit("workspace-changed");
+        return undefined as T;
+      }
+      case "write_members":
+        members.members = (JSON.parse(contentArg(args)) as MembersFile).members;
+        emit("workspace-changed");
+        return undefined as T;
+      case "write_board_file":
+        boards.set(fileNameArg(args), contentArg(args));
+        emit("workspace-changed");
+        return undefined as T;
+      case "delete_board_file":
+        boards.delete(fileNameArg(args));
+        emit("workspace-changed");
+        return undefined as T;
+      case "write_card_file": {
+        const fileName = fileNameArg(args);
+        const content = contentArg(args);
+        const expected = typeof args?.expectedUpdatedAt === "string" ? args.expectedUpdatedAt : undefined;
+        const current = cards.get(fileName);
+        if (expected && current && updatedAt(current) !== expected) {
+          const conflictName = fileName.replace(/\.md$/, `_conflict_${Date.now()}.md`);
+          cards.set(conflictName, content);
+          emit("workspace-changed");
+          return { relative_path: `cards/${conflictName}`, conflict: true } satisfies WriteResult as T;
+        }
+        cards.set(fileName, content);
+        emit("workspace-changed");
+        return { relative_path: `cards/${fileName}`, conflict: false } satisfies WriteResult as T;
+      }
+      case "delete_card_file":
+        cards.delete(fileNameArg(args));
+        emit("workspace-changed");
+        return undefined as T;
+      case "post_slack":
+        if (typeof args?.webhookUrl !== "string" || typeof args?.message !== "string") {
+          throw new Error("Missing Slack arguments");
+        }
+        if (args.webhookUrl.includes("/fail")) {
+          throw new Error("Slack webhook returned 500");
+        }
+        slack.push({ webhookUrl: args.webhookUrl, message: args.message });
+        updateDebugState();
+        return undefined as T;
+      default:
+        throw new Error(`Unhandled test IPC command: ${command}`);
+    }
+  },
+  async listen(event: string, handler: Handler): Promise<Handler> {
+    const handlers = listeners.get(event) ?? new Set<Handler>();
+    handlers.add(handler);
+    listeners.set(event, handlers);
+    return () => handlers.delete(handler);
+  }
+};
+
+window.__LIMN_E2E__ = {
+  snapshot,
+  externalEditBoard(fileName: string, board: Board) {
+    boards.set(fileName, `${JSON.stringify(board, null, 2)}\n`);
+    emit("workspace-changed");
+  },
+  externalEditCard(fileName: string, content: string) {
+    cards.set(fileName, content);
+    emit("workspace-changed");
+  },
+  corruptCard(fileName: string) {
+    cards.set(fileName, "not frontmatter");
+    emit("workspace-changed");
+  },
+  resetSlack() {
+    slack.splice(0, slack.length);
+  }
+};
+
+updateDebugState();
+
+function applyCommand(
+  detail:
+    | { type: "externalEditBoard"; fileName: string; board: Board }
+    | { type: "externalEditCard"; fileName: string; content: string }
+    | { type: "corruptCard"; fileName: string }
+    | { type: "queuePrompt"; value: string | null }
+    | { type: "queueConfirm"; value: boolean }
+    | { type: "resetSlack" }
+) {
+
+  if (!detail) {
+    return;
+  }
+
+  switch (detail.type) {
+    case "externalEditBoard":
+      window.__LIMN_E2E__?.externalEditBoard(detail.fileName, detail.board);
+      break;
+    case "externalEditCard":
+      window.__LIMN_E2E__?.externalEditCard(detail.fileName, detail.content);
+      break;
+    case "corruptCard":
+      window.__LIMN_E2E__?.corruptCard(detail.fileName);
+      break;
+    case "queuePrompt":
+      promptQueue.push(detail.value);
+      break;
+    case "queueConfirm":
+      confirmQueue.push(detail.value);
+      break;
+    case "resetSlack":
+      window.__LIMN_E2E__?.resetSlack();
+      updateDebugState();
+      break;
+  }
+}
+
+function applyHashCommand() {
+  const hash = window.location.hash.replace(/^#/, "");
+  if (!hash.startsWith("limnE2eCommand=")) {
+    return;
+  }
+
+  const raw = decodeURIComponent(hash.slice("limnE2eCommand=".length));
+  applyCommand(JSON.parse(raw) as Parameters<typeof applyCommand>[0]);
+}
+
+document.addEventListener("limn-e2e-command", (event) => {
+  const detail = (event as CustomEvent).detail as Parameters<typeof applyCommand>[0];
+  applyCommand(detail);
+});
+
+window.prompt = () => promptQueue.shift() ?? null;
+window.confirm = () => confirmQueue.shift() ?? true;
+
+window.addEventListener("hashchange", applyHashCommand);
+applyHashCommand();
+
+declare global {
+  interface Window {
+    __LIMN_E2E__?: {
+      snapshot(): HarnessSnapshot;
+      externalEditBoard(fileName: string, board: Board): void;
+      externalEditCard(fileName: string, content: string): void;
+      corruptCard(fileName: string): void;
+      resetSlack(): void;
+    };
+  }
+}

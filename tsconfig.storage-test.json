@@ -1,0 +1,12 @@
+{
+  "extends": "./tsconfig.json",
+  "compilerOptions": {
+    "module": "ESNext",
+    "moduleResolution": "Node",
+    "noEmit": false,
+    "outDir": ".tmp/storage-test",
+    "rootDir": ".",
+    "jsx": "react-jsx"
+  },
+  "include": ["src/storage.ts", "src/types.ts"]
+}
