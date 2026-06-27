@@ -33,6 +33,14 @@ interface TextDialogState {
   onSubmit: (value: string) => Promise<void>;
 }
 
+interface ConfirmDialogState {
+  title: string;
+  message: string;
+  confirmLabel: string;
+  destructive?: boolean;
+  onConfirm: () => Promise<void>;
+}
+
 export default function App() {
   const [workspacePath, setWorkspacePath] = useState("");
   const [settings, setSettings] = useState<WorkspaceSettings | null>(null);
@@ -47,6 +55,7 @@ export default function App() {
   const [notice, setNotice] = useState("");
   const [isLoading, setIsLoading] = useState(true);
   const [textDialog, setTextDialog] = useState<TextDialogState | null>(null);
+  const [confirmDialog, setConfirmDialog] = useState<ConfirmDialogState | null>(null);
 
   const activeBoard = boards.find((board) => board.id === activeBoardId) ?? boards[0] ?? null;
   const selectedCard = cards.find((card) => card.id === selectedCardId) ?? null;
@@ -173,16 +182,23 @@ export default function App() {
   }
 
   async function removeBoard(board: Board) {
-    if (!workspacePath || !window.confirm(`Delete board "${board.name}" and its visible cards?`)) {
+    if (!workspacePath) {
       return;
     }
-
-    const boardCards = cards.filter((card) => card.boardId === board.id);
-    await Promise.all(boardCards.map((card) => deleteCard(workspacePath, card)));
-    await deleteBoard(workspacePath, board.id);
-    setCards((current) => current.filter((card) => card.boardId !== board.id));
-    setBoards((current) => current.filter((item) => item.id !== board.id));
-    setActiveBoardId((current) => (current === board.id ? "" : current));
+    openConfirmDialog({
+      title: "Delete board",
+      message: `Delete board "${board.name}" and its visible cards?`,
+      confirmLabel: "Delete board",
+      destructive: true,
+      onConfirm: async () => {
+        const boardCards = cards.filter((card) => card.boardId === board.id);
+        await Promise.all(boardCards.map((card) => deleteCard(workspacePath, card)));
+        await deleteBoard(workspacePath, board.id);
+        setCards((current) => current.filter((card) => card.boardId !== board.id));
+        setBoards((current) => current.filter((item) => item.id !== board.id));
+        setActiveBoardId((current) => (current === board.id ? "" : current));
+      }
+    });
   }
 
   async function addList() {
@@ -221,21 +237,30 @@ export default function App() {
   }
 
   async function deleteList(list: BoardList) {
-    if (!activeBoard || !window.confirm(`Delete list "${list.name}"? Cards in this list will be archived.`)) {
+    if (!activeBoard) {
       return;
     }
-    const now = timestamp();
-    const nextCards = cards.map((card) =>
-      card.boardId === activeBoard.id && card.listId === list.id
-        ? addActivity({ ...card, archived: true, updatedAt: now }, "archived", `Archived when ${list.name} was deleted`)
-        : card
-    );
-    const changedCards = nextCards.filter((card, index) => card !== cards[index]);
-    await Promise.all(changedCards.map((card) => persistCard(card, cards.find((item) => item.id === card.id))));
-    await persistBoard({
-      ...activeBoard,
-      lists: activeBoard.lists.filter((item) => item.id !== list.id),
-      updatedAt: now
+    const board = activeBoard;
+    openConfirmDialog({
+      title: "Delete list",
+      message: `Delete list "${list.name}"? Cards in this list will be archived.`,
+      confirmLabel: "Delete list",
+      destructive: true,
+      onConfirm: async () => {
+        const now = timestamp();
+        const nextCards = cards.map((card) =>
+          card.boardId === board.id && card.listId === list.id
+            ? addActivity({ ...card, archived: true, updatedAt: now }, "archived", `Archived when ${list.name} was deleted`)
+            : card
+        );
+        const changedCards = nextCards.filter((card, index) => card !== cards[index]);
+        await Promise.all(changedCards.map((card) => persistCard(card, cards.find((item) => item.id === card.id))));
+        await persistBoard({
+          ...board,
+          lists: board.lists.filter((item) => item.id !== list.id),
+          updatedAt: now
+        });
+      }
     });
   }
 
@@ -267,17 +292,24 @@ export default function App() {
   }
 
   async function removeCard(card: Card) {
-    if (!workspacePath || !window.confirm(`Delete card "${card.title}"? This removes the card file from disk.`)) {
+    if (!workspacePath) {
       return;
     }
-
-    try {
-      await deleteCard(workspacePath, card);
-      setCards((current) => current.filter((item) => item.id !== card.id));
-      setSelectedCardId(null);
-    } catch (reason) {
-      setError(`Delete failed: ${String(reason)}`);
-    }
+    openConfirmDialog({
+      title: "Delete card",
+      message: `Delete card "${card.title}"? This removes the card file from disk.`,
+      confirmLabel: "Delete card",
+      destructive: true,
+      onConfirm: async () => {
+        try {
+          await deleteCard(workspacePath, card);
+          setCards((current) => current.filter((item) => item.id !== card.id));
+          setSelectedCardId(null);
+        } catch (reason) {
+          setError(`Delete failed: ${String(reason)}`);
+        }
+      }
+    });
   }
 
   async function moveCard(cardId: string, listId: string) {
@@ -378,6 +410,10 @@ export default function App() {
 
   function openTextDialog(nextDialog: TextDialogState) {
     setTextDialog(nextDialog);
+  }
+
+  function openConfirmDialog(nextDialog: ConfirmDialogState) {
+    setConfirmDialog(nextDialog);
   }
 
   if (isLoading) {
@@ -504,6 +540,20 @@ export default function App() {
             setTextDialog(null);
             try {
               await textDialog.onSubmit(value);
+            } catch (reason) {
+              setError(String(reason));
+            }
+          }}
+        />
+      )}
+      {confirmDialog && (
+        <ConfirmDialog
+          dialog={confirmDialog}
+          onCancel={() => setConfirmDialog(null)}
+          onConfirm={async () => {
+            setConfirmDialog(null);
+            try {
+              await confirmDialog.onConfirm();
             } catch (reason) {
               setError(String(reason));
             }
@@ -1188,6 +1238,51 @@ function TextDialog({
           </button>
         </footer>
       </form>
+    </div>
+  );
+}
+
+function ConfirmDialog({
+  dialog,
+  onCancel,
+  onConfirm
+}: {
+  dialog: ConfirmDialogState;
+  onCancel: () => void;
+  onConfirm: () => Promise<void>;
+}) {
+  const confirmRef = useRef<HTMLButtonElement>(null);
+
+  useEffect(() => {
+    confirmRef.current?.focus();
+  }, [dialog.title]);
+
+  return (
+    <div className="dialog-backdrop" onMouseDown={onCancel}>
+      <div
+        aria-modal="true"
+        className="text-dialog"
+        onMouseDown={(event) => event.stopPropagation()}
+        role="dialog"
+      >
+        <header>
+          <h2>{dialog.title}</h2>
+          <button type="button" onClick={onCancel}>Cancel</button>
+        </header>
+        <p>{dialog.message}</p>
+        <footer>
+          <button type="button" onClick={onCancel}>Cancel</button>
+          <button
+            className={dialog.destructive ? "danger" : "primary"}
+            data-testid="confirm-dialog-submit"
+            ref={confirmRef}
+            type="button"
+            onClick={() => void onConfirm()}
+          >
+            {dialog.confirmLabel}
+          </button>
+        </footer>
+      </div>
     </div>
   );
 }

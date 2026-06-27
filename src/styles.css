@@ -124,6 +124,16 @@ button[data-testid="delete-card"]:hover:not(:disabled),
   border-color: var(--danger-border);
 }
 
+button.danger {
+  color: var(--text-strong);
+  background: var(--danger);
+  border-color: var(--danger-border);
+}
+
+button.danger:hover:not(:disabled) {
+  background: var(--danger-soft);
+}
+
 input,
 select,
 textarea {
