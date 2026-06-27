@@ -40,6 +40,13 @@ export interface ActivityEvent {
   createdAt: string;
 }
 
+export interface Subtask {
+  id: string;
+  title: string;
+  completed: boolean;
+  url: string;
+}
+
 export interface Card {
   id: string;
   title: string;
@@ -53,6 +60,7 @@ export interface Card {
   createdAt: string;
   updatedAt: string;
   activity: ActivityEvent[];
+  subtasks: Subtask[];
   body: string;
   fileName: string;
 }

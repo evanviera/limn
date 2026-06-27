@@ -264,6 +264,14 @@ async fn post_slack(webhook_url: String, message: String) -> Result<(), String> 
     Ok(())
 }
 
+#[tauri::command]
+fn open_external(url: String) -> Result<(), String> {
+    if !(url.starts_with("http://") || url.starts_with("https://")) {
+        return Err("Unsupported URL".to_string());
+    }
+    open::that(url).map_err(display_err)
+}
+
 pub fn run() {
     tauri::Builder::default()
         .manage(WatchState::default())
@@ -280,7 +288,8 @@ pub fn run() {
             save_last_workspace,
             get_last_workspace,
             watch_workspace,
-            post_slack
+            post_slack,
+            open_external
         ])
         .run(tauri::generate_context!())
         .expect("error while running Limn");

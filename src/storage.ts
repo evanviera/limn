@@ -1,5 +1,5 @@
 import { invoke } from "./ipc.js";
-import type { Board, Card, MembersFile, WorkspaceFiles, WorkspaceSettings, WriteResult } from "./types";
+import type { Board, Card, MembersFile, Subtask, WorkspaceFiles, WorkspaceSettings, WriteResult } from "./types";
 
 const SCHEMA_VERSION = 1;
 
@@ -77,6 +77,22 @@ export async function deleteCard(path: string, card: Card): Promise<void> {
   });
 }
 
+export function normalizeUrl(url: string): string {
+  const trimmed = url.trim();
+  if (!trimmed) {
+    return "";
+  }
+  return /^https?:\/\//i.test(trimmed) ? trimmed : `https://${trimmed}`;
+}
+
+export async function openExternal(url: string): Promise<void> {
+  const normalized = normalizeUrl(url);
+  if (!normalized) {
+    return;
+  }
+  await invoke("open_external", { url: normalized });
+}
+
 export async function postSlack(webhookUrl: string, message: string): Promise<void> {
   if (!webhookUrl.trim()) {
     return;
@@ -135,6 +151,7 @@ export function createCard(boardId: string, listId: string, title: string): Card
         createdAt: now
       }
     ],
+    subtasks: [],
     body: "",
     fileName: `${id}.md`
   };
@@ -270,6 +287,7 @@ export function parseCard(content: string, fileName: string): Card | null {
     createdAt: stringValue(values.createdAt) || timestamp(),
     updatedAt: stringValue(values.updatedAt) || timestamp(),
     activity: activityArray(values.activity),
+    subtasks: subtaskArray(values.subtasks),
     body,
     fileName
   };
@@ -288,7 +306,8 @@ export function serializeCard(card: Card): string {
     archived: card.archived,
     createdAt: card.createdAt,
     updatedAt: card.updatedAt,
-    activity: card.activity
+    activity: card.activity,
+    subtasks: card.subtasks
   };
 
   const lines = Object.entries(frontmatter).map(([key, value]) => `${key}: ${formatFrontmatterValue(value)}`);
@@ -367,4 +386,20 @@ function activityArray(value: unknown): Card["activity"] {
       typeof candidate.createdAt === "string"
     );
   });
+}
+
+function subtaskArray(value: unknown): Subtask[] {
+  if (!Array.isArray(value)) {
+    return [];
+  }
+
+  return value
+    .filter((item): item is Record<string, unknown> => Boolean(item) && typeof item === "object")
+    .filter((item) => typeof item.id === "string" && typeof item.title === "string")
+    .map((item) => ({
+      id: item.id as string,
+      title: item.title as string,
+      completed: booleanValue(item.completed),
+      url: stringValue(item.url)
+    }));
 }

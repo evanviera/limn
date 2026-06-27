@@ -932,6 +932,108 @@ body.is-card-dragging * {
   white-space: nowrap;
 }
 
+.subtask-badge {
+  flex: none;
+  padding: 2px 7px;
+  color: var(--text);
+  background: var(--input-bg);
+  border: 1px solid var(--border-soft);
+  border-radius: 999px;
+  font-size: 0.67rem;
+  font-weight: 650;
+  white-space: nowrap;
+}
+
+.card-subtasks {
+  display: grid;
+  gap: 4px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.card-subtask {
+  display: flex;
+  align-items: center;
+  gap: 7px;
+  min-width: 0;
+  margin: 0 -4px;
+  padding: 2px 4px;
+  color: var(--text);
+  font-size: 0.74rem;
+  border-radius: 4px;
+  transition: background 0.12s ease;
+}
+
+.card-subtask:hover {
+  background: var(--surface-hover);
+}
+
+.card-subtask > a,
+.card-subtask > span {
+  overflow: hidden;
+  min-width: 0;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.card-subtask.completed > a,
+.card-subtask.completed > span {
+  color: var(--text-muted);
+  text-decoration: line-through;
+}
+
+.card-subtask-link {
+  color: var(--text);
+  text-decoration: underline;
+  text-decoration-color: var(--accent-border);
+  text-underline-offset: 2px;
+  cursor: pointer;
+}
+
+.card-subtask-link:hover {
+  color: var(--text-strong);
+}
+
+.subtasks {
+  display: grid;
+  gap: 8px;
+  padding: 10px;
+  background: var(--surface);
+  border: 1px solid var(--border-soft);
+  border-radius: 6px;
+}
+
+.subtasks-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+}
+
+.subtask-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  min-width: 0;
+}
+
+.subtask-row .subtask-title {
+  flex: 1 1 55%;
+  min-width: 0;
+}
+
+.subtask-row .subtask-url {
+  flex: 1 1 45%;
+  min-width: 0;
+}
+
+.subtask-open,
+.subtask-remove {
+  flex: none;
+  padding: 4px 8px;
+}
+
 @media (max-width: 800px) {
   .app-shell {
     grid-template-columns: 1fr;

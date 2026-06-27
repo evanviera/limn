@@ -24,12 +24,39 @@ const baseCard = {
       createdAt: "2026-06-27T00:00:00.000Z"
     }
   ],
+  subtasks: [
+    { id: "subtask_one", title: "Open the brief", completed: true, url: "https://example.com/brief" },
+    { id: "subtask_two", title: "Review with team", completed: false, url: "" }
+  ],
   body: "Notes with --- inside the body stay intact.\nSecond line.\n",
   fileName: "card_one.md"
 };
 
 const roundTripped = parseCard(serializeCard(baseCard), baseCard.fileName);
 assert.deepEqual(roundTripped, baseCard);
+
+// Cards written before sub-tasks existed have no `subtasks` line and default to [].
+const legacyCard = parseCard(
+  [
+    "---",
+    "id: card_legacy",
+    "title: Legacy card",
+    "boardId: board_one",
+    "listId: todo",
+    "assignees: []",
+    "labels: []",
+    "due: \"\"",
+    "completed: false",
+    "archived: false",
+    "createdAt: 2026-06-27T00:00:00.000Z",
+    "updatedAt: 2026-06-27T01:00:00.000Z",
+    "activity: []",
+    "---",
+    "Body"
+  ].join("\n"),
+  "card_legacy.md"
+);
+assert.deepEqual(legacyCard.subtasks, []);
 
 const quotedFalse = parseCard(
   [

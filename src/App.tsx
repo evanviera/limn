@@ -11,6 +11,7 @@ import {
   getLastWorkspace,
   loadWorkspace,
   makeId,
+  openExternal,
   pickWorkspaceFolder,
   postSlack,
   saveBoard,
@@ -21,7 +22,7 @@ import {
   timestamp,
   watchWorkspace
 } from "./storage";
-import { Board, BoardList, Card, Member, View, WorkspaceSettings, WriteResult } from "./types";
+import { Board, BoardList, Card, Member, Subtask, View, WorkspaceSettings, WriteResult } from "./types";
 
 const memberColors = ["#2563eb", "#0f766e", "#b45309", "#be123c", "#7c3aed", "#4d7c0f"];
 
@@ -331,6 +332,23 @@ export default function App() {
     }
   }
 
+  async function toggleSubtask(cardId: string, subtaskId: string, completed: boolean) {
+    const card = cards.find((item) => item.id === cardId);
+    if (!card) {
+      return;
+    }
+    const next = {
+      ...card,
+      subtasks: card.subtasks.map((subtask) => (subtask.id === subtaskId ? { ...subtask, completed } : subtask)),
+      updatedAt: timestamp()
+    };
+    try {
+      await persistCard(next, card);
+    } catch (reason) {
+      setError(`Sub-task update failed: ${String(reason)}`);
+    }
+  }
+
   async function saveCardFromEditor(nextCard: Card) {
     const previous = cards.find((card) => card.id === nextCard.id);
     const normalized = { ...nextCard, updatedAt: timestamp() };
@@ -507,6 +525,7 @@ export default function App() {
             onAddCard={addCard}
             onMoveCard={moveCard}
             onOpenCard={setSelectedCardId}
+            onToggleSubtask={toggleSubtask}
           />
         )}
         {view === "board" && !activeBoard && (
@@ -576,6 +595,7 @@ interface BoardViewProps {
   onAddCard: (listId: string) => Promise<void>;
   onMoveCard: (cardId: string, listId: string) => Promise<void>;
   onOpenCard: (cardId: string) => void;
+  onToggleSubtask: (cardId: string, subtaskId: string, completed: boolean) => Promise<void>;
 }
 
 function BoardView(props: BoardViewProps) {
@@ -840,7 +860,7 @@ function BoardView(props: BoardViewProps) {
                     onPointerUp={finishPointerDrag}
                     onMouseDown={(event) => beginMouseDrag(event, card.id)}
                   >
-                    <TaskCardBody card={card} members={props.members} />
+                    <TaskCardBody card={card} members={props.members} onToggleSubtask={props.onToggleSubtask} />
                   </article>
                 ))}
               </div>
@@ -868,7 +888,16 @@ function BoardView(props: BoardViewProps) {
   );
 }
 
-function TaskCardBody({ card, members }: { card: Card; members: Member[] }) {
+function TaskCardBody({
+  card,
+  members,
+  onToggleSubtask
+}: {
+  card: Card;
+  members: Member[];
+  onToggleSubtask?: (cardId: string, subtaskId: string, completed: boolean) => void;
+}) {
+  const doneCount = card.subtasks.filter((subtask) => subtask.completed).length;
   return (
     <>
       <h3>{card.title}</h3>
@@ -879,8 +908,47 @@ function TaskCardBody({ card, members }: { card: Card; members: Member[] }) {
           ))}
         </div>
       )}
+      {card.subtasks.length > 0 && (
+        <ul className="card-subtasks">
+          {card.subtasks.map((subtask) => (
+            <li key={subtask.id} className={`card-subtask ${subtask.completed ? "completed" : ""}`}>
+              <input
+                checked={subtask.completed}
+                data-testid={`card-subtask-${subtask.id}-toggle`}
+                disabled={!onToggleSubtask}
+                type="checkbox"
+                onClick={(event) => event.stopPropagation()}
+                onPointerDown={(event) => event.stopPropagation()}
+                onChange={(event) => onToggleSubtask?.(card.id, subtask.id, event.target.checked)}
+              />
+              {subtask.url.trim() ? (
+                <a
+                  className="card-subtask-link"
+                  data-testid={`card-subtask-${subtask.id}-link`}
+                  href={subtask.url}
+                  onPointerDown={(event) => event.stopPropagation()}
+                  onClick={(event) => {
+                    event.preventDefault();
+                    event.stopPropagation();
+                    void openExternal(subtask.url.trim());
+                  }}
+                >
+                  {subtask.title || subtask.url}
+                </a>
+              ) : (
+                <span>{subtask.title || "Untitled sub-task"}</span>
+              )}
+            </li>
+          ))}
+        </ul>
+      )}
       <footer>
         <span>{card.due || "No due date"}</span>
+        {card.subtasks.length > 0 && (
+          <span className="subtask-badge" title="Sub-tasks completed">
+            ☑ {doneCount}/{card.subtasks.length}
+          </span>
+        )}
         <MemberDots members={members.filter((member) => card.assignees.includes(member.id))} />
       </footer>
     </>
@@ -1039,6 +1107,27 @@ function CardEditor({
     }));
   }
 
+  function addSubtask() {
+    setDraft((current) => ({
+      ...current,
+      subtasks: [...current.subtasks, { id: makeId("subtask"), title: "", completed: false, url: "" }]
+    }));
+  }
+
+  function updateSubtask(id: string, patch: Partial<Subtask>) {
+    setDraft((current) => ({
+      ...current,
+      subtasks: current.subtasks.map((subtask) => (subtask.id === id ? { ...subtask, ...patch } : subtask))
+    }));
+  }
+
+  function removeSubtask(id: string) {
+    setDraft((current) => ({
+      ...current,
+      subtasks: current.subtasks.filter((subtask) => subtask.id !== id)
+    }));
+  }
+
   return (
     <div className="modal-backdrop" onMouseDown={onClose}>
       <aside className="card-editor" onMouseDown={(event) => event.stopPropagation()}>
@@ -1122,6 +1211,57 @@ function CardEditor({
             </label>
           ))}
         </fieldset>
+        <section className="subtasks">
+          <div className="subtasks-header">
+            <h3>Sub-tasks</h3>
+            <button data-testid="add-subtask" onClick={addSubtask}>
+              Add sub-task
+            </button>
+          </div>
+          {draft.subtasks.length === 0 && <p className="muted">No sub-tasks yet.</p>}
+          {draft.subtasks.map((subtask) => (
+            <div key={subtask.id} className="subtask-row">
+              <input
+                checked={subtask.completed}
+                data-testid={`subtask-${subtask.id}-toggle`}
+                type="checkbox"
+                onChange={(event) => updateSubtask(subtask.id, { completed: event.target.checked })}
+              />
+              <input
+                className="subtask-title"
+                data-testid={`subtask-${subtask.id}-title`}
+                value={subtask.title}
+                onChange={(event) => updateSubtask(subtask.id, { title: event.target.value })}
+                placeholder="Sub-task"
+              />
+              <input
+                className="subtask-url"
+                data-testid={`subtask-${subtask.id}-url`}
+                value={subtask.url}
+                onChange={(event) => updateSubtask(subtask.id, { url: event.target.value })}
+                placeholder="https://..."
+              />
+              {subtask.url.trim() && (
+                <button
+                  className="subtask-open"
+                  data-testid={`subtask-${subtask.id}-open`}
+                  title="Open link"
+                  onClick={() => void openExternal(subtask.url.trim())}
+                >
+                  ↗
+                </button>
+              )}
+              <button
+                className="subtask-remove"
+                data-testid={`subtask-${subtask.id}-remove`}
+                title="Remove sub-task"
+                onClick={() => removeSubtask(subtask.id)}
+              >
+                ×
+              </button>
+            </div>
+          ))}
+        </section>
         <label>
           Notes
           <textarea data-testid="card-notes-input" value={draft.body} onChange={(event) => setDraft({ ...draft, body: event.target.value })} rows={10} />
