@@ -1,0 +1,4 @@
+interface:
+  display_name: "Product Tester"
+  short_description: "Test apps through real UI workflows"
+  default_prompt: "Use $product-tester to test this app like a normal user and log findings."
