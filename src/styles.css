@@ -640,6 +640,14 @@ label {
   color: var(--danger);
 }
 
+.form-error {
+  grid-column: 1 / -1;
+  margin: 0;
+  color: var(--danger);
+  font-size: 0.76rem;
+  font-weight: 600;
+}
+
 .error-banner {
   background: var(--danger-soft);
   border-color: var(--danger-border);
@@ -724,6 +732,51 @@ label {
   display: flex;
   justify-content: flex-end;
   background: var(--overlay-bg);
+}
+
+.dialog-backdrop {
+  position: fixed;
+  inset: 0;
+  z-index: 30;
+  display: grid;
+  place-items: center;
+  padding: 18px;
+  background: var(--overlay-bg);
+}
+
+.text-dialog {
+  display: grid;
+  gap: 12px;
+  width: min(420px, 100%);
+  padding: 14px;
+  color: var(--text);
+  background: var(--pane-bg);
+  border: 1px solid var(--border);
+  border-radius: 7px;
+  box-shadow: var(--shadow);
+}
+
+.text-dialog header,
+.text-dialog footer {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+}
+
+.text-dialog header {
+  padding-bottom: 10px;
+  border-bottom: 1px solid var(--border-soft);
+}
+
+.text-dialog h2 {
+  margin: 0;
+  color: var(--text-strong);
+  font-size: 1rem;
+}
+
+.text-dialog footer {
+  justify-content: flex-end;
 }
 
 .card-editor {

@@ -23,6 +23,14 @@ import { Board, BoardList, Card, Member, View, WorkspaceSettings, WriteResult } 
 
 const memberColors = ["#2563eb", "#0f766e", "#b45309", "#be123c", "#7c3aed", "#4d7c0f"];
 
+interface TextDialogState {
+  title: string;
+  label: string;
+  value: string;
+  confirmLabel: string;
+  onSubmit: (value: string) => Promise<void>;
+}
+
 export default function App() {
   const [workspacePath, setWorkspacePath] = useState("");
   const [settings, setSettings] = useState<WorkspaceSettings | null>(null);
@@ -37,6 +45,7 @@ export default function App() {
   const [error, setError] = useState("");
   const [notice, setNotice] = useState("");
   const [isLoading, setIsLoading] = useState(true);
+  const [textDialog, setTextDialog] = useState<TextDialogState | null>(null);
 
   const activeBoard = boards.find((board) => board.id === activeBoardId) ?? boards[0] ?? null;
   const selectedCard = cards.find((card) => card.id === selectedCardId) ?? null;
@@ -136,22 +145,30 @@ export default function App() {
   }
 
   async function addBoard() {
-    const name = window.prompt("Board name");
-    if (!name?.trim()) {
-      return;
-    }
-    const board = createBoard(name.trim());
-    await persistBoard(board);
-    setActiveBoardId(board.id);
-    setView("board");
+    openTextDialog({
+      title: "Create board",
+      label: "Board name",
+      value: "",
+      confirmLabel: "Create board",
+      onSubmit: async (name) => {
+        const board = createBoard(name);
+        await persistBoard(board);
+        setActiveBoardId(board.id);
+        setView("board");
+      }
+    });
   }
 
   async function renameBoard(board: Board) {
-    const name = window.prompt("Board name", board.name);
-    if (!name?.trim()) {
-      return;
-    }
-    await persistBoard({ ...board, name: name.trim(), updatedAt: timestamp() });
+    openTextDialog({
+      title: "Rename board",
+      label: "Board name",
+      value: board.name,
+      confirmLabel: "Save board",
+      onSubmit: async (name) => {
+        await persistBoard({ ...board, name, updatedAt: timestamp() });
+      }
+    });
   }
 
   async function removeBoard(board: Board) {
@@ -171,26 +188,34 @@ export default function App() {
     if (!activeBoard) {
       return;
     }
-    const name = window.prompt("List name");
-    if (!name?.trim()) {
-      return;
-    }
-    const list: BoardList = { id: makeId("list"), name: name.trim() };
-    await persistBoard({ ...activeBoard, lists: [...activeBoard.lists, list], updatedAt: timestamp() });
+    openTextDialog({
+      title: "Add list",
+      label: "List name",
+      value: "",
+      confirmLabel: "Add list",
+      onSubmit: async (name) => {
+        const list: BoardList = { id: makeId("list"), name };
+        await persistBoard({ ...activeBoard, lists: [...activeBoard.lists, list], updatedAt: timestamp() });
+      }
+    });
   }
 
   async function renameList(list: BoardList) {
     if (!activeBoard) {
       return;
     }
-    const name = window.prompt("List name", list.name);
-    if (!name?.trim()) {
-      return;
-    }
-    await persistBoard({
-      ...activeBoard,
-      lists: activeBoard.lists.map((item) => (item.id === list.id ? { ...item, name: name.trim() } : item)),
-      updatedAt: timestamp()
+    openTextDialog({
+      title: "Rename list",
+      label: "List name",
+      value: list.name,
+      confirmLabel: "Save list",
+      onSubmit: async (name) => {
+        await persistBoard({
+          ...activeBoard,
+          lists: activeBoard.lists.map((item) => (item.id === list.id ? { ...item, name } : item)),
+          updatedAt: timestamp()
+        });
+      }
     });
   }
 
@@ -217,13 +242,17 @@ export default function App() {
     if (!activeBoard) {
       return;
     }
-    const title = window.prompt("Card title");
-    if (!title?.trim()) {
-      return;
-    }
-    const card = createCard(activeBoard.id, listId, title.trim());
-    await persistCard(card);
-    setSelectedCardId(card.id);
+    openTextDialog({
+      title: "Add card",
+      label: "Card title",
+      value: "",
+      confirmLabel: "Add card",
+      onSubmit: async (title) => {
+        const card = createCard(activeBoard.id, listId, title);
+        await persistCard(card);
+        setSelectedCardId(card.id);
+      }
+    });
   }
 
   async function archiveCard(card: Card) {
@@ -331,6 +360,10 @@ export default function App() {
 
   function boardName(boardId: string) {
     return boards.find((board) => board.id === boardId)?.name ?? "Unknown board";
+  }
+
+  function openTextDialog(nextDialog: TextDialogState) {
+    setTextDialog(nextDialog);
   }
 
   if (isLoading) {
@@ -448,6 +481,21 @@ export default function App() {
           onClose={() => setSelectedCardId(null)}
           onArchive={archiveCard}
           onDelete={removeCard}
+        />
+      )}
+      {textDialog && (
+        <TextDialog
+          dialog={textDialog}
+          onCancel={() => setTextDialog(null)}
+          onChange={(value) => setTextDialog((current) => current ? { ...current, value } : current)}
+          onSubmit={async (value) => {
+            setTextDialog(null);
+            try {
+              await textDialog.onSubmit(value);
+            } catch (reason) {
+              setError(String(reason));
+            }
+          }}
         />
       )}
     </div>
@@ -570,6 +618,7 @@ function BoardView(props: BoardViewProps) {
 
 function MembersView({ members, onSave, onRemove }: { members: Member[]; onSave: (member: Member) => Promise<void>; onRemove: (id: string) => Promise<void> }) {
   const [name, setName] = useState("");
+  const [validation, setValidation] = useState("");
 
   return (
     <section>
@@ -581,11 +630,14 @@ function MembersView({ members, onSave, onRemove }: { members: Member[]; onSave:
       </header>
       <form
         className="inline-form"
+        noValidate
         onSubmit={(event) => {
           event.preventDefault();
           if (!name.trim()) {
+            setValidation("Enter a member name.");
             return;
           }
+          setValidation("");
           const member: Member = {
             id: name.trim().toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/^-|-$/g, "") || makeId("member"),
             name: name.trim(),
@@ -595,8 +647,21 @@ function MembersView({ members, onSave, onRemove }: { members: Member[]; onSave:
           void onSave(member);
         }}
       >
-        <input data-testid="member-name-input" value={name} onChange={(event) => setName(event.target.value)} placeholder="Member name" />
+        <input
+          aria-describedby={validation ? "member-name-error" : undefined}
+          aria-invalid={validation ? true : undefined}
+          data-testid="member-name-input"
+          value={name}
+          onChange={(event) => {
+            setName(event.target.value);
+            if (validation) {
+              setValidation("");
+            }
+          }}
+          placeholder="Member name"
+        />
         <button className="primary" data-testid="add-member">Add member</button>
+        {validation && <p className="form-error" id="member-name-error">{validation}</p>}
       </form>
       <div className="member-list">
         {members.length === 0 && <p className="muted">No members yet.</p>}
@@ -832,6 +897,76 @@ function EmptyState({ title, body, action, onAction }: { title: string; body: st
       <button className="primary" onClick={() => void onAction()}>
         {action}
       </button>
+    </div>
+  );
+}
+
+function TextDialog({
+  dialog,
+  onCancel,
+  onChange,
+  onSubmit
+}: {
+  dialog: TextDialogState;
+  onCancel: () => void;
+  onChange: (value: string) => void;
+  onSubmit: (value: string) => Promise<void>;
+}) {
+  const [validation, setValidation] = useState("");
+  const inputRef = useRef<HTMLInputElement>(null);
+
+  useEffect(() => {
+    inputRef.current?.focus();
+    inputRef.current?.select();
+  }, [dialog.title]);
+
+  return (
+    <div className="dialog-backdrop" onMouseDown={onCancel}>
+      <form
+        aria-modal="true"
+        className="text-dialog"
+        noValidate
+        onMouseDown={(event) => event.stopPropagation()}
+        onSubmit={(event) => {
+          event.preventDefault();
+          const value = dialog.value.trim();
+          if (!value) {
+            setValidation(`${dialog.label} is required.`);
+            return;
+          }
+          setValidation("");
+          void onSubmit(value);
+        }}
+        role="dialog"
+      >
+        <header>
+          <h2>{dialog.title}</h2>
+          <button type="button" onClick={onCancel}>Cancel</button>
+        </header>
+        <label>
+          {dialog.label}
+          <input
+            aria-describedby={validation ? "text-dialog-error" : undefined}
+            aria-invalid={validation ? true : undefined}
+            data-testid="text-dialog-input"
+            ref={inputRef}
+            value={dialog.value}
+            onChange={(event) => {
+              onChange(event.target.value);
+              if (validation) {
+                setValidation("");
+              }
+            }}
+          />
+        </label>
+        {validation && <p className="form-error" id="text-dialog-error">{validation}</p>}
+        <footer>
+          <button type="button" onClick={onCancel}>Cancel</button>
+          <button className="primary" data-testid="text-dialog-submit" type="submit">
+            {dialog.confirmLabel}
+          </button>
+        </footer>
+      </form>
     </div>
   );
 }
