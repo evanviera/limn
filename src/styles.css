@@ -32,6 +32,7 @@
   --button-border: rgba(255, 255, 255, 0.08);
   --empty-overlay: rgba(32, 35, 42, 0.94);
   --active-line: rgba(255, 255, 255, 0.035);
+  --row-hover: rgba(255, 255, 255, 0.07);
   --focus: 0 0 0 2px rgba(131, 32, 33, 0.42);
   --shadow: 0 22px 70px rgba(0, 0, 0, 0.38);
   --font-ui: -apple-system, BlinkMacSystemFont, "Segoe UI Variable", "Segoe UI", system-ui, sans-serif;
@@ -1113,11 +1114,15 @@ body.is-card-dragging * {
   color: var(--text);
   font-size: var(--text-sm);
   border-radius: var(--radius-sm);
-  transition: background var(--transition);
+  transition: background var(--transition), color var(--transition), box-shadow var(--transition);
 }
 
+/* Translucent overlay so the row visibly lifts whether the card is at rest or
+   already hovered (both share --surface-hover, which would otherwise cancel out). */
 .card-subtask:hover {
-  background: var(--surface-hover);
+  background: var(--row-hover);
+  color: var(--text-strong);
+  box-shadow: inset 2px 0 0 var(--accent);
 }
 
 .card-subtask > a,
@@ -1136,15 +1141,18 @@ body.is-card-dragging * {
 
 .card-subtask-link {
   color: var(--text);
-  text-decoration: underline;
+  text-decoration: none;
   text-decoration-color: var(--accent-border);
   text-underline-offset: 2px;
   cursor: pointer;
   transition: color var(--transition);
 }
 
-.card-subtask-link:hover {
+.card-subtask-link:hover,
+.card-subtask-link:focus-visible {
   color: var(--text-strong);
+  text-decoration: underline;
+  text-decoration-color: var(--accent-border);
 }
 
 .subtasks {
