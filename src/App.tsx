@@ -899,7 +899,7 @@ function BoardView(props: BoardViewProps) {
           <EmptyState title="No lists yet" body="Add a list to organize cards on this board." action="Add list" onAction={props.onAddList} />
         )}
         {props.board.lists.map((list) => {
-          const listCards = props.cards.filter((card) => card.listId === list.id);
+          const listCards = props.cards.filter((card) => card.listId === list.id).sort(compareCardsByDueDate);
           return (
             <section
               className="column"
@@ -1624,6 +1624,24 @@ function MemberDots({ members }: { members: Member[] }) {
       ))}
     </span>
   );
+}
+
+function compareCardsByDueDate(left: Card, right: Card): number {
+  const dueComparison = dueSortValue(left).localeCompare(dueSortValue(right));
+  if (dueComparison !== 0) {
+    return dueComparison;
+  }
+
+  const createdComparison = left.createdAt.localeCompare(right.createdAt);
+  if (createdComparison !== 0) {
+    return createdComparison;
+  }
+
+  return left.title.localeCompare(right.title);
+}
+
+function dueSortValue(card: Card): string {
+  return card.due || "9999-12-31";
 }
 
 function Spinner() {
