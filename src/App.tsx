@@ -1007,36 +1007,43 @@ function TaskCardBody({
       )}
       {card.subtasks.length > 0 && (
         <ul className="card-subtasks">
-          {card.subtasks.map((subtask) => (
-            <li key={subtask.id} className={`card-subtask ${subtask.completed ? "completed" : ""}`}>
-              <input
-                checked={subtask.completed}
-                data-testid={`card-subtask-${subtask.id}-toggle`}
-                disabled={!onToggleSubtask}
-                type="checkbox"
-                onClick={(event) => event.stopPropagation()}
-                onPointerDown={(event) => event.stopPropagation()}
-                onChange={(event) => onToggleSubtask?.(card.id, subtask.id, event.target.checked)}
-              />
-              {subtask.url.trim() ? (
-                <a
-                  className="card-subtask-link"
-                  data-testid={`card-subtask-${subtask.id}-link`}
-                  href={subtask.url}
+          {card.subtasks.map((subtask) => {
+            const subtaskUrl = subtask.url.trim();
+            const title = subtask.title || subtaskUrl || "Untitled sub-task";
+            return (
+              <li
+                key={subtask.id}
+                className={`card-subtask ${subtask.completed ? "completed" : ""}`}
+              >
+                <input
+                  checked={subtask.completed}
+                  data-testid={`card-subtask-${subtask.id}-toggle`}
+                  disabled={!onToggleSubtask}
+                  type="checkbox"
+                  onClick={(event) => event.stopPropagation()}
                   onPointerDown={(event) => event.stopPropagation()}
-                  onClick={(event) => {
-                    event.preventDefault();
-                    event.stopPropagation();
-                    void openExternal(subtask.url.trim());
-                  }}
-                >
-                  {subtask.title || subtask.url}
-                </a>
-              ) : (
-                <span>{subtask.title || "Untitled sub-task"}</span>
-              )}
-            </li>
-          ))}
+                  onChange={(event) => onToggleSubtask?.(card.id, subtask.id, event.target.checked)}
+                />
+                {subtaskUrl ? (
+                  <a
+                    className="card-subtask-title card-subtask-link"
+                    data-testid={`card-subtask-${subtask.id}-link`}
+                    href={subtaskUrl}
+                    onPointerDown={(event) => event.stopPropagation()}
+                    onClick={(event) => {
+                      event.preventDefault();
+                      event.stopPropagation();
+                      void openExternal(subtaskUrl);
+                    }}
+                  >
+                    {title}
+                  </a>
+                ) : (
+                  <span className="card-subtask-title">{title}</span>
+                )}
+              </li>
+            );
+          })}
         </ul>
       )}
       <footer>

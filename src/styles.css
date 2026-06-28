@@ -17,6 +17,9 @@
   --accent-hover: #923b3c;
   --accent-soft: rgba(131, 32, 33, 0.16);
   --accent-border: rgba(131, 32, 33, 0.42);
+  --accent-link: #df7a7b;
+  --accent-link-hover: #f0a0a1;
+  --accent-link-border: rgba(223, 122, 123, 0.68);
   --selection: rgba(131, 32, 33, 0.32);
   --success: #71c98b;
   --success-soft: rgba(113, 201, 139, 0.12);
@@ -1148,34 +1151,38 @@ body.is-card-dragging * {
   box-shadow: inset 2px 0 0 var(--accent);
 }
 
-.card-subtask > a,
-.card-subtask > span {
+.card-subtask-title {
+  flex: 1 1 auto;
   overflow: hidden;
   min-width: 0;
   text-overflow: ellipsis;
   white-space: nowrap;
 }
 
-.card-subtask.completed > a,
-.card-subtask.completed > span {
+.card-subtask.completed .card-subtask-title {
   color: var(--text-muted);
   text-decoration: line-through;
 }
 
 .card-subtask-link {
-  color: var(--text);
-  text-decoration: none;
-  text-decoration-color: var(--accent-border);
-  text-underline-offset: 2px;
+  color: var(--accent-link);
+  text-decoration-line: underline;
+  text-decoration-color: var(--accent-link-border);
+  text-decoration-thickness: 1px;
+  text-underline-offset: 3px;
   cursor: pointer;
-  transition: color var(--transition);
+  transition: color var(--transition), text-decoration-color var(--transition);
 }
 
 .card-subtask-link:hover,
 .card-subtask-link:focus-visible {
-  color: var(--text-strong);
-  text-decoration: underline;
-  text-decoration-color: var(--accent-border);
+  color: var(--accent-link-hover);
+  text-decoration-color: var(--accent-link-hover);
+  text-decoration-thickness: 2px;
+}
+
+.card-subtask.completed .card-subtask-link {
+  text-decoration-line: underline line-through;
 }
 
 .subtasks {
