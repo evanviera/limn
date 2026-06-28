@@ -1131,8 +1131,7 @@ body.is-card-dragging * {
 }
 
 .card-subtask {
-  display: flex;
-  align-items: center;
+  display: grid;
   gap: var(--space-3);
   min-width: 0;
   margin: 0 -4px;
@@ -1149,6 +1148,13 @@ body.is-card-dragging * {
   background: var(--row-hover);
   color: var(--text-strong);
   box-shadow: inset 2px 0 0 var(--accent);
+}
+
+.card-subtask-main {
+  display: flex;
+  align-items: center;
+  gap: var(--space-3);
+  min-width: 0;
 }
 
 .card-subtask-title {
@@ -1185,6 +1191,46 @@ body.is-card-dragging * {
   text-decoration-line: underline line-through;
 }
 
+.card-subtask-items {
+  display: grid;
+  gap: var(--space-1);
+  margin: calc(-1 * var(--space-1)) 0 0 31px;
+  padding: 0;
+  color: var(--text-muted);
+  list-style: none;
+}
+
+.card-subtask-item {
+  position: relative;
+  min-width: 0;
+  padding-left: var(--space-4);
+}
+
+.card-subtask-item::before {
+  position: absolute;
+  top: 0.62em;
+  left: 0;
+  width: 5px;
+  height: 5px;
+  content: "";
+  background: currentColor;
+  border-radius: var(--radius-pill);
+  transform: translateY(-50%);
+}
+
+.card-subtask-item-content {
+  overflow: hidden;
+  display: block;
+  max-width: 100%;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.card-subtask.completed .card-subtask-item-content {
+  color: var(--text-muted);
+  text-decoration: line-through;
+}
+
 .subtasks {
   display: grid;
   gap: var(--space-4);
@@ -1199,6 +1245,12 @@ body.is-card-dragging * {
   align-items: center;
   justify-content: space-between;
   gap: var(--space-4);
+}
+
+.subtask-block {
+  display: grid;
+  gap: var(--space-3);
+  min-width: 0;
 }
 
 .subtask-row {
@@ -1222,6 +1274,67 @@ body.is-card-dragging * {
 .subtask-remove {
   flex: none;
   padding: var(--space-2) var(--space-4);
+}
+
+.subtask-items-editor {
+  display: grid;
+  gap: var(--space-2);
+  min-width: 0;
+  margin-left: 31px;
+  padding-left: var(--space-4);
+  border-left: 1px solid var(--border-soft);
+}
+
+.subtask-items-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--space-3);
+}
+
+.subtask-items-header span {
+  color: var(--text-muted);
+  font-size: var(--text-sm);
+  font-weight: var(--weight-semibold);
+  text-transform: uppercase;
+}
+
+.subtask-items-header button {
+  padding: var(--space-2) var(--space-3);
+}
+
+.subtask-item-list {
+  display: grid;
+  gap: var(--space-2);
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.subtask-item-row {
+  display: flex;
+  align-items: center;
+  gap: var(--space-3);
+  min-width: 0;
+}
+
+.subtask-item-row::before {
+  flex: none;
+  width: 6px;
+  height: 6px;
+  content: "";
+  background: var(--text-muted);
+  border-radius: var(--radius-pill);
+}
+
+.subtask-item-row .subtask-item-text {
+  flex: 1 1 55%;
+  min-width: 0;
+}
+
+.subtask-item-row .subtask-item-url {
+  flex: 1 1 45%;
+  min-width: 0;
 }
 
 @media (prefers-reduced-motion: reduce) {

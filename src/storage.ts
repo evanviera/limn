@@ -1,5 +1,5 @@
 import { invoke } from "./ipc.js";
-import type { Board, Card, MembersFile, Subtask, WorkspaceFiles, WorkspaceSettings, WriteResult } from "./types";
+import type { Board, Card, MembersFile, Subtask, SubtaskListItem, WorkspaceFiles, WorkspaceSettings, WriteResult } from "./types";
 
 const SCHEMA_VERSION = 1;
 
@@ -400,6 +400,22 @@ function subtaskArray(value: unknown): Subtask[] {
       id: item.id as string,
       title: item.title as string,
       completed: booleanValue(item.completed),
+      url: stringValue(item.url),
+      items: subtaskListItemArray(item.items)
+    }));
+}
+
+function subtaskListItemArray(value: unknown): SubtaskListItem[] {
+  if (!Array.isArray(value)) {
+    return [];
+  }
+
+  return value
+    .filter((item): item is Record<string, unknown> => Boolean(item) && typeof item === "object")
+    .filter((item) => typeof item.id === "string" && typeof item.text === "string")
+    .map((item) => ({
+      id: item.id as string,
+      text: item.text as string,
       url: stringValue(item.url)
     }));
 }

@@ -118,6 +118,11 @@ test("qa evidence sweep", async ({ page }, testInfo) => {
       const lastTitle = page.locator('[data-testid^="subtask-"][data-testid$="-title"]').last();
       await lastTitle.fill(item).catch(() => {});
     }
+    await page.locator('[data-testid^="subtask-"][data-testid$="-add-item"]').first().click();
+    await page.locator('[data-testid^="subtask-item-"][data-testid$="-text"]').last().fill("Creative checklist");
+    await page.locator('[data-testid^="subtask-"][data-testid$="-add-item"]').first().click();
+    await page.locator('[data-testid^="subtask-item-"][data-testid$="-text"]').last().fill("Source brief");
+    await page.locator('[data-testid^="subtask-item-"][data-testid$="-url"]').last().fill("https://example.com/brief");
     // Mark one subtask complete so the board shows the completed treatment.
     await page.locator('[data-testid^="subtask-"][data-testid$="-toggle"]').first().check().catch(() => {});
     await page.getByTestId("card-completed-input").check().catch(() => {});

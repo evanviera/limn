@@ -40,11 +40,18 @@ export interface ActivityEvent {
   createdAt: string;
 }
 
+export interface SubtaskListItem {
+  id: string;
+  text: string;
+  url: string;
+}
+
 export interface Subtask {
   id: string;
   title: string;
   completed: boolean;
   url: string;
+  items: SubtaskListItem[];
 }
 
 export interface Card {

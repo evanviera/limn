@@ -52,4 +52,36 @@ test.describe("smoke", () => {
     const titles = await page.getByTestId("list-todo").locator(".task-card h3").allTextContents();
     expect(titles).toEqual(["Earlier", "Later"]);
   });
+
+  test("subtasks support unordered list items with optional links", async ({ page }) => {
+    await openApp(page);
+    await openWorkspace(page);
+
+    await page.getByTestId("create-board").click();
+    await page.getByTestId("text-dialog-input").fill("Checklist Board");
+    await page.getByTestId("text-dialog-submit").click();
+
+    await page.getByTestId("add-card-todo").click();
+    await page.getByTestId("text-dialog-input").fill("Gather launch materials");
+    await page.getByTestId("text-dialog-submit").click();
+
+    await page.getByTestId("add-subtask").click();
+    await page.locator('[data-testid^="subtask-"][data-testid$="-title"]').last().fill("Collect assets");
+    await page.locator('[data-testid^="subtask-"][data-testid$="-add-item"]').last().click();
+    await page.locator('[data-testid^="subtask-item-"][data-testid$="-text"]').last().fill("Logo files");
+    await page.locator('[data-testid^="subtask-"][data-testid$="-add-item"]').last().click();
+    await page.locator('[data-testid^="subtask-item-"][data-testid$="-text"]').last().fill("Brand guide");
+    await page.locator('[data-testid^="subtask-item-"][data-testid$="-url"]').last().fill("https://example.com/brand");
+    await page.getByTestId("save-card").click();
+
+    await expect(page.getByText("Logo files")).toBeVisible();
+    const itemLink = page.getByTestId(/card-subtask-item-.*-link/);
+    await expect(itemLink).toHaveText("Brand guide");
+    await expect(itemLink).toHaveAttribute("href", "https://example.com/brand");
+
+    const saved = await snapshot(page);
+    expect(saved.cards[0].content).toContain('"items"');
+    expect(saved.cards[0].content).toContain('"text":"Logo files"');
+    expect(saved.cards[0].content).toContain('"url":"https://example.com/brand"');
+  });
 });

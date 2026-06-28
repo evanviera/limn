@@ -9,7 +9,7 @@ import { defineConfig, devices } from "@playwright/test";
  * server without needing a Tauri window. The harness only loads in Vite DEV
  * mode, so `webServer` runs `npm run dev:vite` (not a production build).
  */
-const PORT = 1420;
+const PORT = Number(process.env.LIMN_E2E_PORT ?? 1420);
 const HOST = "127.0.0.1";
 const baseURL = `http://${HOST}:${PORT}`;
 
@@ -35,7 +35,7 @@ export default defineConfig({
     }
   ],
   webServer: {
-    command: "npm run dev:vite",
+    command: `npm run dev:vite -- --port ${PORT}`,
     url: baseURL,
     reuseExistingServer: !process.env.CI,
     timeout: 120_000

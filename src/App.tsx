@@ -22,7 +22,7 @@ import {
   timestamp,
   watchWorkspace
 } from "./storage";
-import { Board, BoardList, Card, Member, Subtask, View, WorkspaceSettings, WriteResult } from "./types";
+import { Board, BoardList, Card, Member, Subtask, SubtaskListItem, View, WorkspaceSettings, WriteResult } from "./types";
 
 const memberColors = ["#2563eb", "#0f766e", "#b45309", "#be123c", "#7c3aed", "#4d7c0f"];
 
@@ -1010,36 +1010,68 @@ function TaskCardBody({
           {card.subtasks.map((subtask) => {
             const subtaskUrl = subtask.url.trim();
             const title = subtask.title || subtaskUrl || "Untitled sub-task";
+            const listItems = subtask.items.filter((item) => item.text.trim() || item.url.trim());
             return (
               <li
                 key={subtask.id}
                 className={`card-subtask ${subtask.completed ? "completed" : ""}`}
               >
-                <input
-                  checked={subtask.completed}
-                  data-testid={`card-subtask-${subtask.id}-toggle`}
-                  disabled={!onToggleSubtask}
-                  type="checkbox"
-                  onClick={(event) => event.stopPropagation()}
-                  onPointerDown={(event) => event.stopPropagation()}
-                  onChange={(event) => onToggleSubtask?.(card.id, subtask.id, event.target.checked)}
-                />
-                {subtaskUrl ? (
-                  <a
-                    className="card-subtask-title card-subtask-link"
-                    data-testid={`card-subtask-${subtask.id}-link`}
-                    href={subtaskUrl}
+                <div className="card-subtask-main">
+                  <input
+                    checked={subtask.completed}
+                    data-testid={`card-subtask-${subtask.id}-toggle`}
+                    disabled={!onToggleSubtask}
+                    type="checkbox"
+                    onClick={(event) => event.stopPropagation()}
                     onPointerDown={(event) => event.stopPropagation()}
-                    onClick={(event) => {
-                      event.preventDefault();
-                      event.stopPropagation();
-                      void openExternal(subtaskUrl);
-                    }}
-                  >
-                    {title}
-                  </a>
-                ) : (
-                  <span className="card-subtask-title">{title}</span>
+                    onChange={(event) => onToggleSubtask?.(card.id, subtask.id, event.target.checked)}
+                  />
+                  {subtaskUrl ? (
+                    <a
+                      className="card-subtask-title card-subtask-link"
+                      data-testid={`card-subtask-${subtask.id}-link`}
+                      href={subtaskUrl}
+                      onPointerDown={(event) => event.stopPropagation()}
+                      onClick={(event) => {
+                        event.preventDefault();
+                        event.stopPropagation();
+                        void openExternal(subtaskUrl);
+                      }}
+                    >
+                      {title}
+                    </a>
+                  ) : (
+                    <span className="card-subtask-title">{title}</span>
+                  )}
+                </div>
+                {listItems.length > 0 && (
+                  <ul className="card-subtask-items">
+                    {listItems.map((item) => {
+                      const itemUrl = item.url.trim();
+                      const itemText = item.text || itemUrl || "Untitled item";
+                      return (
+                        <li key={item.id} className="card-subtask-item">
+                          {itemUrl ? (
+                            <a
+                              className="card-subtask-item-content card-subtask-link"
+                              data-testid={`card-subtask-item-${item.id}-link`}
+                              href={itemUrl}
+                              onPointerDown={(event) => event.stopPropagation()}
+                              onClick={(event) => {
+                                event.preventDefault();
+                                event.stopPropagation();
+                                void openExternal(itemUrl);
+                              }}
+                            >
+                              {itemText}
+                            </a>
+                          ) : (
+                            <span className="card-subtask-item-content">{itemText}</span>
+                          )}
+                        </li>
+                      );
+                    })}
+                  </ul>
                 )}
               </li>
             );
@@ -1252,7 +1284,7 @@ function CardEditor({
   function addSubtask() {
     setDraft((current) => ({
       ...current,
-      subtasks: [...current.subtasks, { id: makeId("subtask"), title: "", completed: false, url: "" }]
+      subtasks: [...current.subtasks, { id: makeId("subtask"), title: "", completed: false, url: "", items: [] }]
     }));
   }
 
@@ -1267,6 +1299,42 @@ function CardEditor({
     setDraft((current) => ({
       ...current,
       subtasks: current.subtasks.filter((subtask) => subtask.id !== id)
+    }));
+  }
+
+  function addSubtaskItem(subtaskId: string) {
+    const item: SubtaskListItem = { id: makeId("subtask-item"), text: "", url: "" };
+    setDraft((current) => ({
+      ...current,
+      subtasks: current.subtasks.map((subtask) => (subtask.id === subtaskId ? { ...subtask, items: [...subtask.items, item] } : subtask))
+    }));
+  }
+
+  function updateSubtaskItem(subtaskId: string, itemId: string, patch: Partial<SubtaskListItem>) {
+    setDraft((current) => ({
+      ...current,
+      subtasks: current.subtasks.map((subtask) =>
+        subtask.id === subtaskId
+          ? {
+              ...subtask,
+              items: subtask.items.map((item) => (item.id === itemId ? { ...item, ...patch } : item))
+            }
+          : subtask
+      )
+    }));
+  }
+
+  function removeSubtaskItem(subtaskId: string, itemId: string) {
+    setDraft((current) => ({
+      ...current,
+      subtasks: current.subtasks.map((subtask) =>
+        subtask.id === subtaskId
+          ? {
+              ...subtask,
+              items: subtask.items.filter((item) => item.id !== itemId)
+            }
+          : subtask
+      )
     }));
   }
 
@@ -1370,47 +1438,100 @@ function CardEditor({
           </div>
           {draft.subtasks.length === 0 && <p className="muted">No sub-tasks yet.</p>}
           {draft.subtasks.map((subtask) => (
-            <div key={subtask.id} className="subtask-row">
-              <input
-                checked={subtask.completed}
-                data-testid={`subtask-${subtask.id}-toggle`}
-                type="checkbox"
-                onChange={(event) => updateSubtask(subtask.id, { completed: event.target.checked })}
-              />
-              <input
-                className="subtask-title"
-                data-testid={`subtask-${subtask.id}-title`}
-                value={subtask.title}
-                onChange={(event) => updateSubtask(subtask.id, { title: event.target.value })}
-                placeholder="Sub-task"
-              />
-              <input
-                className="subtask-url"
-                data-testid={`subtask-${subtask.id}-url`}
-                value={subtask.url}
-                onChange={(event) => updateSubtask(subtask.id, { url: event.target.value })}
-                placeholder="https://..."
-              />
-              {subtask.url.trim() && (
+            <div key={subtask.id} className="subtask-block">
+              <div className="subtask-row">
+                <input
+                  checked={subtask.completed}
+                  data-testid={`subtask-${subtask.id}-toggle`}
+                  type="checkbox"
+                  onChange={(event) => updateSubtask(subtask.id, { completed: event.target.checked })}
+                />
+                <input
+                  className="subtask-title"
+                  data-testid={`subtask-${subtask.id}-title`}
+                  value={subtask.title}
+                  onChange={(event) => updateSubtask(subtask.id, { title: event.target.value })}
+                  placeholder="Sub-task"
+                />
+                <input
+                  className="subtask-url"
+                  data-testid={`subtask-${subtask.id}-url`}
+                  value={subtask.url}
+                  onChange={(event) => updateSubtask(subtask.id, { url: event.target.value })}
+                  placeholder="https://..."
+                />
+                {subtask.url.trim() && (
+                  <button
+                    aria-label="Open link"
+                    className="subtask-open"
+                    data-testid={`subtask-${subtask.id}-open`}
+                    title="Open link"
+                    onClick={() => void openExternal(subtask.url.trim())}
+                  >
+                    ↗
+                  </button>
+                )}
                 <button
-                  aria-label="Open link"
-                  className="subtask-open"
-                  data-testid={`subtask-${subtask.id}-open`}
-                  title="Open link"
-                  onClick={() => void openExternal(subtask.url.trim())}
+                  aria-label="Remove sub-task"
+                  className="subtask-remove"
+                  data-testid={`subtask-${subtask.id}-remove`}
+                  title="Remove sub-task"
+                  onClick={() => removeSubtask(subtask.id)}
                 >
-                  ↗
+                  ×
                 </button>
-              )}
-              <button
-                aria-label="Remove sub-task"
-                className="subtask-remove"
-                data-testid={`subtask-${subtask.id}-remove`}
-                title="Remove sub-task"
-                onClick={() => removeSubtask(subtask.id)}
-              >
-                ×
-              </button>
+              </div>
+              <div className="subtask-items-editor">
+                <div className="subtask-items-header">
+                  <span>List items</span>
+                  <button data-testid={`subtask-${subtask.id}-add-item`} onClick={() => addSubtaskItem(subtask.id)}>
+                    Add item
+                  </button>
+                </div>
+                {subtask.items.length === 0 && <p className="muted">No list items yet.</p>}
+                {subtask.items.length > 0 && (
+                  <ul className="subtask-item-list">
+                    {subtask.items.map((item) => (
+                      <li key={item.id} className="subtask-item-row">
+                        <input
+                          className="subtask-item-text"
+                          data-testid={`subtask-item-${item.id}-text`}
+                          value={item.text}
+                          onChange={(event) => updateSubtaskItem(subtask.id, item.id, { text: event.target.value })}
+                          placeholder="List item"
+                        />
+                        <input
+                          className="subtask-item-url"
+                          data-testid={`subtask-item-${item.id}-url`}
+                          value={item.url}
+                          onChange={(event) => updateSubtaskItem(subtask.id, item.id, { url: event.target.value })}
+                          placeholder="https://..."
+                        />
+                        {item.url.trim() && (
+                          <button
+                            aria-label="Open list item link"
+                            className="subtask-open"
+                            data-testid={`subtask-item-${item.id}-open`}
+                            title="Open link"
+                            onClick={() => void openExternal(item.url.trim())}
+                          >
+                            ↗
+                          </button>
+                        )}
+                        <button
+                          aria-label="Remove list item"
+                          className="subtask-remove"
+                          data-testid={`subtask-item-${item.id}-remove`}
+                          title="Remove list item"
+                          onClick={() => removeSubtaskItem(subtask.id, item.id)}
+                        >
+                          ×
+                        </button>
+                      </li>
+                    ))}
+                  </ul>
+                )}
+              </div>
             </div>
           ))}
         </section>

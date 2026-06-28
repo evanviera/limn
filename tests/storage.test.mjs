@@ -25,8 +25,17 @@ const baseCard = {
     }
   ],
   subtasks: [
-    { id: "subtask_one", title: "Open the brief", completed: true, url: "https://example.com/brief" },
-    { id: "subtask_two", title: "Review with team", completed: false, url: "" }
+    {
+      id: "subtask_one",
+      title: "Open the brief",
+      completed: true,
+      url: "https://example.com/brief",
+      items: [
+        { id: "subtask_item_one", text: "Read the launch checklist", url: "" },
+        { id: "subtask_item_two", text: "Reference brief", url: "https://example.com/reference" }
+      ]
+    },
+    { id: "subtask_two", title: "Review with team", completed: false, url: "", items: [] }
   ],
   body: "Notes with --- inside the body stay intact.\nSecond line.\n",
   fileName: "card_one.md"
