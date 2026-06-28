@@ -34,6 +34,20 @@ test("…", async ({ page }) => {
 });
 ```
 
+## QA evidence sweep
+
+`qa-sweep.spec.ts` is an opt-in, report-only evidence run (not pass/fail). It
+drives every surface and dumps screenshots, ARIA snapshots, and console/page
+errors to `qa-artifacts/`:
+
+```bash
+QA_SWEEP=1 npx playwright test qa-sweep
+```
+
+It's skipped during `npm run test:e2e`. The **`limn-qa` skill** orchestrates it
+into a full severity-grouped findings report — run it with `/limn-qa` or by
+asking Claude to "QA the app".
+
 ## Conventions
 
 - **Select by `data-testid`** (e.g. `create-board`, `text-dialog-input`,
