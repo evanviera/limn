@@ -55,7 +55,9 @@ For every finding, point to the responsible code: `src/App.tsx:<line>` for behav
 
 ## Deliverable: the findings report
 
-Write `qa-artifacts/QA-REPORT.md` (and summarize it in your chat reply). Group findings by severity and **do not propose code edits in the repo — only describe the fix in prose**:
+Write `qa-artifacts/QA-REPORT.md` (and summarize it in your chat reply). **The report is tracked in the repo** — `qa-artifacts/` ignores the bulky regenerated evidence (screenshots, ARIA snapshots, JSON) but keeps `QA-REPORT.md` itself committed (see the `!qa-artifacts/QA-REPORT.md` exception in `.gitignore`). After writing it, commit the report on a branch so the deliverable lands in the repo: `git add qa-artifacts/QA-REPORT.md` and commit (branch first if you're on `main`). Because the referenced screenshots are not tracked, keep the report self-contained — describe each finding in prose so it stands alone without the images.
+
+Group findings by severity and **do not propose code edits in the repo — only describe the fix in prose**:
 
 - **🔴 Blocking** — broken functionality, data loss, crash/console error, an action that can't be completed, or an a11y blocker (control unreachable by keyboard, no focus, dialog can't be dismissed).
 - **🟠 Should-fix** — degraded UX, confusing/missing feedback, contrast failures (WCAG AA: 4.5:1 body / 3:1 large), inconsistent or misleading microcopy, overflow/clipping at supported sizes.
@@ -78,6 +80,6 @@ Open with a one-paragraph summary (surfaces covered, counts per severity, overal
 ## Guardrails
 
 - Reuse the existing harness and `data-testid`s; never modify them or app code.
-- `qa-artifacts/` is gitignored and regenerated each run — safe to overwrite.
+- The evidence under `qa-artifacts/` (screenshots, ARIA snapshots, JSON) is gitignored and regenerated each run — safe to overwrite. The exception is `qa-artifacts/QA-REPORT.md`, which is **tracked and committed** — the report always belongs in the repo.
 - Distinguish a real product bug from a harness/mock artifact (e.g. the mock workspace path, stubbed `window.prompt/confirm`). Note the distinction rather than reporting harness behavior as an app bug.
 - Don't over-claim: if you didn't observe it, say so. Severity reflects user impact, not how easy it is to fix.
