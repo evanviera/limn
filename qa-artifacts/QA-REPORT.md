@@ -10,6 +10,18 @@ No **blocking** issues were found — no crashes, no data loss observed, every c
 
 **Counts:** 🔴 Blocking **0** · 🟠 Should-fix **5** · 🟡 Polish **5**
 
+> **Resolution (2026-06-27):** All 10 findings have been addressed in `src/App.tsx` / `src/styles.css`. `tsc --noEmit` is clean and the full Playwright sweep (`QA_SWEEP=1`) passes. Summary of fixes:
+>
+> - **Stacked-modal Escape / focus trap:** `useModalKeys` now keeps a module-level `modalStack`; only the topmost dialog handles Escape/Tab. The hook also captures `document.activeElement` on open and restores it on close, and the card editor moves initial focus into itself (`tabIndex={-1}` + focus on mount).
+> - **Card `role="button"` with interactive descendants:** the card `<article>` is now a plain container (no `role`/`tabIndex`/`onKeyDown`); the title is a real `.card-open` `<button>` that is the keyboard "open card" target. Mouse click-anywhere-to-open is preserved.
+> - **Sidebar overflow:** `.sidebar button` now `overflow:hidden; white-space:nowrap; text-overflow:ellipsis`.
+> - **Dialog names:** `TextDialog` and `ConfirmDialog` reference their heading via `aria-labelledby`.
+> - **Input hardening:** the dialog input has `maxLength={80}`; board/list create+rename reject duplicate names via a `validate` hook.
+> - **Error copy:** user-facing banners use `errorText(reason)` (message only, no `Error:` prefix).
+> - **Delete-board copy:** now reads "…and all its cards?".
+> - **Settings save:** posts a "Settings saved." notice.
+> - **Concurrent card edit:** a silent watch refresh that changes the open card now posts "This card changed on disk…".
+
 ### Coverage / what could NOT be tested
 - **Real Tauri file I/O & native folder picker** — mocked by the harness (`pick_workspace_folder` returns the fixed `/mock/limn-e2e-workspace`). File reads/writes, watch events, and OS dialogs are not exercised.
 - **Real Slack HTTP** — `post_slack` is mocked; the `/fail` path throws synthetically. The success/failure *UI* was verified, not the network call.

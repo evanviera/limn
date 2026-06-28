@@ -397,8 +397,11 @@ label {
 .sidebar button {
   justify-content: flex-start;
   width: 100%;
+  overflow: hidden;
   color: var(--text);
   text-align: left;
+  text-overflow: ellipsis;
+  white-space: nowrap;
   background: transparent;
   border-color: transparent;
 }
@@ -673,6 +676,26 @@ body.is-card-dragging * {
   text-decoration: line-through;
   text-decoration-color: var(--success-border);
   text-decoration-thickness: 1px;
+}
+
+/* The card title is a real button so keyboard users have an explicit "open
+   card" target, while the card itself is a plain (non-button) container. */
+.card-open {
+  display: inline;
+  margin: 0;
+  padding: 0;
+  color: inherit;
+  font: inherit;
+  text-align: left;
+  background: none;
+  border: none;
+  cursor: pointer;
+}
+
+.card-open:focus-visible {
+  outline: none;
+  border-radius: var(--radius-sm);
+  box-shadow: var(--focus);
 }
 
 .done-check {

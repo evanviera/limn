@@ -26,12 +26,17 @@ import { Board, BoardList, Card, Member, Subtask, View, WorkspaceSettings, Write
 
 const memberColors = ["#2563eb", "#0f766e", "#b45309", "#be123c", "#7c3aed", "#4d7c0f"];
 
+const MAX_NAME_LENGTH = 80;
+
 interface TextDialogState {
   title: string;
   label: string;
   value: string;
   confirmLabel: string;
   onSubmit: (value: string) => Promise<void>;
+  // Optional extra validation run on submit (e.g. duplicate-name checks).
+  // Return an error message to block submission, or null to allow it.
+  validate?: (value: string) => string | null;
 }
 
 interface ConfirmDialogState {
@@ -62,6 +67,13 @@ export default function App() {
 
   const activeBoard = boards.find((board) => board.id === activeBoardId) ?? boards[0] ?? null;
   const selectedCard = cards.find((card) => card.id === selectedCardId) ?? null;
+  // The workspace watcher captures `refreshWorkspace` from the effect's render,
+  // so read the open card / cards through refs to get current values when a
+  // disk change fires.
+  const selectedCardIdRef = useRef(selectedCardId);
+  selectedCardIdRef.current = selectedCardId;
+  const cardsRef = useRef(cards);
+  cardsRef.current = cards;
   const visibleCards = useMemo(
     () => cards.filter((card) => !card.archived && card.boardId === activeBoard?.id),
     [activeBoard?.id, cards]
@@ -84,7 +96,7 @@ export default function App() {
     }
 
     let unlisten: (() => void) | undefined;
-    void watchWorkspace(workspacePath).catch((reason) => setError(String(reason)));
+    void watchWorkspace(workspacePath).catch((reason) => setError(errorText(reason)));
     void listen("workspace-changed", () => {
       void refreshWorkspace(false);
     }).then((dispose) => {
@@ -140,6 +152,16 @@ export default function App() {
     } else if (data.diagnostics.length > 0) {
       setNotice(data.diagnostics.join(" "));
       setNoticeKind("warning");
+    } else {
+      // A silent (watch-driven) refresh: if the card currently open in the
+      // editor changed on disk, warn before the user overwrites it.
+      const openId = selectedCardIdRef.current;
+      const before = openId ? cardsRef.current.find((card) => card.id === openId) : undefined;
+      const after = openId ? data.cards.find((card) => card.id === openId) : undefined;
+      if (before && after && before.updatedAt !== after.updatedAt) {
+        setNotice("This card changed on disk. Reopen it to see the latest version.");
+        setNoticeKind("warning");
+      }
     }
   }
 
@@ -172,6 +194,10 @@ export default function App() {
       label: "Board name",
       value: "",
       confirmLabel: "Create board",
+      validate: (name) =>
+        boards.some((board) => board.name.trim().toLowerCase() === name.toLowerCase())
+          ? "A board with this name already exists."
+          : null,
       onSubmit: async (name) => {
         const board = createBoard(name);
         await persistBoard(board);
@@ -187,6 +213,10 @@ export default function App() {
       label: "Board name",
       value: board.name,
       confirmLabel: "Save board",
+      validate: (name) =>
+        boards.some((item) => item.id !== board.id && item.name.trim().toLowerCase() === name.toLowerCase())
+          ? "A board with this name already exists."
+          : null,
       onSubmit: async (name) => {
         await persistBoard({ ...board, name, updatedAt: timestamp() });
       }
@@ -199,7 +229,7 @@ export default function App() {
     }
     openConfirmDialog({
       title: "Delete board",
-      message: `Delete board "${board.name}" and its visible cards?`,
+      message: `Delete board "${board.name}" and all its cards?`,
       confirmLabel: "Delete board",
       destructive: true,
       onConfirm: async () => {
@@ -222,6 +252,10 @@ export default function App() {
       label: "List name",
       value: "",
       confirmLabel: "Add list",
+      validate: (name) =>
+        activeBoard.lists.some((item) => item.name.trim().toLowerCase() === name.toLowerCase())
+          ? "A list with this name already exists."
+          : null,
       onSubmit: async (name) => {
         const list: BoardList = { id: makeId("list"), name };
         await persistBoard({ ...activeBoard, lists: [...activeBoard.lists, list], updatedAt: timestamp() });
@@ -238,6 +272,10 @@ export default function App() {
       label: "List name",
       value: list.name,
       confirmLabel: "Save list",
+      validate: (name) =>
+        activeBoard.lists.some((item) => item.id !== list.id && item.name.trim().toLowerCase() === name.toLowerCase())
+          ? "A list with this name already exists."
+          : null,
       onSubmit: async (name) => {
         await persistBoard({
           ...activeBoard,
@@ -299,7 +337,7 @@ export default function App() {
       await persistCard(archived, card);
       setSelectedCardId(null);
     } catch (reason) {
-      setError(`Archive failed: ${String(reason)}`);
+      setError(`Archive failed: ${errorText(reason)}`);
     }
   }
 
@@ -318,7 +356,7 @@ export default function App() {
           setCards((current) => current.filter((item) => item.id !== card.id));
           setSelectedCardId(null);
         } catch (reason) {
-          setError(`Delete failed: ${String(reason)}`);
+          setError(`Delete failed: ${errorText(reason)}`);
         }
       }
     });
@@ -339,7 +377,7 @@ export default function App() {
         await sendSlack(`➡️ Card moved to Done: ${moved.title}\nBoard: ${activeBoard.name}`);
       }
     } catch (reason) {
-      setError(`Move failed: ${String(reason)}`);
+      setError(`Move failed: ${errorText(reason)}`);
     }
   }
 
@@ -356,7 +394,7 @@ export default function App() {
     try {
       await persistCard(next, card);
     } catch (reason) {
-      setError(`Sub-task update failed: ${String(reason)}`);
+      setError(`Sub-task update failed: ${errorText(reason)}`);
     }
   }
 
@@ -412,6 +450,8 @@ export default function App() {
     settingsRef.current = updated;
     setSettings(updated);
     await saveSettings(workspacePath, updated);
+    setNotice("Settings saved.");
+    setNoticeKind("info");
   }
 
   async function sendSlack(message: string) {
@@ -422,7 +462,7 @@ export default function App() {
     try {
       await postSlack(webhookUrl, message);
     } catch (reason) {
-      setError(`Slack notification failed: ${String(reason)}`);
+      setError(`Slack notification failed: ${errorText(reason)}`);
     }
   }
 
@@ -592,7 +632,7 @@ export default function App() {
             try {
               await textDialog.onSubmit(value);
             } catch (reason) {
-              setError(String(reason));
+              setError(errorText(reason));
             }
           }}
         />
@@ -606,7 +646,7 @@ export default function App() {
             try {
               await confirmDialog.onConfirm();
             } catch (reason) {
-              setError(String(reason));
+              setError(errorText(reason));
             }
           }}
         />
@@ -886,22 +926,14 @@ function BoardView(props: BoardViewProps) {
                     data-card-id={card.id}
                     data-testid={`card-${card.id}`}
                     key={card.id}
-                    role="button"
-                    tabIndex={0}
                     onClick={() => openCard(card.id)}
-                    onKeyDown={(event) => {
-                      if (event.key === "Enter" || event.key === " ") {
-                        event.preventDefault();
-                        props.onOpenCard(card.id);
-                      }
-                    }}
                     onPointerCancel={cancelPointerDrag}
                     onPointerDown={(event) => beginPointerDrag(event, card.id)}
                     onPointerMove={updatePointerDrag}
                     onPointerUp={finishPointerDrag}
                     onMouseDown={(event) => beginMouseDrag(event, card.id)}
                   >
-                    <TaskCardBody card={card} members={props.members} onToggleSubtask={props.onToggleSubtask} />
+                    <TaskCardBody card={card} members={props.members} onOpen={openCard} onToggleSubtask={props.onToggleSubtask} />
                   </article>
                 ))}
               </div>
@@ -932,10 +964,12 @@ function BoardView(props: BoardViewProps) {
 function TaskCardBody({
   card,
   members,
+  onOpen,
   onToggleSubtask
 }: {
   card: Card;
   members: Member[];
+  onOpen?: (cardId: string) => void;
   onToggleSubtask?: (cardId: string, subtaskId: string, completed: boolean) => void;
 }) {
   const doneCount = card.subtasks.filter((subtask) => subtask.completed).length;
@@ -948,7 +982,21 @@ function TaskCardBody({
             <span className="done-check" aria-hidden="true">✓ </span>
           </>
         )}
-        {card.title}
+        {onOpen ? (
+          <button
+            className="card-open"
+            data-testid={`card-open-${card.id}`}
+            type="button"
+            onClick={(event) => {
+              event.stopPropagation();
+              onOpen(card.id);
+            }}
+          >
+            {card.title}
+          </button>
+        ) : (
+          card.title
+        )}
       </h3>
       {card.labels.length > 0 && (
         <div className="label-row">
@@ -1182,6 +1230,10 @@ function CardEditor({
 
   useEffect(() => setDraft(card), [card]);
   useModalKeys(editorRef, onClose);
+  // Move focus into the dialog on open so keyboard users land inside it.
+  useEffect(() => {
+    editorRef.current?.focus();
+  }, []);
 
   function updateAssignee(memberId: string, checked: boolean) {
     setDraft((current) => ({
@@ -1219,6 +1271,7 @@ function CardEditor({
         className="card-editor"
         ref={editorRef}
         role="dialog"
+        tabIndex={-1}
         onMouseDown={(event) => event.stopPropagation()}
       >
         <header>
@@ -1438,6 +1491,7 @@ function TextDialog({
   return (
     <div className="dialog-backdrop" onMouseDown={onCancel}>
       <form
+        aria-labelledby="text-dialog-title"
         aria-modal="true"
         className="text-dialog"
         noValidate
@@ -1450,13 +1504,18 @@ function TextDialog({
             setValidation(`${dialog.label} is required.`);
             return;
           }
+          const problem = dialog.validate?.(value);
+          if (problem) {
+            setValidation(problem);
+            return;
+          }
           setValidation("");
           void onSubmit(value);
         }}
         role="dialog"
       >
         <header>
-          <h2>{dialog.title}</h2>
+          <h2 id="text-dialog-title">{dialog.title}</h2>
           <button type="button" onClick={onCancel}>Cancel</button>
         </header>
         <label>
@@ -1465,6 +1524,7 @@ function TextDialog({
             aria-describedby={validation ? "text-dialog-error" : undefined}
             aria-invalid={validation ? true : undefined}
             data-testid="text-dialog-input"
+            maxLength={MAX_NAME_LENGTH}
             ref={inputRef}
             value={dialog.value}
             onChange={(event) => {
@@ -1515,6 +1575,7 @@ function ConfirmDialog({
     <div className="dialog-backdrop" onMouseDown={onCancel}>
       <div
         aria-describedby="confirm-dialog-message"
+        aria-labelledby="confirm-dialog-title"
         aria-modal="true"
         className="text-dialog"
         ref={dialogRef}
@@ -1522,7 +1583,7 @@ function ConfirmDialog({
         role="dialog"
       >
         <header>
-          <h2>{dialog.title}</h2>
+          <h2 id="confirm-dialog-title">{dialog.title}</h2>
           <button type="button" onClick={onCancel}>Cancel</button>
         </header>
         <p id="confirm-dialog-message">{dialog.message}</p>
@@ -1562,12 +1623,33 @@ function Spinner() {
   return <span className="spinner" aria-hidden="true" />;
 }
 
+// Tracks the order in which modals open so that only the topmost one responds
+// to Escape/Tab. Without this, stacked dialogs (e.g. the card editor with a
+// delete confirm on top) each register a document listener and Escape fires
+// every handler at once, dismissing the wrong layer.
+const modalStack: symbol[] = [];
+
 function useModalKeys(containerRef: { readonly current: HTMLElement | null }, onClose: () => void) {
+  const onCloseRef = useRef(onClose);
+  onCloseRef.current = onClose;
+
   useEffect(() => {
+    const id = Symbol("modal");
+    modalStack.push(id);
+    // Remember what was focused before the modal opened so we can restore it.
+    const previousActive = document.activeElement as HTMLElement | null;
+
+    function isTopmost() {
+      return modalStack[modalStack.length - 1] === id;
+    }
+
     function handleKeyDown(event: KeyboardEvent) {
+      if (!isTopmost()) {
+        return;
+      }
       if (event.key === "Escape") {
         event.preventDefault();
-        onClose();
+        onCloseRef.current();
         return;
       }
       if (event.key !== "Tab") {
@@ -1597,8 +1679,27 @@ function useModalKeys(containerRef: { readonly current: HTMLElement | null }, on
       }
     }
     document.addEventListener("keydown", handleKeyDown);
-    return () => document.removeEventListener("keydown", handleKeyDown);
-  }, [containerRef, onClose]);
+    return () => {
+      document.removeEventListener("keydown", handleKeyDown);
+      const index = modalStack.lastIndexOf(id);
+      if (index !== -1) {
+        modalStack.splice(index, 1);
+      }
+      // Return focus to the opener so keyboard/screen-reader users keep their place.
+      if (previousActive && document.contains(previousActive)) {
+        previousActive.focus();
+      }
+    };
+    // Mount/unmount only: onClose is read through a ref so re-renders don't
+    // churn the modal stack or capture a fresh "previously focused" element.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [containerRef]);
+}
+
+// Extract a clean message for user-facing error banners so we don't surface the
+// stringified Error object (e.g. "Error: …") prefix to the user.
+function errorText(reason: unknown) {
+  return reason instanceof Error ? reason.message : String(reason);
 }
 
 function initials(name: string) {
