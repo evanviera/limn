@@ -5,14 +5,32 @@ on:
     tags:
       - "v*.*.*"
   workflow_dispatch:
+    inputs:
+      version:
+        description: "Version to release, without the leading v"
+        required: true
+        type: string
 
 permissions:
   contents: write
 
 jobs:
   release:
-    name: Build macOS release
-    runs-on: macos-latest
+    name: Build ${{ matrix.platform.name }} release
+    runs-on: ${{ matrix.platform.runner }}
+
+    env:
+      RELEASE_TAG: ${{ github.event_name == 'workflow_dispatch' && format('v{0}', inputs.version) || github.ref_name }}
+
+    strategy:
+      fail-fast: false
+      max-parallel: 1
+      matrix:
+        platform:
+          - name: macOS
+            runner: macos-latest
+          - name: Windows
+            runner: windows-latest
 
     steps:
       - name: Checkout
@@ -37,8 +55,8 @@ jobs:
           TAURI_SIGNING_PRIVATE_KEY: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY }}
           TAURI_SIGNING_PRIVATE_KEY_PASSWORD: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY_PASSWORD }}
         with:
-          tagName: v__VERSION__
-          releaseName: Limn v__VERSION__
+          tagName: ${{ env.RELEASE_TAG }}
+          releaseName: Limn ${{ env.RELEASE_TAG }}
           releaseBody: "See the assets below to download and install Limn."
           releaseDraft: true
           prerelease: false

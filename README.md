@@ -40,7 +40,7 @@ npm run tauri:build
 
 ## Releases and Updates
 
-Limn uses Tauri's updater with GitHub Releases. Release builds upload signed updater metadata to `latest.json`, which the desktop app checks at startup and from Settings.
+Limn uses Tauri's updater with GitHub Releases. Release builds run on macOS and Windows, then upload signed updater metadata to `latest.json`, which the desktop app checks at startup and from Settings.
 
 Before tagging a release, update all version fields:
 
@@ -51,6 +51,8 @@ git push origin v0.2.0
 ```
 
 The release workflow requires `TAURI_SIGNING_PRIVATE_KEY` in GitHub Actions secrets. If the key has a password, also set `TAURI_SIGNING_PRIVATE_KEY_PASSWORD`; otherwise leave it empty.
+
+The draft release should include macOS install/update assets and a Windows installer asset, typically the Tauri NSIS `.exe`.
 
 ## Usage
 
