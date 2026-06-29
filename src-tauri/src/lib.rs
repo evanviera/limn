@@ -272,8 +272,14 @@ fn open_external(url: String) -> Result<(), String> {
     open::that(url).map_err(display_err)
 }
 
+#[tauri::command]
+fn restart_app(app: AppHandle) {
+    app.restart();
+}
+
 pub fn run() {
     tauri::Builder::default()
+        .plugin(tauri_plugin_updater::Builder::new().build())
         .manage(WatchState::default())
         .invoke_handler(tauri::generate_handler![
             pick_workspace_folder,
@@ -289,7 +295,8 @@ pub fn run() {
             get_last_workspace,
             watch_workspace,
             post_slack,
-            open_external
+            open_external,
+            restart_app
         ])
         .run(tauri::generate_context!())
         .expect("error while running Limn");

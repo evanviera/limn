@@ -811,6 +811,14 @@ body.is-card-dragging * {
   background: transparent;
 }
 
+.banner-actions {
+  display: flex;
+  flex: 0 0 auto;
+  flex-wrap: wrap;
+  justify-content: flex-end;
+  gap: var(--space-3);
+}
+
 .banner-warning {
   color: var(--warning);
   background: var(--warning-soft);
@@ -860,6 +868,36 @@ body.is-card-dragging * {
   background: var(--surface);
   border: 1px solid var(--border-soft);
   border-radius: var(--radius-md);
+}
+
+.settings-panel {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  gap: var(--space-5);
+  align-items: start;
+  width: min(760px, 100%);
+  margin-bottom: var(--space-5);
+  padding: var(--space-5);
+  background: var(--surface);
+  border: 1px solid var(--border-soft);
+  border-radius: var(--radius-md);
+}
+
+.settings-panel h2 {
+  margin: 0 0 var(--space-3);
+  color: var(--text-strong);
+  font-size: var(--text-lg);
+}
+
+.settings-panel p {
+  margin: 0;
+}
+
+.settings-actions {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: flex-end;
+  gap: var(--space-3);
 }
 
 .member-row {
@@ -1454,6 +1492,20 @@ body.is-card-dragging * {
   .card-editor footer {
     align-items: stretch;
     flex-direction: column;
+  }
+
+  .banner-actions,
+  .settings-actions {
+    justify-content: stretch;
+  }
+
+  .banner-actions button,
+  .settings-actions button {
+    width: 100%;
+  }
+
+  .settings-panel {
+    grid-template-columns: 1fr;
   }
 
   .destructive-actions {

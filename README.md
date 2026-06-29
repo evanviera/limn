@@ -38,6 +38,20 @@ Build:
 npm run tauri:build
 ```
 
+## Releases and Updates
+
+Limn uses Tauri's updater with GitHub Releases. Release builds upload signed updater metadata to `latest.json`, which the desktop app checks at startup and from Settings.
+
+Before tagging a release, update all version fields:
+
+```sh
+npm run release:version -- 0.2.0
+git tag v0.2.0
+git push origin v0.2.0
+```
+
+The release workflow requires `TAURI_SIGNING_PRIVATE_KEY` in GitHub Actions secrets. If the key has a password, also set `TAURI_SIGNING_PRIVATE_KEY_PASSWORD`; otherwise leave it empty.
+
 ## Usage
 
 1. Launch Limn.

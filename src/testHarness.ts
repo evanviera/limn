@@ -1,4 +1,5 @@
 import type { Board, Card, MembersFile, WorkspaceFiles, WorkspaceSettings, WriteResult } from "./types";
+import type { DownloadProgress } from "./updater";
 
 type Handler = () => void;
 
@@ -14,7 +15,14 @@ interface HarnessSnapshot {
   cards: HarnessFile[];
   lastWorkspace: string | null;
   slack: Array<{ webhookUrl: string; message: string }>;
+  updater: {
+    mode: UpdaterMode;
+    installed: boolean;
+    restarted: boolean;
+  };
 }
+
+type UpdaterMode = "none" | "available" | "install-fail";
 
 const workspacePath = "/mock/limn-e2e-workspace";
 const now = "2026-06-27T12:00:00.000Z";
@@ -33,6 +41,11 @@ const listeners = new Map<string, Set<Handler>>();
 const slack: Array<{ webhookUrl: string; message: string }> = [];
 const promptQueue: Array<string | null> = [];
 const confirmQueue: boolean[] = [];
+const updater = {
+  mode: "none" as UpdaterMode,
+  installed: false,
+  restarted: false
+};
 let lastWorkspace: string | null = null;
 
 if (new URLSearchParams(window.location.search).has("resetLimnE2e")) {
@@ -52,6 +65,7 @@ if (new URLSearchParams(window.location.search).has("resetLimnE2e")) {
       cards.set(file.file_name, file.content);
     }
     slack.splice(0, slack.length, ...restored.slack);
+    Object.assign(updater, restored.updater ?? { mode: "none", installed: false, restarted: false });
     lastWorkspace = restored.lastWorkspace;
   }
 }
@@ -70,7 +84,8 @@ function snapshot(): HarnessSnapshot {
     boards: [...boards.entries()].sort().map(([file_name, content]) => ({ file_name, content })),
     cards: [...cards.entries()].sort().map(([file_name, content]) => ({ file_name, content })),
     lastWorkspace,
-    slack: [...slack]
+    slack: [...slack],
+    updater: { ...updater }
   };
 }
 
@@ -177,6 +192,10 @@ window.__LIMN_TEST_IPC__ = {
         slack.push({ webhookUrl: args.webhookUrl, message: args.message });
         updateDebugState();
         return undefined as T;
+      case "restart_app":
+        updater.restarted = true;
+        updateDebugState();
+        return undefined as T;
       default:
         throw new Error(`Unhandled test IPC command: ${command}`);
     }
@@ -186,6 +205,32 @@ window.__LIMN_TEST_IPC__ = {
     handlers.add(handler);
     listeners.set(event, handlers);
     return () => handlers.delete(handler);
+  }
+};
+
+window.__LIMN_TEST_UPDATER__ = {
+  async check() {
+    if (updater.mode === "none") {
+      return null;
+    }
+    return {
+      version: "0.2.0",
+      currentVersion: "0.1.0",
+      body: "Test release notes"
+    };
+  },
+  async install(onProgress?: (progress: DownloadProgress) => void) {
+    if (updater.mode === "install-fail") {
+      throw new Error("Test install failed");
+    }
+    onProgress?.({ downloaded: 1024, total: 2048 });
+    onProgress?.({ downloaded: 2048, total: 2048 });
+    updater.installed = true;
+    updateDebugState();
+  },
+  async restart() {
+    updater.restarted = true;
+    updateDebugState();
   }
 };
 
@@ -205,6 +250,12 @@ window.__LIMN_E2E__ = {
   },
   resetSlack() {
     slack.splice(0, slack.length);
+  },
+  setUpdaterMode(mode: UpdaterMode) {
+    updater.mode = mode;
+    updater.installed = false;
+    updater.restarted = false;
+    updateDebugState();
   }
 };
 
@@ -217,6 +268,7 @@ function applyCommand(
     | { type: "corruptCard"; fileName: string }
     | { type: "queuePrompt"; value: string | null }
     | { type: "queueConfirm"; value: boolean }
+    | { type: "setUpdaterMode"; mode: UpdaterMode }
     | { type: "resetSlack" }
 ) {
 
@@ -239,6 +291,9 @@ function applyCommand(
       break;
     case "queueConfirm":
       confirmQueue.push(detail.value);
+      break;
+    case "setUpdaterMode":
+      window.__LIMN_E2E__?.setUpdaterMode(detail.mode);
       break;
     case "resetSlack":
       window.__LIMN_E2E__?.resetSlack();
@@ -276,6 +331,7 @@ declare global {
       externalEditCard(fileName: string, content: string): void;
       corruptCard(fileName: string): void;
       resetSlack(): void;
+      setUpdaterMode(mode: UpdaterMode): void;
     };
   }
 }

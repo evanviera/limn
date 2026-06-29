@@ -1,5 +1,5 @@
 import { test, expect } from "@playwright/test";
-import { openApp, openWorkspace, snapshot } from "./harness";
+import { openApp, openWorkspace, setUpdaterMode, snapshot } from "./harness";
 
 test.describe("smoke", () => {
   test("welcome screen renders", async ({ page }) => {
@@ -83,5 +83,43 @@ test.describe("smoke", () => {
     expect(saved.cards[0].content).toContain('"items"');
     expect(saved.cards[0].content).toContain('"text":"Logo files"');
     expect(saved.cards[0].content).toContain('"url":"https://example.com/brand"');
+  });
+
+  test("manual update check reports when Limn is up to date", async ({ page }) => {
+    await openApp(page);
+    await openWorkspace(page);
+
+    await page.getByTestId("nav-settings").click();
+    await page.getByTestId("check-updates").click();
+
+    await expect(page.getByTestId("update-status")).toContainText("Limn is up to date.");
+  });
+
+  test("available update can be installed and restarted from the banner", async ({ page }) => {
+    await openApp(page);
+    await setUpdaterMode(page, "available");
+    await openApp(page, { reset: false });
+    await openWorkspace(page);
+
+    await expect(page.getByTestId("update-banner")).toContainText("Limn 0.2.0 is available.");
+    await page.getByTestId("install-update").click();
+    await expect(page.getByTestId("update-banner")).toContainText("Restart to finish updating.");
+    await expect.poll(async () => (await snapshot(page)).updater.installed).toBe(true);
+
+    await page.getByTestId("restart-update").click();
+    await expect.poll(async () => (await snapshot(page)).updater.restarted).toBe(true);
+  });
+
+  test("update install failure is shown in settings", async ({ page }) => {
+    await openApp(page);
+    await openWorkspace(page);
+    await setUpdaterMode(page, "install-fail");
+
+    await page.getByTestId("nav-settings").click();
+    await page.getByTestId("check-updates").click();
+    await expect(page.getByTestId("settings-install-update")).toBeVisible();
+    await page.getByTestId("settings-install-update").click();
+
+    await expect(page.getByTestId("update-status")).toContainText("Update install failed: Test install failed");
   });
 });

@@ -23,10 +23,19 @@ import {
   watchWorkspace
 } from "./storage";
 import { Board, BoardList, Card, Member, Subtask, SubtaskListItem, View, WorkspaceSettings, WriteResult } from "./types";
+import {
+  canUseUpdater,
+  checkForUpdate,
+  installUpdate,
+  restartApp,
+  type AppUpdate,
+  type DownloadProgress
+} from "./updater";
 
 const memberColors = ["#2563eb", "#0f766e", "#b45309", "#be123c", "#7c3aed", "#4d7c0f"];
 
 const MAX_NAME_LENGTH = 80;
+type UpdateStatus = "idle" | "checking" | "available" | "downloading" | "restart-ready" | "not-available" | "error";
 
 interface TextDialogState {
   title: string;
@@ -64,9 +73,15 @@ export default function App() {
   const [opening, setOpening] = useState(false);
   const [textDialog, setTextDialog] = useState<TextDialogState | null>(null);
   const [confirmDialog, setConfirmDialog] = useState<ConfirmDialogState | null>(null);
+  const [updateStatus, setUpdateStatus] = useState<UpdateStatus>("idle");
+  const [updateInfo, setUpdateInfo] = useState<AppUpdate | null>(null);
+  const [updateMessage, setUpdateMessage] = useState("");
+  const [updateProgress, setUpdateProgress] = useState<DownloadProgress | null>(null);
+  const hasCheckedForUpdatesRef = useRef(false);
 
   const activeBoard = boards.find((board) => board.id === activeBoardId) ?? boards[0] ?? null;
   const selectedCard = cards.find((card) => card.id === selectedCardId) ?? null;
+  const updaterAvailable = canUseUpdater();
   // The workspace watcher captures `refreshWorkspace` from the effect's render,
   // so read the open card / cards through refs to get current values when a
   // disk change fires.
@@ -89,6 +104,14 @@ export default function App() {
       .catch(() => undefined)
       .finally(() => setIsLoading(false));
   }, []);
+
+  useEffect(() => {
+    if (hasCheckedForUpdatesRef.current || !updaterAvailable) {
+      return;
+    }
+    hasCheckedForUpdatesRef.current = true;
+    void checkForUpdates(false);
+  }, [updaterAvailable]);
 
   useEffect(() => {
     if (!workspacePath) {
@@ -162,6 +185,63 @@ export default function App() {
         setNotice("This card changed on disk. Reopen it to see the latest version.");
         setNoticeKind("warning");
       }
+    }
+  }
+
+  async function checkForUpdates(showNoUpdate = true): Promise<AppUpdate | null> {
+    if (!updaterAvailable) {
+      if (showNoUpdate) {
+        setUpdateStatus("not-available");
+        setUpdateMessage("Update checks are available in the desktop app.");
+      }
+      return null;
+    }
+
+    setUpdateStatus("checking");
+    setUpdateMessage("");
+    setUpdateProgress(null);
+    try {
+      const update = await checkForUpdate();
+      setUpdateInfo(update);
+      if (update) {
+        setUpdateStatus("available");
+        setUpdateMessage(update.body?.trim() || `Limn ${update.version} is ready to install.`);
+        return update;
+      }
+      setUpdateStatus(showNoUpdate ? "not-available" : "idle");
+      setUpdateMessage(showNoUpdate ? "Limn is up to date." : "");
+      return null;
+    } catch (reason) {
+      setUpdateStatus("error");
+      setUpdateMessage(`Update check failed: ${errorText(reason)}`);
+      return null;
+    }
+  }
+
+  async function installAvailableUpdate() {
+    if (!updateInfo) {
+      return;
+    }
+
+    setUpdateStatus("downloading");
+    setUpdateMessage(`Downloading Limn ${updateInfo.version}...`);
+    setUpdateProgress({ downloaded: 0 });
+    try {
+      await installUpdate((progress) => setUpdateProgress(progress));
+      setUpdateStatus("restart-ready");
+      setUpdateMessage(`Limn ${updateInfo.version} is installed. Restart to finish updating.`);
+    } catch (reason) {
+      setUpdateStatus("error");
+      setUpdateMessage(`Update install failed: ${errorText(reason)}`);
+    }
+  }
+
+  async function restartAfterUpdate() {
+    try {
+      await restartApp();
+    } catch (reason) {
+      setUpdateStatus("error");
+      setUpdateMessage(`Restart failed: ${errorText(reason)}`);
     }
   }
 
@@ -485,6 +565,9 @@ export default function App() {
     setConfirmDialog(nextDialog);
   }
 
+  const updateBannerVisible = ["available", "downloading", "restart-ready", "error"].includes(updateStatus);
+  const updateBannerText = updateBannerMessage(updateStatus, updateInfo, updateMessage, updateProgress);
+
   if (isLoading) {
     return (
       <div className="center-screen">
@@ -583,6 +666,37 @@ export default function App() {
             </button>
           </div>
         )}
+        {updateBannerVisible && (
+          <div
+            aria-live={updateStatus === "error" ? "assertive" : "polite"}
+            className={`banner ${updateStatus === "error" ? "banner-error" : "banner-warning"}`}
+            data-testid="update-banner"
+            role={updateStatus === "error" ? "alert" : "status"}
+          >
+            <span>{updateBannerText}</span>
+            <div className="banner-actions">
+              {updateStatus === "available" && (
+                <button data-testid="install-update" onClick={() => void installAvailableUpdate()}>
+                  Install update
+                </button>
+              )}
+              {updateStatus === "restart-ready" && (
+                <button data-testid="restart-update" onClick={() => void restartAfterUpdate()}>
+                  Restart Limn
+                </button>
+              )}
+              <button
+                data-testid="dismiss-update-banner"
+                onClick={() => {
+                  setUpdateStatus("idle");
+                  setUpdateMessage("");
+                }}
+              >
+                Dismiss
+              </button>
+            </div>
+          </div>
+        )}
 
         {view === "board" && activeBoard && (
           <BoardView
@@ -607,7 +721,20 @@ export default function App() {
           <MembersView members={members} onSave={saveMember} onRemove={removeMember} />
         )}
         {view === "settings" && (
-          <SettingsView settings={settings} workspacePath={workspacePath} onSave={saveWorkspaceSettings} onReload={refreshWorkspace} />
+          <SettingsView
+            settings={settings}
+            workspacePath={workspacePath}
+            onSave={saveWorkspaceSettings}
+            onReload={refreshWorkspace}
+            updaterAvailable={updaterAvailable}
+            updateInfo={updateInfo}
+            updateMessage={updateMessage}
+            updateProgress={updateProgress}
+            updateStatus={updateStatus}
+            onCheckForUpdates={checkForUpdates}
+            onInstallUpdate={installAvailableUpdate}
+            onRestartAfterUpdate={restartAfterUpdate}
+          />
         )}
       </main>
 
@@ -1168,12 +1295,28 @@ function SettingsView({
   settings,
   workspacePath,
   onSave,
-  onReload
+  onReload,
+  updaterAvailable,
+  updateInfo,
+  updateMessage,
+  updateProgress,
+  updateStatus,
+  onCheckForUpdates,
+  onInstallUpdate,
+  onRestartAfterUpdate
 }: {
   settings: WorkspaceSettings;
   workspacePath: string;
   onSave: (settings: WorkspaceSettings) => Promise<void>;
   onReload: () => Promise<void>;
+  updaterAvailable: boolean;
+  updateInfo: AppUpdate | null;
+  updateMessage: string;
+  updateProgress: DownloadProgress | null;
+  updateStatus: UpdateStatus;
+  onCheckForUpdates: (showNoUpdate?: boolean) => Promise<AppUpdate | null>;
+  onInstallUpdate: () => Promise<void>;
+  onRestartAfterUpdate: () => Promise<void>;
 }) {
   const [draft, setDraft] = useState(settings);
   const [reloading, setReloading] = useState(false);
@@ -1224,6 +1367,40 @@ function SettingsView({
           <input value={workspacePath} readOnly />
         </label>
       </div>
+      <section className="settings-panel" aria-labelledby="updates-heading">
+        <div>
+          <p className="eyebrow">Application</p>
+          <h2 id="updates-heading">Updates</h2>
+          <p className={updateStatus === "error" ? "error" : "muted"} data-testid="update-status">
+            {settingsUpdateMessage(updateStatus, updaterAvailable, updateInfo, updateMessage, updateProgress)}
+          </p>
+        </div>
+        <div className="settings-actions">
+          <button
+            data-testid="check-updates"
+            disabled={!updaterAvailable || updateStatus === "checking" || updateStatus === "downloading"}
+            onClick={() => void onCheckForUpdates(true)}
+          >
+            {updateStatus === "checking" ? (
+              <>
+                <Spinner /> Checking…
+              </>
+            ) : (
+              "Check for updates"
+            )}
+          </button>
+          {updateStatus === "available" && (
+            <button className="primary" data-testid="settings-install-update" onClick={() => void onInstallUpdate()}>
+              Install update
+            </button>
+          )}
+          {updateStatus === "restart-ready" && (
+            <button className="primary" data-testid="settings-restart-update" onClick={() => void onRestartAfterUpdate()}>
+              Restart Limn
+            </button>
+          )}
+        </div>
+      </section>
       <button
         className="primary"
         data-testid="save-settings"
@@ -1581,6 +1758,75 @@ function CardEditor({
       </aside>
     </div>
   );
+}
+
+function updateBannerMessage(status: UpdateStatus, update: AppUpdate | null, message: string, progress: DownloadProgress | null): string {
+  if (status === "available" && update) {
+    return `Limn ${update.version} is available. ${message}`;
+  }
+  if (status === "downloading" && update) {
+    return `Installing Limn ${update.version}... ${formatDownloadProgress(progress)}`;
+  }
+  if (status === "restart-ready") {
+    return message || "Update installed. Restart Limn to finish.";
+  }
+  if (status === "error") {
+    return message || "Update failed.";
+  }
+  return message;
+}
+
+function settingsUpdateMessage(
+  status: UpdateStatus,
+  updaterAvailable: boolean,
+  update: AppUpdate | null,
+  message: string,
+  progress: DownloadProgress | null
+): string {
+  if (!updaterAvailable) {
+    return "Update checks are available in the desktop app.";
+  }
+  if (status === "checking") {
+    return "Checking GitHub Releases for a newer version.";
+  }
+  if (status === "available" && update) {
+    return `Limn ${update.version} is available. ${message}`;
+  }
+  if (status === "downloading" && update) {
+    return `Installing Limn ${update.version}. ${formatDownloadProgress(progress)}`;
+  }
+  if (status === "restart-ready") {
+    return message || "Update installed. Restart Limn to finish.";
+  }
+  if (status === "not-available") {
+    return message || "Limn is up to date.";
+  }
+  if (status === "error") {
+    return message || "Update failed.";
+  }
+  return "Limn checks GitHub Releases for signed updates.";
+}
+
+function formatDownloadProgress(progress: DownloadProgress | null): string {
+  if (!progress) {
+    return "";
+  }
+  if (!progress.total) {
+    return `${formatBytes(progress.downloaded)} downloaded.`;
+  }
+  const percent = Math.min(100, Math.round((progress.downloaded / progress.total) * 100));
+  return `${percent}% (${formatBytes(progress.downloaded)} of ${formatBytes(progress.total)}).`;
+}
+
+function formatBytes(bytes: number): string {
+  if (bytes < 1024) {
+    return `${bytes} B`;
+  }
+  const kib = bytes / 1024;
+  if (kib < 1024) {
+    return `${kib.toFixed(1)} KB`;
+  }
+  return `${(kib / 1024).toFixed(1)} MB`;
 }
 
 function EmptyState({ title, body, action, onAction }: { title: string; body: string; action: string; onAction: () => void | Promise<void> }) {

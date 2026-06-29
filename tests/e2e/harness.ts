@@ -20,6 +20,11 @@ export interface HarnessSnapshot {
   cards: HarnessFile[];
   lastWorkspace: string | null;
   slack: Array<{ webhookUrl: string; message: string }>;
+  updater: {
+    mode: "none" | "available" | "install-fail";
+    installed: boolean;
+    restarted: boolean;
+  };
 }
 
 /** Navigate to the app with the E2E harness enabled and reset to a clean state. */
@@ -47,4 +52,14 @@ export function snapshot(page: Page): Promise<HarnessSnapshot> {
     }
     return api.snapshot();
   });
+}
+
+export async function setUpdaterMode(page: Page, mode: HarnessSnapshot["updater"]["mode"]): Promise<void> {
+  await page.evaluate((nextMode) => {
+    const api = (window as { __LIMN_E2E__?: { setUpdaterMode(mode: typeof nextMode): void } }).__LIMN_E2E__;
+    if (!api) {
+      throw new Error("Limn E2E harness not loaded");
+    }
+    api.setUpdaterMode(nextMode);
+  }, mode);
 }
