@@ -154,6 +154,16 @@ button.primary:hover:not(:disabled) {
   background: var(--accent-hover);
 }
 
+.icon {
+  width: 16px;
+  height: 16px;
+  fill: none;
+  stroke: currentColor;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+  stroke-width: 2;
+}
+
 button[data-testid="delete-board"],
 button[data-testid^="delete-list"],
 button[data-testid="delete-card"],
@@ -758,6 +768,32 @@ body.is-card-dragging * {
   font-size: var(--text-sm);
 }
 
+.card-notes-preview {
+  display: -webkit-box;
+  overflow: hidden;
+  margin: 0;
+  color: var(--text-muted);
+  font-size: var(--text-sm);
+  line-height: 1.38;
+  overflow-wrap: anywhere;
+  white-space: pre-wrap;
+  -webkit-box-orient: vertical;
+  -webkit-line-clamp: 3;
+}
+
+.card-notes-preview a {
+  color: var(--accent-link);
+  text-decoration-line: underline;
+  text-decoration-color: var(--accent-link-border);
+  text-underline-offset: 2px;
+}
+
+.card-notes-preview a:hover,
+.card-notes-preview a:focus-visible {
+  color: var(--accent-link-hover);
+  text-decoration-color: var(--accent-link-hover);
+}
+
 .empty-state {
   display: grid;
   place-content: center;
@@ -1075,6 +1111,7 @@ body.is-card-dragging * {
 /* Section headers inside the editor (Sub-tasks, Activity) share the same quiet,
    uppercase label treatment as the Assignees legend for a consistent rhythm. */
 .subtasks h3,
+.notes-editor h3,
 .activity h3 {
   margin: 0;
   color: var(--text-muted);
@@ -1120,6 +1157,53 @@ body.is-card-dragging * {
   font-weight: var(--weight-medium);
   letter-spacing: 0.02em;
   text-transform: uppercase;
+}
+
+.notes-editor {
+  display: grid;
+  gap: var(--space-3);
+  min-width: 0;
+}
+
+.notes-editor-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--space-4);
+  min-width: 0;
+}
+
+.notes-toolbar {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: flex-end;
+  gap: var(--space-2);
+  min-width: 0;
+}
+
+.notes-tool {
+  min-width: 32px;
+  min-height: 28px;
+  padding: 0 var(--space-3);
+  color: var(--text);
+  background: var(--input-bg);
+  border-color: var(--border-soft);
+  border-radius: var(--radius-sm);
+}
+
+.notes-link-form {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto auto;
+  gap: var(--space-3);
+  min-width: 0;
+  padding: var(--space-3);
+  background: var(--surface);
+  border: 1px solid var(--border-soft);
+  border-radius: var(--radius-md);
+}
+
+.notes-link-form button {
+  white-space: nowrap;
 }
 
 .activity {
@@ -1488,6 +1572,7 @@ body.is-card-dragging * {
   }
 
   .banner,
+  .notes-editor-header,
   .card-editor header,
   .card-editor footer {
     align-items: stretch;
@@ -1495,11 +1580,17 @@ body.is-card-dragging * {
   }
 
   .banner-actions,
+  .notes-toolbar,
   .settings-actions {
     justify-content: stretch;
   }
 
+  .notes-link-form {
+    grid-template-columns: 1fr;
+  }
+
   .banner-actions button,
+  .notes-link-form button,
   .settings-actions button {
     width: 100%;
   }

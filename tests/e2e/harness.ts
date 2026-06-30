@@ -19,6 +19,7 @@ export interface HarnessSnapshot {
   boards: HarnessFile[];
   cards: HarnessFile[];
   lastWorkspace: string | null;
+  externalLinks: string[];
   slack: Array<{ webhookUrl: string; message: string }>;
   updater: {
     mode: "none" | "available" | "install-fail";
@@ -62,4 +63,12 @@ export async function setUpdaterMode(page: Page, mode: HarnessSnapshot["updater"
     }
     api.setUpdaterMode(nextMode);
   }, mode);
+}
+
+export async function queuePrompt(page: Page, value: string | null): Promise<void> {
+  await page.evaluate((nextValue) => {
+    document.dispatchEvent(new CustomEvent("limn-e2e-command", {
+      detail: { type: "queuePrompt", value: nextValue }
+    }));
+  }, value);
 }

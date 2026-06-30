@@ -14,6 +14,7 @@ interface HarnessSnapshot {
   boards: HarnessFile[];
   cards: HarnessFile[];
   lastWorkspace: string | null;
+  externalLinks: string[];
   slack: Array<{ webhookUrl: string; message: string }>;
   updater: {
     mode: UpdaterMode;
@@ -38,6 +39,7 @@ const members: MembersFile = { schemaVersion: 1, members: [] };
 const boards = new Map<string, string>();
 const cards = new Map<string, string>();
 const listeners = new Map<string, Set<Handler>>();
+const externalLinks: string[] = [];
 const slack: Array<{ webhookUrl: string; message: string }> = [];
 const promptQueue: Array<string | null> = [];
 const confirmQueue: boolean[] = [];
@@ -64,6 +66,7 @@ if (new URLSearchParams(window.location.search).has("resetLimnE2e")) {
     for (const file of restored.cards) {
       cards.set(file.file_name, file.content);
     }
+    externalLinks.splice(0, externalLinks.length, ...(restored.externalLinks ?? []));
     slack.splice(0, slack.length, ...restored.slack);
     Object.assign(updater, restored.updater ?? { mode: "none", installed: false, restarted: false });
     lastWorkspace = restored.lastWorkspace;
@@ -84,6 +87,7 @@ function snapshot(): HarnessSnapshot {
     boards: [...boards.entries()].sort().map(([file_name, content]) => ({ file_name, content })),
     cards: [...cards.entries()].sort().map(([file_name, content]) => ({ file_name, content })),
     lastWorkspace,
+    externalLinks: [...externalLinks],
     slack: [...slack],
     updater: { ...updater }
   };
@@ -190,6 +194,13 @@ window.__LIMN_TEST_IPC__ = {
           throw new Error("Slack webhook returned 500");
         }
         slack.push({ webhookUrl: args.webhookUrl, message: args.message });
+        updateDebugState();
+        return undefined as T;
+      case "open_external":
+        if (typeof args?.url !== "string") {
+          throw new Error("Missing external URL");
+        }
+        externalLinks.push(args.url);
         updateDebugState();
         return undefined as T;
       case "restart_app":

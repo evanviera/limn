@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useRef, useState } from "react";
-import type { MouseEvent as ReactMouseEvent } from "react";
+import type { FormEvent as ReactFormEvent, MouseEvent as ReactMouseEvent, ReactNode } from "react";
 import type { PointerEvent as ReactPointerEvent } from "react";
 import { listen } from "./ipc";
 import {
@@ -11,6 +11,7 @@ import {
   getLastWorkspace,
   loadWorkspace,
   makeId,
+  normalizeUrl,
   openExternal,
   pickWorkspaceFolder,
   postSlack,
@@ -1100,6 +1101,7 @@ function TaskCardBody({
   onToggleSubtask?: (cardId: string, subtaskId: string, completed: boolean) => void;
 }) {
   const doneCount = card.subtasks.filter((subtask) => subtask.completed).length;
+  const noteText = card.body.trim();
   return (
     <>
       <h3>
@@ -1205,6 +1207,11 @@ function TaskCardBody({
           })}
         </ul>
       )}
+      {noteText && (
+        <p className="card-notes-preview" data-testid={`card-notes-${card.id}`}>
+          <RichNoteText text={noteText} testIdPrefix={`card-note-link-${card.id}`} />
+        </p>
+      )}
       <footer>
         <span>{card.due || "No due date"}</span>
         {card.subtasks.length > 0 && (
@@ -1215,6 +1222,93 @@ function TaskCardBody({
         <MemberDots members={members.filter((member) => card.assignees.includes(member.id))} />
       </footer>
     </>
+  );
+}
+
+function RichNoteText({ text, testIdPrefix }: { text: string; testIdPrefix: string }) {
+  const nodes: ReactNode[] = [];
+  const inlinePattern = /\[([^\]\n]+)\]\(([^)\s]+)\)|\*\*([^*\n]+)\*\*|\*([^*\n]+)\*|((?:https?:\/\/|www\.)[^\s<]+)/gi;
+  let index = 0;
+  let linkIndex = 0;
+
+  for (const match of text.matchAll(inlinePattern)) {
+    const matchStart = match.index ?? 0;
+    const rawMatch = match[0];
+    if (matchStart > index) {
+      nodes.push(text.slice(index, matchStart));
+    }
+
+    const markdownLabel = match[1];
+    const markdownUrl = match[2];
+    const boldText = match[3];
+    const italicText = match[4];
+    const bareUrl = match[5];
+    const link = buildNoteLink(markdownUrl || bareUrl || "");
+
+    if (link) {
+      const label = markdownLabel || link.url;
+      nodes.push(
+        <a
+          data-testid={`${testIdPrefix}-${linkIndex}`}
+          href={link.href}
+          key={`${matchStart}-${linkIndex}`}
+          onMouseDown={(event) => event.stopPropagation()}
+          onPointerDown={(event) => event.stopPropagation()}
+          onClick={(event) => {
+            event.preventDefault();
+            event.stopPropagation();
+            void openExternal(link.url);
+          }}
+        >
+          {label}
+        </a>
+      );
+      if (link.trailing) {
+        nodes.push(link.trailing);
+      }
+      linkIndex += 1;
+    } else if (boldText) {
+      nodes.push(<strong key={`${matchStart}-bold`}>{boldText}</strong>);
+    } else if (italicText) {
+      nodes.push(<em key={`${matchStart}-italic`}>{italicText}</em>);
+    } else {
+      nodes.push(rawMatch);
+    }
+
+    index = matchStart + rawMatch.length;
+  }
+
+  if (index < text.length) {
+    nodes.push(text.slice(index));
+  }
+
+  return <>{nodes}</>;
+}
+
+function buildNoteLink(rawUrl: string): { url: string; href: string; trailing: string } | null {
+  let url = rawUrl.trim();
+  let trailing = "";
+
+  while (/[)\].,!?;:}]$/.test(url)) {
+    trailing = `${url.slice(-1)}${trailing}`;
+    url = url.slice(0, -1);
+  }
+
+  const isWebUrl = /^(https?:\/\/|www\.)/i.test(url) || /^[a-z0-9][a-z0-9.-]*\.[a-z]{2,}(?:[/:?#][^\s<]*)?$/i.test(url);
+  if (!url || !isWebUrl) {
+    return null;
+  }
+
+  const href = normalizeUrl(url);
+  return /^https?:\/\//i.test(href) ? { url, href, trailing } : null;
+}
+
+function LinkIcon() {
+  return (
+    <svg className="icon" aria-hidden="true" viewBox="0 0 24 24">
+      <path d="M10 13a5 5 0 0 0 7.07 0l2.12-2.12a5 5 0 0 0-7.07-7.07L10.9 5.03" />
+      <path d="M14 11a5 5 0 0 0-7.07 0L4.81 13.12a5 5 0 0 0 7.07 7.07l1.22-1.22" />
+    </svg>
   );
 }
 
@@ -1441,7 +1535,10 @@ function CardEditor({
 }) {
   const [draft, setDraft] = useState(card);
   const [saving, setSaving] = useState(false);
+  const [linkDraft, setLinkDraft] = useState<{ start: number; end: number; label: string; url: string } | null>(null);
   const editorRef = useRef<HTMLElement>(null);
+  const notesInputRef = useRef<HTMLTextAreaElement>(null);
+  const notesLinkInputRef = useRef<HTMLInputElement>(null);
   const board = boards.find((item) => item.id === draft.boardId) ?? boards[0];
 
   useEffect(() => setDraft(card), [card]);
@@ -1513,6 +1610,103 @@ function CardEditor({
           : subtask
       )
     }));
+  }
+
+  function replaceNotesSelection(
+    buildReplacement: (selectedText: string) => { text: string; selectionStart: number; selectionEnd: number } | null
+  ) {
+    const input = notesInputRef.current;
+    if (!input) {
+      return;
+    }
+
+    const start = input.selectionStart;
+    const end = input.selectionEnd;
+    const body = input.value;
+    const selectedText = body.slice(start, end);
+    const replacement = buildReplacement(selectedText);
+    if (!replacement) {
+      return;
+    }
+
+    const nextBody = `${body.slice(0, start)}${replacement.text}${body.slice(end)}`;
+    setDraft((current) => ({ ...current, body: nextBody }));
+    window.requestAnimationFrame(() => {
+      input.focus();
+      input.setSelectionRange(start + replacement.selectionStart, start + replacement.selectionEnd);
+    });
+  }
+
+  function formatNotesAsBold() {
+    replaceNotesSelection((selectedText) => {
+      const text = selectedText || "bold text";
+      return {
+        text: `**${text}**`,
+        selectionStart: 2,
+        selectionEnd: 2 + text.length
+      };
+    });
+  }
+
+  function formatNotesAsItalic() {
+    replaceNotesSelection((selectedText) => {
+      const text = selectedText || "italic text";
+      return {
+        text: `*${text}*`,
+        selectionStart: 1,
+        selectionEnd: 1 + text.length
+      };
+    });
+  }
+
+  function formatNotesAsLink() {
+    const input = notesInputRef.current;
+    if (!input) {
+      return;
+    }
+
+    const start = input.selectionStart;
+    const end = input.selectionEnd;
+    const selectedText = input.value.slice(start, end);
+    const isSelectedUrl = /^(https?:\/\/|www\.)/i.test(selectedText);
+    setLinkDraft({
+      start,
+      end,
+      label: selectedText || "link text",
+      url: isSelectedUrl ? normalizeUrl(selectedText) : ""
+    });
+    window.requestAnimationFrame(() => {
+      notesLinkInputRef.current?.focus();
+    });
+  }
+
+  function applyNotesLink(event: ReactFormEvent<HTMLFormElement>) {
+    event.preventDefault();
+    if (!linkDraft) {
+      return;
+    }
+
+    const normalizedUrl = normalizeUrl(linkDraft.url);
+    if (!linkDraft.url.trim() || normalizedUrl === "https://") {
+      return;
+    }
+
+    const label = linkDraft.label || "link text";
+    const text = `[${label}](${normalizedUrl})`;
+    setDraft((current) => ({
+      ...current,
+      body: `${current.body.slice(0, linkDraft.start)}${text}${current.body.slice(linkDraft.end)}`
+    }));
+    setLinkDraft(null);
+    window.requestAnimationFrame(() => {
+      const input = notesInputRef.current;
+      if (!input) {
+        return;
+      }
+
+      input.focus();
+      input.setSelectionRange(linkDraft.start + 1, linkDraft.start + 1 + label.length);
+    });
   }
 
   return (
@@ -1712,10 +1906,72 @@ function CardEditor({
             </div>
           ))}
         </section>
-        <label>
-          Notes
-          <textarea data-testid="card-notes-input" value={draft.body} onChange={(event) => setDraft({ ...draft, body: event.target.value })} rows={10} />
-        </label>
+        <section className="notes-editor" aria-labelledby="notes-heading">
+          <div className="notes-editor-header">
+            <h3 id="notes-heading">Notes</h3>
+            <div className="notes-toolbar" aria-label="Notes formatting">
+              <button
+                aria-label="Bold"
+                className="notes-tool"
+                data-testid="notes-bold"
+                title="Bold"
+                type="button"
+                onMouseDown={(event) => event.preventDefault()}
+                onClick={formatNotesAsBold}
+              >
+                <strong>B</strong>
+              </button>
+              <button
+                aria-label="Italic"
+                className="notes-tool"
+                data-testid="notes-italic"
+                title="Italic"
+                type="button"
+                onMouseDown={(event) => event.preventDefault()}
+                onClick={formatNotesAsItalic}
+              >
+                <em>I</em>
+              </button>
+              <button
+                aria-label="Create link"
+                className="notes-tool"
+                data-testid="notes-link"
+                title="Create link"
+                type="button"
+                onMouseDown={(event) => event.preventDefault()}
+                onClick={formatNotesAsLink}
+              >
+                <LinkIcon />
+              </button>
+            </div>
+          </div>
+          {linkDraft && (
+            <form className="notes-link-form" data-testid="notes-link-form" onSubmit={applyNotesLink}>
+              <input
+                aria-label="Link URL"
+                data-testid="notes-link-url"
+                placeholder="https://example.com"
+                ref={notesLinkInputRef}
+                value={linkDraft.url}
+                onChange={(event) => setLinkDraft({ ...linkDraft, url: event.target.value })}
+              />
+              <button className="primary" data-testid="notes-link-apply" type="submit">
+                Insert link
+              </button>
+              <button data-testid="notes-link-cancel" type="button" onClick={() => setLinkDraft(null)}>
+                Cancel
+              </button>
+            </form>
+          )}
+          <textarea
+            aria-labelledby="notes-heading"
+            data-testid="card-notes-input"
+            ref={notesInputRef}
+            value={draft.body}
+            onChange={(event) => setDraft({ ...draft, body: event.target.value })}
+            rows={10}
+          />
+        </section>
         <section className="activity">
           <h3>Activity</h3>
           {draft.activity.length === 0 && <p className="muted">No activity yet.</p>}
