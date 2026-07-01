@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useRef, useState } from "react";
+import { useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
 import type { FormEvent as ReactFormEvent, MouseEvent as ReactMouseEvent, ReactNode } from "react";
 import type { PointerEvent as ReactPointerEvent } from "react";
 import { listen } from "./ipc";
@@ -36,6 +36,8 @@ import {
 const memberColors = ["#2563eb", "#0f766e", "#b45309", "#be123c", "#7c3aed", "#4d7c0f"];
 
 const MAX_NAME_LENGTH = 80;
+const THEME_STORAGE_KEY = "limn-theme";
+type ThemeMode = "dark" | "light";
 type UpdateStatus = "idle" | "checking" | "available" | "downloading" | "restart-ready" | "not-available" | "error";
 type IconName =
   | "archive"
@@ -45,10 +47,12 @@ type IconName =
   | "chevron-up-right"
   | "edit"
   | "folder"
+  | "moon"
   | "plus"
   | "refresh"
   | "save"
   | "settings"
+  | "sun"
   | "tag"
   | "trash"
   | "users"
@@ -94,6 +98,7 @@ export default function App() {
   const [updateInfo, setUpdateInfo] = useState<AppUpdate | null>(null);
   const [updateMessage, setUpdateMessage] = useState("");
   const [updateProgress, setUpdateProgress] = useState<DownloadProgress | null>(null);
+  const [themeMode, setThemeMode] = useState<ThemeMode>(() => readStoredThemeMode());
   const hasCheckedForUpdatesRef = useRef(false);
 
   const activeBoard = boards.find((board) => board.id === activeBoardId) ?? boards[0] ?? null;
@@ -122,6 +127,11 @@ export default function App() {
       .catch(() => undefined)
       .finally(() => setIsLoading(false));
   }, []);
+
+  useLayoutEffect(() => {
+    document.documentElement.dataset.theme = themeMode;
+    localStorage.setItem(THEME_STORAGE_KEY, themeMode);
+  }, [themeMode]);
 
   useEffect(() => {
     if (hasCheckedForUpdatesRef.current || !updaterAvailable) {
@@ -664,6 +674,13 @@ export default function App() {
           ))}
         </nav>
         <div className="sidebar-bottom">
+          <button
+            data-testid="theme-toggle"
+            title={`Switch to ${themeMode === "dark" ? "light" : "dark"} mode`}
+            onClick={() => setThemeMode((current) => (current === "dark" ? "light" : "dark"))}
+          >
+            <Icon name={themeMode === "dark" ? "sun" : "moon"} /> {themeMode === "dark" ? "Light mode" : "Dark mode"}
+          </button>
           <button className={view === "members" ? "active" : ""} data-testid="nav-members" onClick={() => setView("members")}>
             <Icon name="users" /> Members
           </button>
@@ -2504,6 +2521,11 @@ function Icon({ name }: { name: IconName }) {
         <path d="M3 10h18" />
       </>
     ),
+    moon: (
+      <>
+        <path d="M20 15.3A8 8 0 0 1 8.7 4a7 7 0 1 0 11.3 11.3z" />
+      </>
+    ),
     plus: (
       <>
         <path d="M12 5v14" />
@@ -2536,6 +2558,19 @@ function Icon({ name }: { name: IconName }) {
         <path d="M12 18v3" />
         <path d="m18.4 5.6-2.1 2.1" />
         <path d="m7.7 16.3-2.1 2.1" />
+      </>
+    ),
+    sun: (
+      <>
+        <circle cx="12" cy="12" r="4" />
+        <path d="M12 2v2" />
+        <path d="M12 20v2" />
+        <path d="m4.9 4.9 1.4 1.4" />
+        <path d="m17.7 17.7 1.4 1.4" />
+        <path d="M2 12h2" />
+        <path d="M20 12h2" />
+        <path d="m4.9 19.1 1.4-1.4" />
+        <path d="m17.7 6.3 1.4-1.4" />
       </>
     ),
     tag: (
@@ -2647,6 +2682,13 @@ function useModalKeys(containerRef: { readonly current: HTMLElement | null }, on
     // churn the modal stack or capture a fresh "previously focused" element.
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [containerRef]);
+}
+
+function readStoredThemeMode(): ThemeMode {
+  if (import.meta.env.DEV && new URLSearchParams(window.location.search).has("resetLimnE2e")) {
+    localStorage.removeItem(THEME_STORAGE_KEY);
+  }
+  return localStorage.getItem(THEME_STORAGE_KEY) === "light" ? "light" : "dark";
 }
 
 // Extract a clean message for user-facing error banners so we don't surface the

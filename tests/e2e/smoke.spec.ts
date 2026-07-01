@@ -16,6 +16,22 @@ test.describe("smoke", () => {
     await expect(page.getByTestId("nav-settings")).toBeVisible();
   });
 
+  test("theme toggle switches to light mode and persists", async ({ page }) => {
+    await openApp(page);
+    await openWorkspace(page);
+
+    await expect(page.locator("html")).toHaveAttribute("data-theme", "dark");
+    await page.getByTestId("theme-toggle").click();
+    await expect(page.locator("html")).toHaveAttribute("data-theme", "light");
+    await expect(page.getByTestId("theme-toggle")).toContainText("Dark mode");
+
+    await openApp(page, { reset: false });
+    await expect(page.locator("html")).toHaveAttribute("data-theme", "light");
+    await openWorkspace(page);
+    await expect(page.getByTestId("theme-toggle")).toBeVisible();
+    await expect(page.getByTestId("theme-toggle")).toContainText("Dark mode");
+  });
+
   test("creating a board persists to the harness snapshot", async ({ page }) => {
     await openApp(page);
     await openWorkspace(page);
