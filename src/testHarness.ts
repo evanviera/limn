@@ -1,7 +1,8 @@
 import type { Board, Card, MembersFile, WorkspaceFiles, WorkspaceSettings, WriteResult } from "./types";
 import type { DownloadProgress } from "./updater";
 
-type Handler = () => void;
+type HarnessEvent<T = unknown> = { event: string; id: number; payload: T };
+type Handler<T = unknown> = (event: HarnessEvent<T>) => void;
 
 interface HarnessFile {
   file_name: string;
@@ -38,7 +39,7 @@ const settings: WorkspaceSettings = {
 const members: MembersFile = { schemaVersion: 1, members: [] };
 const boards = new Map<string, string>();
 const cards = new Map<string, string>();
-const listeners = new Map<string, Set<Handler>>();
+const listeners = new Map<string, Set<Handler<any>>>();
 const externalLinks: string[] = [];
 const slack: Array<{ webhookUrl: string; message: string }> = [];
 const promptQueue: Array<string | null> = [];
@@ -73,10 +74,10 @@ if (new URLSearchParams(window.location.search).has("resetLimnE2e")) {
   }
 }
 
-function emit(event: string) {
+function emit<T = unknown>(event: string, payload?: T) {
   updateDebugState();
   for (const handler of listeners.get(event) ?? []) {
-    handler();
+    handler({ event, id: Date.now(), payload });
   }
 }
 
@@ -203,6 +204,10 @@ window.__LIMN_TEST_IPC__ = {
         externalLinks.push(args.url);
         updateDebugState();
         return undefined as T;
+      case "open_workspace_folder":
+        externalLinks.push(`file://${workspacePath}`);
+        updateDebugState();
+        return undefined as T;
       case "restart_app":
         updater.restarted = true;
         updateDebugState();
@@ -211,8 +216,8 @@ window.__LIMN_TEST_IPC__ = {
         throw new Error(`Unhandled test IPC command: ${command}`);
     }
   },
-  async listen(event: string, handler: Handler): Promise<Handler> {
-    const handlers = listeners.get(event) ?? new Set<Handler>();
+  async listen<T = unknown>(event: string, handler: Handler<T>): Promise<() => void> {
+    const handlers = listeners.get(event) ?? new Set<Handler<any>>();
     handlers.add(handler);
     listeners.set(event, handlers);
     return () => handlers.delete(handler);

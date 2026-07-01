@@ -1,11 +1,12 @@
 import { invoke as tauriInvoke } from "@tauri-apps/api/core";
 import { listen as tauriListen } from "@tauri-apps/api/event";
+import type { Event as TauriEvent } from "@tauri-apps/api/event";
 
-type Listener = () => void;
+type Listener<T = unknown> = (event: TauriEvent<T>) => void;
 
 export interface LimnTestIpc {
   invoke<T>(command: string, args?: Record<string, unknown>): Promise<T>;
-  listen(event: string, handler: Listener): Promise<Listener>;
+  listen<T = unknown>(event: string, handler: Listener<T>): Promise<() => void>;
 }
 
 declare global {
@@ -21,9 +22,9 @@ export async function invoke<T>(command: string, args?: Record<string, unknown>)
   return tauriInvoke<T>(command, args);
 }
 
-export async function listen(event: string, handler: Listener): Promise<Listener> {
+export async function listen<T = unknown>(event: string, handler: Listener<T>): Promise<() => void> {
   if (window.__LIMN_TEST_IPC__) {
-    return window.__LIMN_TEST_IPC__.listen(event, handler);
+    return window.__LIMN_TEST_IPC__.listen<T>(event, handler);
   }
-  return tauriListen(event, handler);
+  return tauriListen<T>(event, handler);
 }

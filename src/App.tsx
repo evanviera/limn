@@ -14,6 +14,7 @@ import {
   makeId,
   normalizeUrl,
   openExternal,
+  openWorkspaceFolder,
   pickWorkspaceFolder,
   postSlack,
   saveBoard,
@@ -178,6 +179,26 @@ export default function App() {
       unlisten?.();
     };
   }, [workspacePath]);
+
+  useEffect(() => {
+    let disposed = false;
+    let unlisten: (() => void) | undefined;
+
+    void listen<string>("menu-command", (event) => {
+      void handleMenuCommand(event.payload);
+    }).then((dispose) => {
+      if (disposed) {
+        dispose();
+        return;
+      }
+      unlisten = dispose;
+    });
+
+    return () => {
+      disposed = true;
+      unlisten?.();
+    };
+  });
 
   async function openWorkspace(path?: string) {
     const selectedPath = path ?? (await pickWorkspaceFolder());
@@ -617,6 +638,163 @@ export default function App() {
 
   function openConfirmDialog(nextDialog: ConfirmDialogState) {
     setConfirmDialog(nextDialog);
+  }
+
+  async function handleMenuCommand(command: string) {
+    try {
+      switch (command) {
+        case "open-workspace":
+          await openWorkspace();
+          return;
+        case "open-workspace-folder":
+          if (!workspacePath) {
+            showCommandNotice("Open a workspace before showing its folder.", "warning");
+            return;
+          }
+          await openWorkspaceFolder(workspacePath);
+          return;
+        case "reload-workspace":
+          if (!workspacePath) {
+            showCommandNotice("Open a workspace before reloading.", "warning");
+            return;
+          }
+          await refreshWorkspace();
+          return;
+        case "new-board":
+          if (!settings) {
+            showCommandNotice("Open a workspace before creating a board.", "warning");
+            return;
+          }
+          await addBoard();
+          return;
+        case "rename-board":
+          if (!activeBoard) {
+            showCommandNotice("Select a board before renaming.", "warning");
+            return;
+          }
+          await renameBoard(activeBoard);
+          return;
+        case "delete-board":
+          if (!activeBoard) {
+            showCommandNotice("Select a board before deleting.", "warning");
+            return;
+          }
+          await removeBoard(activeBoard);
+          return;
+        case "add-list":
+          if (!activeBoard) {
+            showCommandNotice("Select a board before adding a list.", "warning");
+            return;
+          }
+          await addList();
+          return;
+        case "new-card":
+          await addCardFromMenu();
+          return;
+        case "save-card":
+          if (!selectedCard) {
+            showCommandNotice("Open a card before saving.", "warning");
+            return;
+          }
+          window.dispatchEvent(new Event("limn-save-card-editor"));
+          return;
+        case "close-card":
+          if (!selectedCard) {
+            showCommandNotice("No card is open.", "warning");
+            return;
+          }
+          setSelectedCardId(null);
+          return;
+        case "toggle-card-completed":
+          await toggleSelectedCardCompleted();
+          return;
+        case "archive-card":
+          if (!selectedCard) {
+            showCommandNotice("Open a card before archiving.", "warning");
+            return;
+          }
+          await archiveCard(selectedCard);
+          return;
+        case "delete-card":
+          if (!selectedCard) {
+            showCommandNotice("Open a card before deleting.", "warning");
+            return;
+          }
+          await removeCard(selectedCard);
+          return;
+        case "show-board":
+          if (!activeBoard) {
+            showCommandNotice("Create or select a board first.", "warning");
+            return;
+          }
+          setView("board");
+          return;
+        case "show-members":
+          if (!settings) {
+            showCommandNotice("Open a workspace before viewing members.", "warning");
+            return;
+          }
+          setView("members");
+          return;
+        case "show-settings":
+          if (!settings) {
+            showCommandNotice("Open a workspace before viewing settings.", "warning");
+            return;
+          }
+          setView("settings");
+          return;
+        case "toggle-theme":
+          setThemeMode((current) => (current === "dark" ? "light" : "dark"));
+          return;
+        case "check-updates":
+          await checkForUpdates(true);
+          return;
+        case "show-help":
+          if (settings) {
+            setView("settings");
+          }
+          showCommandNotice("Limn stores boards as JSON and cards as Markdown in the selected workspace folder.", "info");
+          return;
+      }
+    } catch (reason) {
+      setError(errorText(reason));
+    }
+  }
+
+  async function addCardFromMenu() {
+    if (!activeBoard) {
+      showCommandNotice("Select a board before creating a card.", "warning");
+      return;
+    }
+    const firstList = activeBoard.lists[0];
+    if (!firstList) {
+      showCommandNotice("Add a list before creating a card.", "warning");
+      return;
+    }
+    await addCard(firstList.id);
+  }
+
+  async function toggleSelectedCardCompleted() {
+    if (!selectedCard) {
+      showCommandNotice("Open a card before changing completion.", "warning");
+      return;
+    }
+    const completed = !selectedCard.completed;
+    const next = addActivity(
+      { ...selectedCard, completed, updatedAt: timestamp() },
+      completed ? "completed" : "updated",
+      completed ? "Marked complete" : "Marked incomplete"
+    );
+    await persistCard(next, selectedCard);
+  }
+
+  function showCommandNotice(message: string, kind: "info" | "warning") {
+    if (!workspacePath) {
+      setError(message);
+      return;
+    }
+    setNotice(message);
+    setNoticeKind(kind);
   }
 
   const updateBannerVisible = ["available", "downloading", "restart-ready", "error"].includes(updateStatus);
@@ -1663,6 +1841,21 @@ function CardEditor({
   useEffect(() => {
     editorRef.current?.focus();
   }, []);
+
+  useEffect(() => {
+    function saveFromMenu() {
+      if (saving) {
+        return;
+      }
+      setSaving(true);
+      void onSave(draft)
+        .catch(() => undefined)
+        .finally(() => setSaving(false));
+    }
+
+    window.addEventListener("limn-save-card-editor", saveFromMenu);
+    return () => window.removeEventListener("limn-save-card-editor", saveFromMenu);
+  }, [draft, onSave, saving]);
 
   function updateAssignee(memberId: string, checked: boolean) {
     setDraft((current) => ({

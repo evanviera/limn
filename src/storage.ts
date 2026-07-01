@@ -93,6 +93,10 @@ export async function openExternal(url: string): Promise<void> {
   await invoke("open_external", { url: normalized });
 }
 
+export async function openWorkspaceFolder(path: string): Promise<void> {
+  await invoke("open_workspace_folder", { path });
+}
+
 export async function postSlack(webhookUrl: string, message: string): Promise<void> {
   if (!webhookUrl.trim()) {
     return;
