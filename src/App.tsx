@@ -37,6 +37,18 @@ const memberColors = ["#2563eb", "#0f766e", "#b45309", "#be123c", "#7c3aed", "#4
 
 const MAX_NAME_LENGTH = 80;
 type UpdateStatus = "idle" | "checking" | "available" | "downloading" | "restart-ready" | "not-available" | "error";
+type IconName =
+  | "archive"
+  | "check"
+  | "chevron-up-right"
+  | "edit"
+  | "folder"
+  | "plus"
+  | "refresh"
+  | "settings"
+  | "trash"
+  | "users"
+  | "x";
 
 interface TextDialogState {
   title: string;
@@ -90,6 +102,7 @@ export default function App() {
   selectedCardIdRef.current = selectedCardId;
   const cardsRef = useRef(cards);
   cardsRef.current = cards;
+  const pendingCardWriteRef = useRef<Record<string, string>>({});
   const visibleCards = useMemo(
     () => cards.filter((card) => !card.archived && card.boardId === activeBoard?.id),
     [activeBoard?.id, cards]
@@ -182,6 +195,11 @@ export default function App() {
       const openId = selectedCardIdRef.current;
       const before = openId ? cardsRef.current.find((card) => card.id === openId) : undefined;
       const after = openId ? data.cards.find((card) => card.id === openId) : undefined;
+      const expectedSelfWrite = openId ? pendingCardWriteRef.current[openId] : undefined;
+      if (openId && expectedSelfWrite && after?.updatedAt === expectedSelfWrite) {
+        delete pendingCardWriteRef.current[openId];
+        return;
+      }
       if (before && after && before.updatedAt !== after.updatedAt) {
         setNotice("This card changed on disk. Reopen it to see the latest version.");
         setNoticeKind("warning");
@@ -259,6 +277,7 @@ export default function App() {
       return null;
     }
     const expectedUpdatedAt = previous?.updatedAt;
+    pendingCardWriteRef.current[nextCard.id] = nextCard.updatedAt;
     const result = await saveCard(workspacePath, nextCard, expectedUpdatedAt);
     setCards((current) => upsertById(current, nextCard));
     if (result.conflict) {
@@ -613,14 +632,16 @@ export default function App() {
               <Spinner /> Opening…
             </>
           ) : (
-            "Open workspace"
+            <>
+              <Icon name="folder" /> Open workspace
+            </>
           )}
         </button>
         <nav className="board-nav">
           <div className="nav-heading">
             <span>Boards</span>
             <button aria-label="Create board" title="Create board" data-testid="create-board" onClick={() => void addBoard()}>
-              +
+              <Icon name="plus" />
             </button>
           </div>
           {boards.length === 0 && <p className="empty-small">No boards yet.</p>}
@@ -640,10 +661,10 @@ export default function App() {
         </nav>
         <div className="sidebar-bottom">
           <button className={view === "members" ? "active" : ""} data-testid="nav-members" onClick={() => setView("members")}>
-            Members
+            <Icon name="users" /> Members
           </button>
           <button className={view === "settings" ? "active" : ""} data-testid="nav-settings" onClick={() => setView("settings")}>
-            Settings
+            <Icon name="settings" /> Settings
           </button>
         </div>
       </aside>
@@ -657,13 +678,16 @@ export default function App() {
           >
             <span>{error || notice}</span>
             <button
+              aria-label="Dismiss message"
+              className="icon-button"
               data-testid="dismiss-banner"
+              title="Dismiss"
               onClick={() => {
                 setError("");
                 setNotice("");
               }}
             >
-              Dismiss
+              <Icon name="x" />
             </button>
           </div>
         )}
@@ -687,13 +711,16 @@ export default function App() {
                 </button>
               )}
               <button
+                aria-label="Dismiss update message"
+                className="icon-button"
                 data-testid="dismiss-update-banner"
+                title="Dismiss"
                 onClick={() => {
                   setUpdateStatus("idle");
                   setUpdateMessage("");
                 }}
               >
-                Dismiss
+                <Icon name="x" />
               </button>
             </div>
           </div>
@@ -1012,12 +1039,17 @@ function BoardView(props: BoardViewProps) {
         <div>
           <p className="eyebrow">Board</p>
           <h1>{props.board.name}</h1>
+          <p className="meta-line">{countLabel(props.board.lists.length, "list")} / {countLabel(props.cards.length, "card")}</p>
         </div>
         <div className="header-actions">
-          <button data-testid="rename-board" onClick={() => void props.onRenameBoard(props.board)}>Rename</button>
-          <button data-testid="delete-board" onClick={() => void props.onDeleteBoard(props.board)}>Delete</button>
+          <button aria-label="Rename board" className="icon-button" data-testid="rename-board" title="Rename board" onClick={() => void props.onRenameBoard(props.board)}>
+            <Icon name="edit" />
+          </button>
+          <button aria-label="Delete board" className="icon-button" data-testid="delete-board" title="Delete board" onClick={() => void props.onDeleteBoard(props.board)}>
+            <Icon name="trash" />
+          </button>
           <button className="primary" data-testid="add-list" onClick={() => void props.onAddList()}>
-            Add list
+            <Icon name="plus" /> Add list
           </button>
         </div>
       </header>
@@ -1038,11 +1070,11 @@ function BoardView(props: BoardViewProps) {
               <header className="column-header">
                 <h2>{list.name}</h2>
                 <span>{listCards.length}</span>
-                <button title="Rename list" data-testid={`rename-list-${list.id}`} onClick={() => void props.onRenameList(list)}>
-                  Rename
+                <button aria-label={`Rename ${list.name}`} title="Rename list" data-testid={`rename-list-${list.id}`} onClick={() => void props.onRenameList(list)}>
+                  <Icon name="edit" />
                 </button>
-                <button title="Delete list" data-testid={`delete-list-${list.id}`} onClick={() => void props.onDeleteList(list)}>
-                  Delete
+                <button aria-label={`Delete ${list.name}`} title="Delete list" data-testid={`delete-list-${list.id}`} onClick={() => void props.onDeleteList(list)}>
+                  <Icon name="trash" />
                 </button>
               </header>
               <div className="card-stack">
@@ -1066,7 +1098,7 @@ function BoardView(props: BoardViewProps) {
                 ))}
               </div>
               <button className="add-card" data-testid={`add-card-${list.id}`} onClick={() => void props.onAddCard(list.id)}>
-                Add card
+                <Icon name="plus" /> Add card
               </button>
             </section>
           );
@@ -1216,7 +1248,7 @@ function TaskCardBody({
         <span>{card.due || "No due date"}</span>
         {card.subtasks.length > 0 && (
           <span className="subtask-badge" title="Sub-tasks completed">
-            ☑ {doneCount}/{card.subtasks.length}
+            <Icon name="check" /> {doneCount}/{card.subtasks.length}
           </span>
         )}
         <MemberDots members={members.filter((member) => card.assignees.includes(member.id))} />
@@ -1438,7 +1470,9 @@ function SettingsView({
               <Spinner /> Reloading…
             </>
           ) : (
-            "Reload from disk"
+            <>
+              <Icon name="refresh" /> Reload
+            </>
           )}
         </button>
       </header>
@@ -1480,7 +1514,9 @@ function SettingsView({
                 <Spinner /> Checking…
               </>
             ) : (
-              "Check for updates"
+              <>
+                <Icon name="refresh" /> Check updates
+              </>
             )}
           </button>
           {updateStatus === "available" && (
@@ -1540,6 +1576,8 @@ function CardEditor({
   const notesInputRef = useRef<HTMLTextAreaElement>(null);
   const notesLinkInputRef = useRef<HTMLInputElement>(null);
   const board = boards.find((item) => item.id === draft.boardId) ?? boards[0];
+  const listName = board?.lists.find((list) => list.id === draft.listId)?.name ?? "No list";
+  const completedSubtasks = draft.subtasks.filter((subtask) => subtask.completed).length;
 
   useEffect(() => setDraft(card), [card]);
   useModalKeys(editorRef, onClose);
@@ -1720,91 +1758,113 @@ function CardEditor({
         tabIndex={-1}
         onMouseDown={(event) => event.stopPropagation()}
       >
-        <header>
-          <h2>Edit card</h2>
-          <button disabled={saving} onClick={onClose}>Close</button>
-        </header>
-        <label>
-          Title
-          <input data-testid="card-title-input" value={draft.title} onChange={(event) => setDraft({ ...draft, title: event.target.value })} />
-        </label>
-        <div className="editor-grid">
-          <label>
-            Board
-            <select
-              data-testid="card-board-select"
-              value={draft.boardId}
-              onChange={(event) => {
-                const nextBoard = boards.find((item) => item.id === event.target.value);
-                setDraft({ ...draft, boardId: event.target.value, listId: nextBoard?.lists[0]?.id ?? "" });
-              }}
-            >
-              {boards.map((item) => (
-                <option key={item.id} value={item.id}>
-                  {item.name}
-                </option>
-              ))}
-            </select>
-          </label>
-          <label>
-            List
-            <select data-testid="card-list-select" value={draft.listId} onChange={(event) => setDraft({ ...draft, listId: event.target.value })}>
-              {board?.lists.map((list) => (
-                <option key={list.id} value={list.id}>
-                  {list.name}
-                </option>
-              ))}
-            </select>
-          </label>
-          <label>
-            Due
-            <input data-testid="card-due-input" type="date" value={draft.due} onChange={(event) => setDraft({ ...draft, due: event.target.value })} />
-          </label>
-          <label className="checkbox-row">
-            <input data-testid="card-completed-input" type="checkbox" checked={draft.completed} onChange={(event) => setDraft({ ...draft, completed: event.target.checked })} />
-            Completed
-          </label>
-        </div>
-        <label>
-          Labels
-          <input
-            data-testid="card-labels-input"
-            value={draft.labels.join(", ")}
-            onChange={(event) =>
-              setDraft({
-                ...draft,
-                labels: event.target.value
-                  .split(",")
-                  .map((label) => label.trim())
-                  .filter(Boolean)
-              })
-            }
-            placeholder="animation, review"
-          />
-        </label>
-        <fieldset className="assignee-fieldset">
-          <legend>Assignees</legend>
-          {members.length === 0 && <p className="muted">Add members before assigning cards.</p>}
-          {members.map((member) => (
-            <label key={member.id} className="checkbox-row">
-              <input
-                checked={draft.assignees.includes(member.id)}
-                data-testid={`assignee-${member.id}`}
-                type="checkbox"
-                onChange={(event) => updateAssignee(member.id, event.target.checked)}
-              />
-              <span className="avatar" style={{ background: member.color }}>
-                {initials(member.name)}
-              </span>
-              {member.name}
+        <header className="card-editor-header">
+          <div>
+            <p className="eyebrow">Card</p>
+            <h2>{draft.title || "Untitled card"}</h2>
+            <div className="card-editor-summary" aria-label="Card summary">
+              <span>{board?.name ?? "No board"}</span>
+              <span>{listName}</span>
+              <span>{completedSubtasks}/{draft.subtasks.length} sub-tasks</span>
+            </div>
+          </div>
+          <div className="card-editor-header-actions">
+            <label className="status-pill">
+              <input data-testid="card-completed-input" type="checkbox" checked={draft.completed} onChange={(event) => setDraft({ ...draft, completed: event.target.checked })} />
+              Completed
             </label>
-          ))}
+            <button aria-label="Close" className="icon-button" disabled={saving} title="Close" onClick={onClose}>
+              <Icon name="x" />
+            </button>
+          </div>
+        </header>
+        <section className="editor-section editor-details" aria-labelledby="card-details-heading">
+          <div className="editor-section-heading">
+            <h3 id="card-details-heading">Details</h3>
+          </div>
+          <label className="title-field">
+            Title
+            <input data-testid="card-title-input" value={draft.title} onChange={(event) => setDraft({ ...draft, title: event.target.value })} />
+          </label>
+          <div className="editor-grid">
+            <label>
+              Board
+              <select
+                data-testid="card-board-select"
+                value={draft.boardId}
+                onChange={(event) => {
+                  const nextBoard = boards.find((item) => item.id === event.target.value);
+                  setDraft({ ...draft, boardId: event.target.value, listId: nextBoard?.lists[0]?.id ?? "" });
+                }}
+              >
+                {boards.map((item) => (
+                  <option key={item.id} value={item.id}>
+                    {item.name}
+                  </option>
+                ))}
+              </select>
+            </label>
+            <label>
+              List
+              <select data-testid="card-list-select" value={draft.listId} onChange={(event) => setDraft({ ...draft, listId: event.target.value })}>
+                {board?.lists.map((list) => (
+                  <option key={list.id} value={list.id}>
+                    {list.name}
+                  </option>
+                ))}
+              </select>
+            </label>
+            <label>
+              Due
+              <input data-testid="card-due-input" type="date" value={draft.due} onChange={(event) => setDraft({ ...draft, due: event.target.value })} />
+            </label>
+            <label>
+              Labels
+              <input
+                data-testid="card-labels-input"
+                value={draft.labels.join(", ")}
+                onChange={(event) =>
+                  setDraft({
+                    ...draft,
+                    labels: event.target.value
+                      .split(",")
+                      .map((label) => label.trim())
+                      .filter(Boolean)
+                  })
+                }
+                placeholder="animation, review"
+              />
+            </label>
+          </div>
+        </section>
+        <fieldset className="editor-section assignee-fieldset">
+          <legend>Assignees</legend>
+          <div className="assignee-list">
+            {members.length === 0 && <p className="empty-inline">Add members before assigning cards.</p>}
+            {members.map((member) => (
+              <label key={member.id} className="assignee-option">
+                <input
+                  checked={draft.assignees.includes(member.id)}
+                  data-testid={`assignee-${member.id}`}
+                  type="checkbox"
+                  onChange={(event) => updateAssignee(member.id, event.target.checked)}
+                />
+                <span className="avatar" style={{ background: member.color }}>
+                  {initials(member.name)}
+                </span>
+                <span>{member.name}</span>
+              </label>
+            ))}
+          </div>
         </fieldset>
-        <section className="subtasks">
-          <div className="subtasks-header">
-            <h3>Sub-tasks</h3>
+        <section className="editor-section subtasks" aria-labelledby="subtasks-heading">
+          <div className="editor-section-heading">
+            <div>
+              <h3 id="subtasks-heading">Sub-tasks</h3>
+              <p>{draft.subtasks.length === 0 ? "No checklist items yet." : `${completedSubtasks} of ${draft.subtasks.length} complete`}</p>
+            </div>
             <button data-testid="add-subtask" onClick={addSubtask}>
-              Add sub-task
+              <Icon name="plus" /> Add sub-task
             </button>
           </div>
           {draft.subtasks.length === 0 && <p className="muted">No sub-tasks yet.</p>}
@@ -1839,7 +1899,7 @@ function CardEditor({
                     title="Open link"
                     onClick={() => void openExternal(subtask.url.trim())}
                   >
-                    ↗
+                    <Icon name="chevron-up-right" />
                   </button>
                 )}
                 <button
@@ -1849,14 +1909,14 @@ function CardEditor({
                   title="Remove sub-task"
                   onClick={() => removeSubtask(subtask.id)}
                 >
-                  ×
+                  <Icon name="x" />
                 </button>
               </div>
               <div className="subtask-items-editor">
                 <div className="subtask-items-header">
                   <span>List items</span>
                   <button data-testid={`subtask-${subtask.id}-add-item`} onClick={() => addSubtaskItem(subtask.id)}>
-                    Add item
+                    <Icon name="plus" /> Add item
                   </button>
                 </div>
                 {subtask.items.length === 0 && <p className="muted">No list items yet.</p>}
@@ -1886,7 +1946,7 @@ function CardEditor({
                             title="Open link"
                             onClick={() => void openExternal(item.url.trim())}
                           >
-                            ↗
+                            <Icon name="chevron-up-right" />
                           </button>
                         )}
                         <button
@@ -1896,7 +1956,7 @@ function CardEditor({
                           title="Remove list item"
                           onClick={() => removeSubtaskItem(subtask.id, item.id)}
                         >
-                          ×
+                          <Icon name="x" />
                         </button>
                       </li>
                     ))}
@@ -1906,8 +1966,8 @@ function CardEditor({
             </div>
           ))}
         </section>
-        <section className="notes-editor" aria-labelledby="notes-heading">
-          <div className="notes-editor-header">
+        <section className="editor-section notes-editor" aria-labelledby="notes-heading">
+          <div className="editor-section-heading notes-editor-header">
             <h3 id="notes-heading">Notes</h3>
             <div className="notes-toolbar" aria-label="Notes formatting">
               <button
@@ -1972,7 +2032,7 @@ function CardEditor({
             rows={10}
           />
         </section>
-        <section className="activity">
+        <section className="editor-section activity">
           <h3>Activity</h3>
           {draft.activity.length === 0 && <p className="muted">No activity yet.</p>}
           {draft.activity.slice(0, 8).map((event) => (
@@ -1985,10 +2045,10 @@ function CardEditor({
         <footer>
           <div className="destructive-actions">
             <button data-testid="archive-card" disabled={saving} onClick={() => void onArchive(draft)}>
-              Archive
+              <Icon name="archive" /> Archive
             </button>
             <button data-testid="delete-card" disabled={saving} onClick={() => void onDelete(draft)}>
-              Delete
+              <Icon name="trash" /> Delete
             </button>
           </div>
           <button
@@ -2271,6 +2331,94 @@ function Spinner() {
   return <span className="spinner" aria-hidden="true" />;
 }
 
+function Icon({ name }: { name: IconName }) {
+  const paths: Record<IconName, ReactNode> = {
+    archive: (
+      <>
+        <path d="M4 7h16" />
+        <path d="M6 7v12h12V7" />
+        <path d="M9 11h6" />
+        <path d="M7 4h10l1 3H6z" />
+      </>
+    ),
+    check: <path d="m5 12 4 4L19 6" />,
+    "chevron-up-right": (
+      <>
+        <path d="M7 17 17 7" />
+        <path d="M9 7h8v8" />
+      </>
+    ),
+    edit: (
+      <>
+        <path d="M4 20h4l11-11-4-4L4 16z" />
+        <path d="M13 7l4 4" />
+      </>
+    ),
+    folder: (
+      <>
+        <path d="M3 6h7l2 2h9v10H3z" />
+        <path d="M3 10h18" />
+      </>
+    ),
+    plus: (
+      <>
+        <path d="M12 5v14" />
+        <path d="M5 12h14" />
+      </>
+    ),
+    refresh: (
+      <>
+        <path d="M20 7v5h-5" />
+        <path d="M4 17v-5h5" />
+        <path d="M18 9a6 6 0 0 0-10-3L4 10" />
+        <path d="M6 15a6 6 0 0 0 10 3l4-4" />
+      </>
+    ),
+    settings: (
+      <>
+        <path d="M12 8a4 4 0 1 0 0 8 4 4 0 0 0 0-8z" />
+        <path d="M3 12h3" />
+        <path d="M18 12h3" />
+        <path d="m5.6 5.6 2.1 2.1" />
+        <path d="m16.3 16.3 2.1 2.1" />
+        <path d="M12 3v3" />
+        <path d="M12 18v3" />
+        <path d="m18.4 5.6-2.1 2.1" />
+        <path d="m7.7 16.3-2.1 2.1" />
+      </>
+    ),
+    trash: (
+      <>
+        <path d="M4 7h16" />
+        <path d="M10 11v6" />
+        <path d="M14 11v6" />
+        <path d="M6 7l1 13h10l1-13" />
+        <path d="M9 7V4h6v3" />
+      </>
+    ),
+    users: (
+      <>
+        <path d="M9 11a4 4 0 1 0 0-8 4 4 0 0 0 0 8z" />
+        <path d="M2 20a7 7 0 0 1 14 0" />
+        <path d="M17 11a3 3 0 1 0 0-6" />
+        <path d="M19 20a5 5 0 0 0-3-4.6" />
+      </>
+    ),
+    x: (
+      <>
+        <path d="M6 6l12 12" />
+        <path d="M18 6 6 18" />
+      </>
+    )
+  };
+
+  return (
+    <svg className="icon" aria-hidden="true" viewBox="0 0 24 24">
+      {paths[name]}
+    </svg>
+  );
+}
+
 // Tracks the order in which modals open so that only the topmost one responds
 // to Escape/Tab. Without this, stacked dialogs (e.g. the card editor with a
 // delete confirm on top) each register a document listener and Escape fires
@@ -2369,4 +2517,8 @@ function selectActiveBoardId(current: string, boards: Board[]): string {
     return current;
   }
   return boards[0]?.id ?? "";
+}
+
+function countLabel(count: number, label: string) {
+  return `${count} ${label}${count === 1 ? "" : "s"}`;
 }

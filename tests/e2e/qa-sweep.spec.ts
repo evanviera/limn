@@ -1,5 +1,5 @@
 import { test, expect, type ConsoleMessage } from "@playwright/test";
-import { mkdirSync, rmSync, writeFileSync } from "node:fs";
+import { mkdirSync, readdirSync, unlinkSync, writeFileSync } from "node:fs";
 import path from "node:path";
 import { openApp, openWorkspace, snapshot } from "./harness";
 
@@ -26,8 +26,12 @@ test("qa evidence sweep", async ({ page }, testInfo) => {
   // Capture is single-shot; give it room and don't let one slow step abort it.
   test.setTimeout(180_000);
 
-  rmSync(ARTIFACTS, { recursive: true, force: true });
   mkdirSync(ARTIFACTS, { recursive: true });
+  for (const fileName of readdirSync(ARTIFACTS)) {
+    if (/^\d{2}-.*\.png$/.test(fileName) || /^aria-.*\.yaml$/.test(fileName) || fileName === "diagnostics.json") {
+      unlinkSync(path.join(ARTIFACTS, fileName));
+    }
+  }
 
   const consoleEvents: Array<{ type: string; text: string; location?: string }> = [];
   const pageErrors: string[] = [];
@@ -86,7 +90,7 @@ test("qa evidence sweep", async ({ page }, testInfo) => {
   });
 
   await step("add two lists", async () => {
-    for (const name of ["To Do", "Doing"]) {
+    for (const name of ["Review", "Blocked"]) {
       await page.getByTestId("add-list").click();
       await page.getByTestId("text-dialog-input").fill(name);
       await page.getByTestId("text-dialog-submit").click();
@@ -148,7 +152,7 @@ test("qa evidence sweep", async ({ page }, testInfo) => {
 
   await step("confirm (destructive) dialog", async () => {
     // Open the editor again and trigger the delete confirmation, then cancel.
-    const card = page.locator('[data-testid^="card-"]').first();
+    const card = page.locator('[data-testid^="card-open-"]').first();
     await card.click();
     await expect(page.getByTestId("card-title-input")).toBeVisible();
     await page.getByTestId("delete-card").click();

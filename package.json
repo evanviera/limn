@@ -14,7 +14,8 @@
     "test:e2e:report": "playwright show-report",
     "release:version": "node scripts/release-version.mjs",
     "tauri:dev": "tauri dev",
-    "tauri:build": "tauri build"
+    "tauri:build": "tauri build --config src-tauri/tauri.local.conf.json",
+    "tauri:build:release": "tauri build"
   },
   "dependencies": {
     "@tauri-apps/api": "^2.5.0",

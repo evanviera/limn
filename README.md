@@ -38,6 +38,8 @@ Build:
 npm run tauri:build
 ```
 
+This local build does not create signed updater artifacts, so it does not require a Tauri updater signing key.
+
 ## Releases and Updates
 
 Limn uses Tauri's updater with GitHub Releases. Release builds run on macOS and Windows, then upload signed updater metadata to `latest.json`, which the desktop app checks at startup and from Settings.
@@ -51,6 +53,12 @@ git push origin v0.2.0
 ```
 
 The release workflow requires `TAURI_SIGNING_PRIVATE_KEY` in GitHub Actions secrets. If the key has a password, also set `TAURI_SIGNING_PRIVATE_KEY_PASSWORD`; otherwise leave it empty.
+
+To run the same signed updater-artifact build locally, set those environment variables and run:
+
+```sh
+npm run tauri:build:release
+```
 
 The draft release should include macOS install/update assets and a Windows installer asset, typically the Tauri NSIS `.exe`.
 
