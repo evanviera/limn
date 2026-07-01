@@ -281,6 +281,14 @@ pub fn run() {
     tauri::Builder::default()
         .plugin(tauri_plugin_updater::Builder::new().build())
         .manage(WatchState::default())
+        .setup(|_app| {
+            #[cfg(target_os = "windows")]
+            if let Some(window) = _app.get_webview_window("main") {
+                let _ = window.set_decorations(false);
+                let _ = window.set_shadow(true);
+            }
+            Ok(())
+        })
         .invoke_handler(tauri::generate_handler![
             pick_workspace_folder,
             init_workspace,

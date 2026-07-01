@@ -1,6 +1,7 @@
 import { useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
 import type { FormEvent as ReactFormEvent, MouseEvent as ReactMouseEvent, ReactNode } from "react";
 import type { PointerEvent as ReactPointerEvent } from "react";
+import { getCurrentWindow } from "@tauri-apps/api/window";
 import { listen } from "./ipc";
 import {
   addActivity,
@@ -47,6 +48,8 @@ type IconName =
   | "chevron-up-right"
   | "edit"
   | "folder"
+  | "maximize"
+  | "minus"
   | "moon"
   | "plus"
   | "refresh"
@@ -77,6 +80,19 @@ interface ConfirmDialogState {
   onConfirm: () => Promise<void>;
 }
 
+function platformName() {
+  const platform = navigator.platform || navigator.userAgent;
+  if (/win/i.test(platform)) {
+    return "windows";
+  }
+  if (/mac/i.test(platform)) {
+    return "macos";
+  }
+  return "other";
+}
+
+document.documentElement.dataset.platform = platformName();
+
 export default function App() {
   const [workspacePath, setWorkspacePath] = useState("");
   const [settings, setSettings] = useState<WorkspaceSettings | null>(null);
@@ -104,6 +120,10 @@ export default function App() {
   const activeBoard = boards.find((board) => board.id === activeBoardId) ?? boards[0] ?? null;
   const selectedCard = cards.find((card) => card.id === selectedCardId) ?? null;
   const updaterAvailable = canUseUpdater();
+
+  useLayoutEffect(() => {
+    document.documentElement.dataset.platform = platformName();
+  }, []);
   // The workspace watcher captures `refreshWorkspace` from the effect's render,
   // so read the open card / cards through refs to get current values when a
   // disk change fires.
@@ -634,8 +654,10 @@ export default function App() {
   }
 
   return (
-    <div className="app-shell">
-      <aside className="sidebar">
+    <div className="app-frame">
+      <WindowsTitlebar />
+      <div className="app-shell">
+        <aside className="sidebar">
         <div className="brand">
           <strong>Limn</strong>
           <span>{settings.workspaceName}</span>
@@ -688,9 +710,9 @@ export default function App() {
             <Icon name="settings" /> Settings
           </button>
         </div>
-      </aside>
+        </aside>
 
-      <main className="workspace">
+        <main className="workspace">
         {(error || notice) && (
           <div
             aria-live={error ? "assertive" : "polite"}
@@ -785,49 +807,77 @@ export default function App() {
             onRestartAfterUpdate={restartAfterUpdate}
           />
         )}
-      </main>
+        </main>
 
-      {selectedCard && (
-        <CardEditor
-          card={selectedCard}
-          boards={boards}
-          members={members}
-          onSave={saveCardFromEditor}
-          onClose={() => setSelectedCardId(null)}
-          onArchive={archiveCard}
-          onDelete={removeCard}
-        />
-      )}
-      {textDialog && (
-        <TextDialog
-          dialog={textDialog}
-          onCancel={() => setTextDialog(null)}
-          onChange={(value) => setTextDialog((current) => current ? { ...current, value } : current)}
-          onSubmit={async (value) => {
-            setTextDialog(null);
-            try {
-              await textDialog.onSubmit(value);
-            } catch (reason) {
-              setError(errorText(reason));
-            }
-          }}
-        />
-      )}
-      {confirmDialog && (
-        <ConfirmDialog
-          dialog={confirmDialog}
-          onCancel={() => setConfirmDialog(null)}
-          onConfirm={async () => {
-            setConfirmDialog(null);
-            try {
-              await confirmDialog.onConfirm();
-            } catch (reason) {
-              setError(errorText(reason));
-            }
-          }}
-        />
-      )}
+        {selectedCard && (
+          <CardEditor
+            card={selectedCard}
+            boards={boards}
+            members={members}
+            onSave={saveCardFromEditor}
+            onClose={() => setSelectedCardId(null)}
+            onArchive={archiveCard}
+            onDelete={removeCard}
+          />
+        )}
+        {textDialog && (
+          <TextDialog
+            dialog={textDialog}
+            onCancel={() => setTextDialog(null)}
+            onChange={(value) => setTextDialog((current) => current ? { ...current, value } : current)}
+            onSubmit={async (value) => {
+              setTextDialog(null);
+              try {
+                await textDialog.onSubmit(value);
+              } catch (reason) {
+                setError(errorText(reason));
+              }
+            }}
+          />
+        )}
+        {confirmDialog && (
+          <ConfirmDialog
+            dialog={confirmDialog}
+            onCancel={() => setConfirmDialog(null)}
+            onConfirm={async () => {
+              setConfirmDialog(null);
+              try {
+                await confirmDialog.onConfirm();
+              } catch (reason) {
+                setError(errorText(reason));
+              }
+            }}
+          />
+        )}
+      </div>
     </div>
+  );
+}
+
+function WindowsTitlebar() {
+  function withWindow(action: "minimize" | "toggleMaximize" | "close") {
+    if (!window.__TAURI_INTERNALS__) {
+      return;
+    }
+    void getCurrentWindow()[action]();
+  }
+
+  return (
+    <header className="windows-titlebar" data-tauri-drag-region>
+      <span className="windows-titlebar-spacer" data-tauri-drag-region />
+      <strong className="windows-titlebar-title" data-tauri-drag-region>Limn</strong>
+      <div className="windows-titlebar-controls">
+        <button aria-label="Minimize window" className="window-control" title="Minimize" type="button" onClick={() => withWindow("minimize")}>
+          <Icon name="minus" />
+        </button>
+        <button aria-label="Maximize window" className="window-control" title="Maximize" type="button" onClick={() => withWindow("toggleMaximize")}>
+          <Icon name="maximize" />
+        </button>
+        <button aria-label="Close window" className="window-control close" title="Close" type="button" onClick={() => withWindow("close")}>
+          <Icon name="x" />
+        </button>
+      </div>
+    </header>
   );
 }
 
@@ -2521,6 +2571,8 @@ function Icon({ name }: { name: IconName }) {
         <path d="M3 10h18" />
       </>
     ),
+    maximize: <path d="M6 6h12v12H6z" />,
+    minus: <path d="M5 12h14" />,
     moon: (
       <>
         <path d="M20 15.3A8 8 0 0 1 8.7 4a7 7 0 1 0 11.3 11.3z" />
