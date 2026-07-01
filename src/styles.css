@@ -1099,12 +1099,10 @@ body.is-card-dragging * {
 
 .card-editor {
   display: grid;
-  align-content: start;
-  gap: 0;
-  width: min(720px, 100vw);
+  grid-template-rows: auto minmax(0, 1fr) auto;
+  width: min(1060px, 100vw);
   height: 100vh;
-  overflow-y: auto;
-  padding: 18px 20px;
+  overflow: hidden;
   color: var(--text);
   background: var(--pane-bg);
   border-left: 1px solid var(--border-soft);
@@ -1113,21 +1111,16 @@ body.is-card-dragging * {
 }
 
 .card-editor-header {
-  position: sticky;
-  top: -18px;
-  z-index: 2;
   display: flex;
   align-items: flex-start;
   justify-content: space-between;
   gap: var(--space-5);
-  margin: -18px -20px 0;
-  padding: 18px 20px 16px;
-  background: rgba(24, 24, 22, 0.96);
+  padding: 16px 24px;
+  background: var(--pane-bg);
   border-bottom: 1px solid var(--border-soft);
-  backdrop-filter: blur(10px);
 }
 
-.card-editor-header > div:first-child {
+.card-editor-heading {
   min-width: 0;
 }
 
@@ -1141,69 +1134,43 @@ body.is-card-dragging * {
   white-space: nowrap;
 }
 
-.card-editor-header-actions {
-  display: flex;
-  flex: 0 0 auto;
-  align-items: center;
-  gap: var(--space-3);
+/* Two-column body: primary work area + a metadata rail. The body is the scroll
+   container so the header/footer stay fixed and the rail can stick. */
+.card-editor-body {
+  overflow-y: auto;
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) 300px;
+  align-items: start;
+  gap: 32px;
+  padding: 24px;
 }
 
-.card-editor-summary {
-  display: flex;
-  flex-wrap: wrap;
-  gap: var(--space-3);
-  margin-top: var(--space-4);
-  color: var(--text-muted);
-  font-size: var(--text-sm);
+.card-editor-main {
+  display: grid;
+  align-content: start;
+  gap: 28px;
+  min-width: 0;
 }
 
-.card-editor-summary span {
-  overflow: hidden;
-  max-width: 17ch;
-  padding: 2px 7px;
-  background: rgba(255, 255, 255, 0.035);
-  border: 1px solid var(--border-soft);
-  border-radius: var(--radius-pill);
-  text-overflow: ellipsis;
-  white-space: nowrap;
-}
-
-.status-pill {
-  display: inline-flex;
-  grid-auto-flow: column;
-  align-items: center;
-  gap: var(--space-3);
-  min-height: 32px;
-  padding: 0 var(--space-4);
-  color: var(--text);
-  background: var(--surface);
-  border: 1px solid var(--border-soft);
-  border-radius: var(--radius-pill);
-  font-size: var(--text-sm);
-}
-
-.status-pill input {
-  width: 16px;
-}
-
-.status-pill:has(input:checked) {
-  color: var(--success);
-  background: var(--success-soft);
-  border-color: var(--success-border);
+.card-editor-side {
+  position: sticky;
+  top: 0;
+  display: grid;
+  align-content: start;
+  gap: 22px;
+  min-width: 0;
+  padding-left: 24px;
+  border-left: 1px solid var(--border-soft);
 }
 
 .card-editor footer {
-  position: sticky;
-  bottom: -18px;
   display: flex;
   align-items: center;
   justify-content: space-between;
   gap: var(--space-5);
-  margin: var(--space-6) -20px -18px;
-  padding: 14px 20px;
-  background: rgba(24, 24, 22, 0.96);
+  padding: 14px 24px;
+  background: var(--pane-bg);
   border-top: 1px solid var(--border-soft);
-  backdrop-filter: blur(10px);
 }
 
 .destructive-actions {
@@ -1212,15 +1179,14 @@ body.is-card-dragging * {
   gap: var(--space-4);
 }
 
-.editor-section {
+/* Shared section rhythm for the main column and the metadata rail. */
+.main-section {
   display: grid;
-  gap: var(--space-4);
+  gap: var(--space-5);
   min-width: 0;
-  padding: var(--space-6) 0;
-  border-bottom: 1px solid var(--border-soft);
 }
 
-.editor-section-heading {
+.main-section-head {
   display: flex;
   align-items: center;
   justify-content: space-between;
@@ -1228,10 +1194,9 @@ body.is-card-dragging * {
   min-width: 0;
 }
 
-.editor-section-heading h3,
-.assignee-fieldset legend,
-.activity h3 {
-  margin: 0;
+.field-label,
+.side-heading,
+.main-section-head h3 {
   color: var(--text-muted);
   font-size: var(--text-sm);
   font-weight: var(--weight-medium);
@@ -1239,86 +1204,194 @@ body.is-card-dragging * {
   text-transform: uppercase;
 }
 
-.editor-section-heading p {
+.main-section-head h3 {
+  margin: 0;
+}
+
+.main-section-sub {
   margin: var(--space-2) 0 0;
   color: var(--text-faint);
   font-size: var(--text-sm);
+  text-transform: none;
 }
 
-.editor-details {
-  padding-top: var(--space-5);
+.section-empty {
+  margin: 0;
+  padding: 14px var(--space-5);
+  color: var(--text-muted);
+  text-align: center;
+  background: transparent;
+  border: 1px dashed var(--border-soft);
+  border-radius: var(--radius-md);
+  font-size: var(--text-sm);
+}
+
+.title-field {
+  gap: var(--space-3);
 }
 
 .title-field input {
-  height: 42px;
+  height: 44px;
   color: var(--text-strong);
   font-size: var(--text-lg);
   font-weight: var(--weight-bold);
 }
 
-.editor-grid {
+/* --- Metadata rail --- */
+.side-section {
   display: grid;
-  grid-template-columns: repeat(2, minmax(0, 1fr));
-  gap: var(--space-5);
-}
-
-.checkbox-row {
-  display: flex;
-  align-items: center;
-  gap: var(--space-4);
-  color: var(--text);
-  font-size: var(--text-base);
-}
-
-.checkbox-row input {
-  width: auto;
-}
-
-.assignee-fieldset {
-  min-width: 0;
-  margin: 0;
-  padding: var(--space-6) 0;
-  background: transparent;
-  border: 0;
-  border-bottom: 1px solid var(--border-soft);
-}
-
-.assignee-fieldset legend {
-  padding: 0;
-}
-
-.assignee-list {
-  display: flex;
-  flex-wrap: wrap;
   gap: var(--space-3);
   min-width: 0;
 }
 
-.assignee-option {
-  display: inline-flex;
-  grid-auto-flow: column;
+.side-field {
+  gap: var(--space-2);
+}
+
+.side-field > span {
+  color: var(--text-faint);
+  font-size: var(--text-sm);
+  font-weight: var(--weight-medium);
+}
+
+.status-toggle {
+  display: flex;
+  flex-direction: row;
   align-items: center;
-  width: auto;
-  min-height: 36px;
-  padding: var(--space-2) var(--space-4) var(--space-2) var(--space-2);
+  gap: var(--space-4);
+  min-height: 40px;
+  padding: 0 var(--space-5);
   color: var(--text);
   background: var(--surface);
   border: 1px solid var(--border-soft);
-  border-radius: var(--radius-pill);
+  border-radius: var(--radius-md);
+  font-size: var(--text-base);
+  font-weight: var(--weight-medium);
+  cursor: pointer;
+  transition: background var(--transition), border-color var(--transition), color var(--transition);
+}
+
+.status-toggle:hover {
+  border-color: var(--border);
+}
+
+.status-toggle input {
+  width: 16px;
+}
+
+.status-toggle[data-checked="true"] {
+  color: var(--success);
+  background: var(--success-soft);
+  border-color: var(--success-border);
+}
+
+.assignee-list {
+  display: grid;
+  gap: var(--space-2);
+  min-width: 0;
+}
+
+.assignee-option {
+  display: flex;
+  flex-direction: row;
+  align-items: center;
+  gap: var(--space-3);
+  min-width: 0;
+  min-height: 34px;
+  padding: var(--space-2) var(--space-3);
+  color: var(--text-muted);
+  background: transparent;
+  border: 1px solid transparent;
+  border-radius: var(--radius-md);
+  font-weight: var(--weight-normal);
+  cursor: pointer;
+  transition: background var(--transition), border-color var(--transition), color var(--transition);
+}
+
+.assignee-option:hover {
+  background: var(--surface);
+}
+
+.assignee-option.checked {
+  color: var(--text-strong);
+  background: var(--surface);
+  border-color: var(--border-soft);
 }
 
 .assignee-option input {
   width: 16px;
 }
 
-.empty-inline {
-  margin: 0;
-  color: var(--text-muted);
-  font-size: var(--text-base);
+.assignee-name {
+  overflow: hidden;
+  min-width: 0;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 
-.notes-editor {
+.empty-inline {
+  margin: 0;
+  color: var(--text-faint);
+  font-size: var(--text-sm);
+}
+
+/* --- Label chips --- */
+.label-field {
+  display: grid;
+  gap: var(--space-3);
   min-width: 0;
+}
+
+.label-chips {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-2);
+  min-width: 0;
+}
+
+.label-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-2);
+  max-width: 100%;
+  padding: 2px 2px 2px 9px;
+  color: var(--text);
+  background: var(--accent-soft);
+  border: 1px solid var(--accent-border);
+  border-radius: var(--radius-pill);
+  font-size: var(--text-sm);
+  font-weight: var(--weight-medium);
+}
+
+.label-chip-text {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.label-chip-remove {
+  display: inline-grid;
+  place-items: center;
+  flex: 0 0 auto;
+  width: 18px;
+  min-width: 18px;
+  height: 18px;
+  min-height: 18px;
+  padding: 0;
+  color: var(--text-muted);
+  background: transparent;
+  border: 0;
+  border-radius: var(--radius-pill);
+}
+
+.label-chip-remove:hover:not(:disabled) {
+  color: var(--text-strong);
+  background: rgba(255, 255, 255, 0.1);
+}
+
+.label-chip-remove .icon {
+  width: 12px;
+  height: 12px;
 }
 
 .notes-editor-header {
@@ -1344,7 +1417,7 @@ body.is-card-dragging * {
 }
 
 .notes-editor textarea {
-  min-height: 180px;
+  min-height: 170px;
 }
 
 .notes-link-form {
@@ -1362,26 +1435,28 @@ body.is-card-dragging * {
   white-space: nowrap;
 }
 
-.activity {
+.side-activity {
   gap: var(--space-3);
-  border-bottom: 0;
 }
 
-.activity p {
+.activity-row {
   display: grid;
-  grid-template-columns: 150px minmax(0, 1fr);
-  gap: var(--space-4);
-  margin: 0;
-  color: var(--text);
-  font-size: var(--text-base);
-  line-height: 1.38;
+  gap: 2px;
+  min-width: 0;
+  padding-left: var(--space-4);
+  border-left: 2px solid var(--border-soft);
 }
 
-.activity span {
-  overflow: hidden;
-  color: var(--text-muted);
-  text-overflow: ellipsis;
-  white-space: nowrap;
+.activity-row time {
+  color: var(--text-faint);
+  font-size: var(--text-xs);
+}
+
+.activity-row span {
+  color: var(--text);
+  font-size: var(--text-sm);
+  line-height: 1.35;
+  overflow-wrap: anywhere;
 }
 
 .subtask-badge {
@@ -1513,73 +1588,171 @@ body.is-card-dragging * {
   text-decoration: line-through;
 }
 
-.subtask-block {
+/* --- Sub-task editor blocks (card editor, not the board card) --- */
+.subtask-list {
   display: grid;
   gap: var(--space-3);
   min-width: 0;
-  padding: var(--space-4);
+}
+
+.subtask-block {
+  display: grid;
+  gap: var(--space-2);
+  min-width: 0;
+  padding: var(--space-3) var(--space-4);
   background: var(--surface);
   border: 1px solid var(--border-soft);
   border-radius: var(--radius-md);
+  transition: border-color var(--transition);
 }
 
-.subtask-row {
+.subtask-block:focus-within {
+  border-color: var(--border);
+}
+
+.subtask-block.completed {
+  background: var(--success-soft);
+  border-color: var(--success-border);
+}
+
+.subtask-head {
   display: grid;
-  grid-template-columns: auto minmax(150px, 1fr) minmax(130px, 0.8fr) auto auto;
+  grid-template-columns: auto minmax(0, 1fr) auto auto;
   align-items: center;
   gap: var(--space-3);
   min-width: 0;
 }
 
-.subtask-row .subtask-title {
-  min-width: 0;
+.subtask-head .subtask-check {
+  flex: none;
 }
 
-.subtask-row .subtask-url {
+.subtask-title {
   min-width: 0;
+  background: transparent;
+  border-color: transparent;
+  font-weight: var(--weight-medium);
 }
 
-.subtask-open,
-.subtask-remove {
+.subtask-title:hover:not(:focus) {
+  border-color: var(--border-soft);
+}
+
+.subtask-block.completed .subtask-title {
+  color: var(--text-muted);
+  text-decoration: line-through;
+  text-decoration-color: var(--success-border);
+}
+
+/* Chevron toggle that also carries the list-item count. */
+.subtask-expand {
+  flex: none;
+  gap: var(--space-2);
+  min-width: 32px;
+  height: 32px;
+  padding: 0 var(--space-3);
+  color: var(--text-muted);
+  background: transparent;
+  border-color: transparent;
+}
+
+.subtask-expand:hover:not(:disabled) {
+  color: var(--text-strong);
+  background: var(--surface-hover);
+}
+
+.subtask-count {
+  font-size: var(--text-sm);
+  font-variant-numeric: tabular-nums;
+}
+
+.subtask-expand .icon {
+  transition: transform var(--transition);
+}
+
+.subtask-expand[data-expanded="true"] .icon {
+  transform: rotate(180deg);
+}
+
+.subtask-remove,
+.link-open {
   flex: none;
   width: 32px;
   min-width: 32px;
   padding: 0;
 }
 
-.subtask-open {
-  grid-column: 4;
+.subtask-remove {
+  color: var(--text-faint);
+  background: transparent;
+  border-color: transparent;
 }
 
-.subtask-remove {
-  grid-column: 5;
+.subtask-remove:hover:not(:disabled) {
+  color: var(--danger);
+  background: var(--danger-soft);
+  border-color: var(--danger-border);
+}
+
+/* Inline link editor shared by sub-tasks and their list items: a link glyph, a
+   quiet URL field, and an "open" affordance that appears once a URL exists. */
+.link-line {
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr) auto;
+  align-items: center;
+  gap: var(--space-2);
+  min-width: 0;
+  padding-left: var(--space-2);
+  color: var(--text-faint);
+}
+
+.link-line.has-url {
+  color: var(--accent-link);
+}
+
+.link-line > .icon {
+  width: 15px;
+  height: 15px;
+}
+
+.link-input {
+  min-width: 0;
+  height: 30px;
+  color: var(--text);
+  background: transparent;
+  border-color: transparent;
+  font-size: var(--text-sm);
+}
+
+.link-input:hover:not(:focus) {
+  border-color: var(--border-soft);
+}
+
+.link-input:focus {
+  background: var(--input-bg);
+}
+
+.link-open {
+  height: 30px;
+  color: var(--accent-link);
+  border-color: transparent;
 }
 
 .subtask-items-editor {
   display: grid;
   gap: var(--space-2);
   min-width: 0;
-  margin-left: 28px;
-  padding: var(--space-2) 0 0 var(--space-4);
+  margin: var(--space-1) 0 0 26px;
+  padding: var(--space-3) 0 var(--space-1) var(--space-4);
   border-left: 1px solid var(--border-soft);
 }
 
-.subtask-items-header {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: var(--space-3);
-}
-
-.subtask-items-header span {
-  color: var(--text-muted);
-  font-size: var(--text-sm);
-  font-weight: var(--weight-medium);
-  text-transform: uppercase;
-}
-
-.subtask-items-header button {
+.subtask-add-item {
+  justify-self: start;
   padding: var(--space-2) var(--space-3);
+  color: var(--text-muted);
+  background: transparent;
+  border-style: dashed;
 }
 
 .subtask-item-list {
@@ -1592,27 +1765,28 @@ body.is-card-dragging * {
 
 .subtask-item-row {
   display: grid;
-  grid-template-columns: auto minmax(150px, 1fr) minmax(130px, 0.8fr) auto auto;
+  grid-template-columns: auto minmax(120px, 1.3fr) minmax(120px, 1fr) auto;
   align-items: center;
   gap: var(--space-3);
   min-width: 0;
 }
 
-.subtask-item-row::before {
+.subtask-item-bullet {
   flex: none;
-  width: 6px;
-  height: 6px;
-  content: "";
-  background: var(--text-muted);
+  width: 5px;
+  height: 5px;
+  background: var(--text-faint);
   border-radius: var(--radius-pill);
 }
 
 .subtask-item-row .subtask-item-text {
   min-width: 0;
+  height: 30px;
+  font-size: var(--text-sm);
 }
 
-.subtask-item-row .subtask-item-url {
-  min-width: 0;
+.subtask-item-row .link-line {
+  padding-left: 0;
 }
 
 @media (prefers-reduced-motion: reduce) {
@@ -1694,43 +1868,39 @@ body.is-card-dragging * {
   }
 
   .inline-form,
-  .member-row,
-  .editor-grid,
-  .activity p {
+  .member-row {
     grid-template-columns: 1fr;
   }
 
-  .card-editor-header {
-    top: 0;
-    margin: 0 -20px;
-    padding-top: 16px;
+  /* Collapse the editor's two columns; the metadata rail drops below the main
+     work area and its divider flips from a left border to a top border. */
+  .card-editor-body {
+    grid-template-columns: minmax(0, 1fr);
+    gap: 24px;
   }
 
-  .card-editor-summary {
-    gap: var(--space-2);
+  .card-editor-side {
+    position: static;
+    padding-left: 0;
+    padding-top: 20px;
+    border-left: 0;
+    border-top: 1px solid var(--border-soft);
   }
 
-  .subtask-row,
   .subtask-item-row {
-    grid-template-columns: auto minmax(0, 1fr) auto auto;
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
   }
 
-  .subtask-row .subtask-title,
   .subtask-item-row .subtask-item-text {
-    grid-column: 2 / -1;
+    flex: 1 1 55%;
+    min-width: 120px;
   }
 
-  .subtask-row .subtask-url,
-  .subtask-item-row .subtask-item-url {
-    grid-column: 2 / 3;
-  }
-
-  .subtask-open {
-    grid-column: 3;
-  }
-
-  .subtask-remove {
-    grid-column: 4;
+  .subtask-item-row .link-line {
+    flex: 1 1 100%;
+    order: 1;
   }
 
   .member-row input[type="color"] {
@@ -1739,7 +1909,6 @@ body.is-card-dragging * {
 
   .card-editor {
     width: 100vw;
-    padding-top: 0;
     border-left: 0;
   }
 }
@@ -1763,15 +1932,9 @@ body.is-card-dragging * {
 
   .banner,
   .notes-editor-header,
-  .card-editor-header,
   .card-editor footer {
     align-items: stretch;
     flex-direction: column;
-  }
-
-  .card-editor-header-actions {
-    justify-content: space-between;
-    width: 100%;
   }
 
   .banner-actions,

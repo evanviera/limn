@@ -40,6 +40,7 @@ type UpdateStatus = "idle" | "checking" | "available" | "downloading" | "restart
 type IconName =
   | "archive"
   | "check"
+  | "chevron-down"
   | "chevron-up-right"
   | "edit"
   | "folder"
@@ -1571,15 +1572,22 @@ function CardEditor({
 }) {
   const [draft, setDraft] = useState(card);
   const [saving, setSaving] = useState(false);
+  const [labelInput, setLabelInput] = useState("");
+  // Which sub-tasks have their list-items section expanded. Kept out of the card
+  // model since it's pure view state; reset whenever a different card opens.
+  const [expandedSubtasks, setExpandedSubtasks] = useState<Set<string>>(() => new Set());
   const [linkDraft, setLinkDraft] = useState<{ start: number; end: number; label: string; url: string } | null>(null);
   const editorRef = useRef<HTMLElement>(null);
   const notesInputRef = useRef<HTMLTextAreaElement>(null);
   const notesLinkInputRef = useRef<HTMLInputElement>(null);
   const board = boards.find((item) => item.id === draft.boardId) ?? boards[0];
-  const listName = board?.lists.find((list) => list.id === draft.listId)?.name ?? "No list";
   const completedSubtasks = draft.subtasks.filter((subtask) => subtask.completed).length;
 
-  useEffect(() => setDraft(card), [card]);
+  useEffect(() => {
+    setDraft(card);
+    setLabelInput("");
+    setExpandedSubtasks(new Set());
+  }, [card]);
   useModalKeys(editorRef, onClose);
   // Move focus into the dialog on open so keyboard users land inside it.
   useEffect(() => {
@@ -1594,10 +1602,25 @@ function CardEditor({
   }
 
   function addSubtask() {
+    const id = makeId("subtask");
     setDraft((current) => ({
       ...current,
-      subtasks: [...current.subtasks, { id: makeId("subtask"), title: "", completed: false, url: "", items: [] }]
+      subtasks: [...current.subtasks, { id, title: "", completed: false, url: "", items: [] }]
     }));
+    // New sub-tasks open expanded so their list items are immediately reachable.
+    setExpandedSubtasks((current) => new Set(current).add(id));
+  }
+
+  function toggleSubtaskExpanded(id: string) {
+    setExpandedSubtasks((current) => {
+      const next = new Set(current);
+      if (next.has(id)) {
+        next.delete(id);
+      } else {
+        next.add(id);
+      }
+      return next;
+    });
   }
 
   function updateSubtask(id: string, patch: Partial<Subtask>) {
@@ -1620,6 +1643,8 @@ function CardEditor({
       ...current,
       subtasks: current.subtasks.map((subtask) => (subtask.id === subtaskId ? { ...subtask, items: [...subtask.items, item] } : subtask))
     }));
+    // Reveal the items section if it was collapsed so the new row is visible.
+    setExpandedSubtasks((current) => new Set(current).add(subtaskId));
   }
 
   function updateSubtaskItem(subtaskId: string, itemId: string, patch: Partial<SubtaskListItem>) {
@@ -1648,6 +1673,33 @@ function CardEditor({
           : subtask
       )
     }));
+  }
+
+  // Turn the pending input into one or more label chips. Accepts comma-separated
+  // text so a paste like "launch, urgent" yields two chips; ignores duplicates
+  // (case-insensitive) and blank entries.
+  function commitLabels(raw: string) {
+    const additions = raw
+      .split(",")
+      .map((label) => label.trim())
+      .filter(Boolean);
+    setLabelInput("");
+    if (additions.length === 0) {
+      return;
+    }
+    setDraft((current) => {
+      const next = [...current.labels];
+      for (const label of additions) {
+        if (!next.some((existing) => existing.toLowerCase() === label.toLowerCase())) {
+          next.push(label);
+        }
+      }
+      return { ...current, labels: next };
+    });
+  }
+
+  function removeLabel(label: string) {
+    setDraft((current) => ({ ...current, labels: current.labels.filter((item) => item !== label) }));
   }
 
   function replaceNotesSelection(
@@ -1759,289 +1811,366 @@ function CardEditor({
         onMouseDown={(event) => event.stopPropagation()}
       >
         <header className="card-editor-header">
-          <div>
+          <div className="card-editor-heading">
             <p className="eyebrow">Card</p>
             <h2>{draft.title || "Untitled card"}</h2>
-            <div className="card-editor-summary" aria-label="Card summary">
-              <span>{board?.name ?? "No board"}</span>
-              <span>{listName}</span>
-              <span>{completedSubtasks}/{draft.subtasks.length} sub-tasks</span>
-            </div>
           </div>
-          <div className="card-editor-header-actions">
-            <label className="status-pill">
-              <input data-testid="card-completed-input" type="checkbox" checked={draft.completed} onChange={(event) => setDraft({ ...draft, completed: event.target.checked })} />
-              Completed
-            </label>
-            <button aria-label="Close" className="icon-button" disabled={saving} title="Close" onClick={onClose}>
-              <Icon name="x" />
-            </button>
-          </div>
+          <button aria-label="Close" className="icon-button" disabled={saving} title="Close" onClick={onClose}>
+            <Icon name="x" />
+          </button>
         </header>
-        <section className="editor-section editor-details" aria-labelledby="card-details-heading">
-          <div className="editor-section-heading">
-            <h3 id="card-details-heading">Details</h3>
-          </div>
-          <label className="title-field">
-            Title
-            <input data-testid="card-title-input" value={draft.title} onChange={(event) => setDraft({ ...draft, title: event.target.value })} />
-          </label>
-          <div className="editor-grid">
-            <label>
-              Board
-              <select
-                data-testid="card-board-select"
-                value={draft.boardId}
-                onChange={(event) => {
-                  const nextBoard = boards.find((item) => item.id === event.target.value);
-                  setDraft({ ...draft, boardId: event.target.value, listId: nextBoard?.lists[0]?.id ?? "" });
-                }}
-              >
-                {boards.map((item) => (
-                  <option key={item.id} value={item.id}>
-                    {item.name}
-                  </option>
-                ))}
-              </select>
-            </label>
-            <label>
-              List
-              <select data-testid="card-list-select" value={draft.listId} onChange={(event) => setDraft({ ...draft, listId: event.target.value })}>
-                {board?.lists.map((list) => (
-                  <option key={list.id} value={list.id}>
-                    {list.name}
-                  </option>
-                ))}
-              </select>
-            </label>
-            <label>
-              Due
-              <input data-testid="card-due-input" type="date" value={draft.due} onChange={(event) => setDraft({ ...draft, due: event.target.value })} />
-            </label>
-            <label>
-              Labels
+
+        <div className="card-editor-body">
+          <div className="card-editor-main">
+            <label className="title-field">
+              <span className="field-label">Title</span>
               <input
-                data-testid="card-labels-input"
-                value={draft.labels.join(", ")}
-                onChange={(event) =>
-                  setDraft({
-                    ...draft,
-                    labels: event.target.value
-                      .split(",")
-                      .map((label) => label.trim())
-                      .filter(Boolean)
-                  })
-                }
-                placeholder="animation, review"
+                data-testid="card-title-input"
+                value={draft.title}
+                onChange={(event) => setDraft({ ...draft, title: event.target.value })}
+                placeholder="Card title"
               />
             </label>
-          </div>
-        </section>
-        <fieldset className="editor-section assignee-fieldset">
-          <legend>Assignees</legend>
-          <div className="assignee-list">
-            {members.length === 0 && <p className="empty-inline">Add members before assigning cards.</p>}
-            {members.map((member) => (
-              <label key={member.id} className="assignee-option">
-                <input
-                  checked={draft.assignees.includes(member.id)}
-                  data-testid={`assignee-${member.id}`}
-                  type="checkbox"
-                  onChange={(event) => updateAssignee(member.id, event.target.checked)}
-                />
-                <span className="avatar" style={{ background: member.color }}>
-                  {initials(member.name)}
-                </span>
-                <span>{member.name}</span>
-              </label>
-            ))}
-          </div>
-        </fieldset>
-        <section className="editor-section subtasks" aria-labelledby="subtasks-heading">
-          <div className="editor-section-heading">
-            <div>
-              <h3 id="subtasks-heading">Sub-tasks</h3>
-              <p>{draft.subtasks.length === 0 ? "No checklist items yet." : `${completedSubtasks} of ${draft.subtasks.length} complete`}</p>
-            </div>
-            <button data-testid="add-subtask" onClick={addSubtask}>
-              <Icon name="plus" /> Add sub-task
-            </button>
-          </div>
-          {draft.subtasks.length === 0 && <p className="muted">No sub-tasks yet.</p>}
-          {draft.subtasks.map((subtask) => (
-            <div key={subtask.id} className="subtask-block">
-              <div className="subtask-row">
-                <input
-                  checked={subtask.completed}
-                  data-testid={`subtask-${subtask.id}-toggle`}
-                  type="checkbox"
-                  onChange={(event) => updateSubtask(subtask.id, { completed: event.target.checked })}
-                />
-                <input
-                  className="subtask-title"
-                  data-testid={`subtask-${subtask.id}-title`}
-                  value={subtask.title}
-                  onChange={(event) => updateSubtask(subtask.id, { title: event.target.value })}
-                  placeholder="Sub-task"
-                />
-                <input
-                  className="subtask-url"
-                  data-testid={`subtask-${subtask.id}-url`}
-                  value={subtask.url}
-                  onChange={(event) => updateSubtask(subtask.id, { url: event.target.value })}
-                  placeholder="https://..."
-                />
-                {subtask.url.trim() && (
-                  <button
-                    aria-label="Open link"
-                    className="subtask-open"
-                    data-testid={`subtask-${subtask.id}-open`}
-                    title="Open link"
-                    onClick={() => void openExternal(subtask.url.trim())}
-                  >
-                    <Icon name="chevron-up-right" />
-                  </button>
-                )}
-                <button
-                  aria-label="Remove sub-task"
-                  className="subtask-remove"
-                  data-testid={`subtask-${subtask.id}-remove`}
-                  title="Remove sub-task"
-                  onClick={() => removeSubtask(subtask.id)}
-                >
-                  <Icon name="x" />
+
+            <section className="main-section" aria-labelledby="subtasks-heading">
+              <div className="main-section-head">
+                <div>
+                  <h3 id="subtasks-heading">Sub-tasks</h3>
+                  <p className="main-section-sub">
+                    {draft.subtasks.length === 0 ? "No checklist items yet." : `${completedSubtasks} of ${draft.subtasks.length} complete`}
+                  </p>
+                </div>
+                <button data-testid="add-subtask" onClick={addSubtask}>
+                  <Icon name="plus" /> Add sub-task
                 </button>
               </div>
-              <div className="subtask-items-editor">
-                <div className="subtask-items-header">
-                  <span>List items</span>
-                  <button data-testid={`subtask-${subtask.id}-add-item`} onClick={() => addSubtaskItem(subtask.id)}>
-                    <Icon name="plus" /> Add item
+              {draft.subtasks.length === 0 && <p className="section-empty">No sub-tasks yet. Break this card into smaller steps.</p>}
+              {draft.subtasks.length > 0 && (
+                <div className="subtask-list">
+                  {draft.subtasks.map((subtask) => {
+                    const isExpanded = expandedSubtasks.has(subtask.id);
+                    const itemCount = subtask.items.length;
+                    const hasUrl = subtask.url.trim().length > 0;
+                    return (
+                      <div key={subtask.id} className={`subtask-block ${subtask.completed ? "completed" : ""}`}>
+                        <div className="subtask-head">
+                          <input
+                            className="subtask-check"
+                            checked={subtask.completed}
+                            data-testid={`subtask-${subtask.id}-toggle`}
+                            type="checkbox"
+                            aria-label="Mark sub-task complete"
+                            onChange={(event) => updateSubtask(subtask.id, { completed: event.target.checked })}
+                          />
+                          <input
+                            className="subtask-title"
+                            data-testid={`subtask-${subtask.id}-title`}
+                            value={subtask.title}
+                            onChange={(event) => updateSubtask(subtask.id, { title: event.target.value })}
+                            placeholder="Sub-task"
+                          />
+                          <button
+                            className="subtask-expand"
+                            data-expanded={isExpanded}
+                            aria-expanded={isExpanded}
+                            aria-label={isExpanded ? "Hide list items" : "Show list items"}
+                            title={isExpanded ? "Hide list items" : "Show list items"}
+                            onClick={() => toggleSubtaskExpanded(subtask.id)}
+                          >
+                            {itemCount > 0 && <span className="subtask-count">{itemCount}</span>}
+                            <Icon name="chevron-down" />
+                          </button>
+                          <button
+                            aria-label="Remove sub-task"
+                            className="subtask-remove"
+                            data-testid={`subtask-${subtask.id}-remove`}
+                            title="Remove sub-task"
+                            onClick={() => removeSubtask(subtask.id)}
+                          >
+                            <Icon name="x" />
+                          </button>
+                        </div>
+                        {(isExpanded || hasUrl) && (
+                          <div className={`link-line ${hasUrl ? "has-url" : ""}`}>
+                            <LinkIcon />
+                            <input
+                              className="link-input"
+                              data-testid={`subtask-${subtask.id}-url`}
+                              value={subtask.url}
+                              onChange={(event) => updateSubtask(subtask.id, { url: event.target.value })}
+                              placeholder="Add link"
+                            />
+                            {hasUrl && (
+                              <button
+                                aria-label="Open link"
+                                className="link-open"
+                                data-testid={`subtask-${subtask.id}-open`}
+                                title="Open link"
+                                onClick={() => void openExternal(subtask.url.trim())}
+                              >
+                                <Icon name="chevron-up-right" />
+                              </button>
+                            )}
+                          </div>
+                        )}
+                        {isExpanded && (
+                          <div className="subtask-items-editor">
+                            {itemCount > 0 && (
+                              <ul className="subtask-item-list">
+                                {subtask.items.map((item) => {
+                                  const itemHasUrl = item.url.trim().length > 0;
+                                  return (
+                                    <li key={item.id} className="subtask-item-row">
+                                      <span className="subtask-item-bullet" aria-hidden="true" />
+                                      <input
+                                        className="subtask-item-text"
+                                        data-testid={`subtask-item-${item.id}-text`}
+                                        value={item.text}
+                                        onChange={(event) => updateSubtaskItem(subtask.id, item.id, { text: event.target.value })}
+                                        placeholder="List item"
+                                      />
+                                      <div className={`link-line ${itemHasUrl ? "has-url" : ""}`}>
+                                        <LinkIcon />
+                                        <input
+                                          className="link-input"
+                                          data-testid={`subtask-item-${item.id}-url`}
+                                          value={item.url}
+                                          onChange={(event) => updateSubtaskItem(subtask.id, item.id, { url: event.target.value })}
+                                          placeholder="Add link"
+                                        />
+                                        {itemHasUrl && (
+                                          <button
+                                            aria-label="Open list item link"
+                                            className="link-open"
+                                            data-testid={`subtask-item-${item.id}-open`}
+                                            title="Open link"
+                                            onClick={() => void openExternal(item.url.trim())}
+                                          >
+                                            <Icon name="chevron-up-right" />
+                                          </button>
+                                        )}
+                                      </div>
+                                      <button
+                                        aria-label="Remove list item"
+                                        className="subtask-remove"
+                                        data-testid={`subtask-item-${item.id}-remove`}
+                                        title="Remove list item"
+                                        onClick={() => removeSubtaskItem(subtask.id, item.id)}
+                                      >
+                                        <Icon name="x" />
+                                      </button>
+                                    </li>
+                                  );
+                                })}
+                              </ul>
+                            )}
+                            <button
+                              className="subtask-add-item"
+                              data-testid={`subtask-${subtask.id}-add-item`}
+                              onClick={() => addSubtaskItem(subtask.id)}
+                            >
+                              <Icon name="plus" /> Add item
+                            </button>
+                          </div>
+                        )}
+                      </div>
+                    );
+                  })}
+                </div>
+              )}
+            </section>
+
+            <section className="main-section notes-editor" aria-labelledby="notes-heading">
+              <div className="main-section-head notes-editor-header">
+                <h3 id="notes-heading">Notes</h3>
+                <div className="notes-toolbar" aria-label="Notes formatting">
+                  <button
+                    aria-label="Bold"
+                    className="notes-tool"
+                    data-testid="notes-bold"
+                    title="Bold"
+                    type="button"
+                    onMouseDown={(event) => event.preventDefault()}
+                    onClick={formatNotesAsBold}
+                  >
+                    <strong>B</strong>
+                  </button>
+                  <button
+                    aria-label="Italic"
+                    className="notes-tool"
+                    data-testid="notes-italic"
+                    title="Italic"
+                    type="button"
+                    onMouseDown={(event) => event.preventDefault()}
+                    onClick={formatNotesAsItalic}
+                  >
+                    <em>I</em>
+                  </button>
+                  <button
+                    aria-label="Create link"
+                    className="notes-tool"
+                    data-testid="notes-link"
+                    title="Create link"
+                    type="button"
+                    onMouseDown={(event) => event.preventDefault()}
+                    onClick={formatNotesAsLink}
+                  >
+                    <LinkIcon />
                   </button>
                 </div>
-                {subtask.items.length === 0 && <p className="muted">No list items yet.</p>}
-                {subtask.items.length > 0 && (
-                  <ul className="subtask-item-list">
-                    {subtask.items.map((item) => (
-                      <li key={item.id} className="subtask-item-row">
-                        <input
-                          className="subtask-item-text"
-                          data-testid={`subtask-item-${item.id}-text`}
-                          value={item.text}
-                          onChange={(event) => updateSubtaskItem(subtask.id, item.id, { text: event.target.value })}
-                          placeholder="List item"
-                        />
-                        <input
-                          className="subtask-item-url"
-                          data-testid={`subtask-item-${item.id}-url`}
-                          value={item.url}
-                          onChange={(event) => updateSubtaskItem(subtask.id, item.id, { url: event.target.value })}
-                          placeholder="https://..."
-                        />
-                        {item.url.trim() && (
-                          <button
-                            aria-label="Open list item link"
-                            className="subtask-open"
-                            data-testid={`subtask-item-${item.id}-open`}
-                            title="Open link"
-                            onClick={() => void openExternal(item.url.trim())}
-                          >
-                            <Icon name="chevron-up-right" />
-                          </button>
-                        )}
+              </div>
+              {linkDraft && (
+                <form className="notes-link-form" data-testid="notes-link-form" onSubmit={applyNotesLink}>
+                  <input
+                    aria-label="Link URL"
+                    data-testid="notes-link-url"
+                    placeholder="https://example.com"
+                    ref={notesLinkInputRef}
+                    value={linkDraft.url}
+                    onChange={(event) => setLinkDraft({ ...linkDraft, url: event.target.value })}
+                  />
+                  <button className="primary" data-testid="notes-link-apply" type="submit">
+                    Insert link
+                  </button>
+                  <button data-testid="notes-link-cancel" type="button" onClick={() => setLinkDraft(null)}>
+                    Cancel
+                  </button>
+                </form>
+              )}
+              <textarea
+                aria-labelledby="notes-heading"
+                data-testid="card-notes-input"
+                ref={notesInputRef}
+                value={draft.body}
+                onChange={(event) => setDraft({ ...draft, body: event.target.value })}
+                rows={8}
+              />
+            </section>
+          </div>
+
+          <aside className="card-editor-side" aria-label="Card properties">
+            <div className="side-section">
+              <span className="side-heading">Status</span>
+              <label className="status-toggle" data-checked={draft.completed}>
+                <input
+                  data-testid="card-completed-input"
+                  type="checkbox"
+                  checked={draft.completed}
+                  onChange={(event) => setDraft({ ...draft, completed: event.target.checked })}
+                />
+                <span>{draft.completed ? "Completed" : "Mark complete"}</span>
+              </label>
+            </div>
+
+            <div className="side-section">
+              <span className="side-heading">Details</span>
+              <label className="side-field">
+                <span>Board</span>
+                <select
+                  data-testid="card-board-select"
+                  value={draft.boardId}
+                  onChange={(event) => {
+                    const nextBoard = boards.find((item) => item.id === event.target.value);
+                    setDraft({ ...draft, boardId: event.target.value, listId: nextBoard?.lists[0]?.id ?? "" });
+                  }}
+                >
+                  {boards.map((item) => (
+                    <option key={item.id} value={item.id}>
+                      {item.name}
+                    </option>
+                  ))}
+                </select>
+              </label>
+              <label className="side-field">
+                <span>List</span>
+                <select data-testid="card-list-select" value={draft.listId} onChange={(event) => setDraft({ ...draft, listId: event.target.value })}>
+                  {board?.lists.map((list) => (
+                    <option key={list.id} value={list.id}>
+                      {list.name}
+                    </option>
+                  ))}
+                </select>
+              </label>
+              <label className="side-field">
+                <span>Due date</span>
+                <input data-testid="card-due-input" type="date" value={draft.due} onChange={(event) => setDraft({ ...draft, due: event.target.value })} />
+              </label>
+            </div>
+
+            <div className="side-section">
+              <span className="side-heading">Assignees</span>
+              <div className="assignee-list">
+                {members.length === 0 && <p className="empty-inline">Add members before assigning cards.</p>}
+                {members.map((member) => (
+                  <label key={member.id} className={`assignee-option ${draft.assignees.includes(member.id) ? "checked" : ""}`}>
+                    <input
+                      checked={draft.assignees.includes(member.id)}
+                      data-testid={`assignee-${member.id}`}
+                      type="checkbox"
+                      onChange={(event) => updateAssignee(member.id, event.target.checked)}
+                    />
+                    <span className="avatar small" style={{ background: member.color }}>
+                      {initials(member.name)}
+                    </span>
+                    <span className="assignee-name">{member.name}</span>
+                  </label>
+                ))}
+              </div>
+            </div>
+
+            <div className="side-section">
+              <span className="side-heading">Labels</span>
+              <div className="label-field">
+                {draft.labels.length > 0 && (
+                  <div className="label-chips">
+                    {draft.labels.map((label) => (
+                      <span className="label-chip" key={label}>
+                        <span className="label-chip-text">{label}</span>
                         <button
-                          aria-label="Remove list item"
-                          className="subtask-remove"
-                          data-testid={`subtask-item-${item.id}-remove`}
-                          title="Remove list item"
-                          onClick={() => removeSubtaskItem(subtask.id, item.id)}
+                          className="label-chip-remove"
+                          type="button"
+                          aria-label={`Remove label ${label}`}
+                          title={`Remove ${label}`}
+                          onClick={() => removeLabel(label)}
                         >
                           <Icon name="x" />
                         </button>
-                      </li>
+                      </span>
                     ))}
-                  </ul>
+                  </div>
                 )}
+                <input
+                  className="label-input"
+                  data-testid="card-labels-input"
+                  value={labelInput}
+                  onChange={(event) => setLabelInput(event.target.value)}
+                  onKeyDown={(event) => {
+                    if (event.key === "Enter" || event.key === ",") {
+                      event.preventDefault();
+                      commitLabels(labelInput);
+                    } else if (event.key === "Backspace" && labelInput === "" && draft.labels.length > 0) {
+                      removeLabel(draft.labels[draft.labels.length - 1]);
+                    }
+                  }}
+                  onBlur={() => commitLabels(labelInput)}
+                  placeholder="Add label…"
+                />
               </div>
             </div>
-          ))}
-        </section>
-        <section className="editor-section notes-editor" aria-labelledby="notes-heading">
-          <div className="editor-section-heading notes-editor-header">
-            <h3 id="notes-heading">Notes</h3>
-            <div className="notes-toolbar" aria-label="Notes formatting">
-              <button
-                aria-label="Bold"
-                className="notes-tool"
-                data-testid="notes-bold"
-                title="Bold"
-                type="button"
-                onMouseDown={(event) => event.preventDefault()}
-                onClick={formatNotesAsBold}
-              >
-                <strong>B</strong>
-              </button>
-              <button
-                aria-label="Italic"
-                className="notes-tool"
-                data-testid="notes-italic"
-                title="Italic"
-                type="button"
-                onMouseDown={(event) => event.preventDefault()}
-                onClick={formatNotesAsItalic}
-              >
-                <em>I</em>
-              </button>
-              <button
-                aria-label="Create link"
-                className="notes-tool"
-                data-testid="notes-link"
-                title="Create link"
-                type="button"
-                onMouseDown={(event) => event.preventDefault()}
-                onClick={formatNotesAsLink}
-              >
-                <LinkIcon />
-              </button>
+
+            <div className="side-section side-activity">
+              <span className="side-heading">Activity</span>
+              {draft.activity.length === 0 && <p className="empty-inline">No activity yet.</p>}
+              {draft.activity.slice(0, 8).map((event) => (
+                <div className="activity-row" key={event.id}>
+                  <time>{new Date(event.createdAt).toLocaleString()}</time>
+                  <span>{event.message}</span>
+                </div>
+              ))}
             </div>
-          </div>
-          {linkDraft && (
-            <form className="notes-link-form" data-testid="notes-link-form" onSubmit={applyNotesLink}>
-              <input
-                aria-label="Link URL"
-                data-testid="notes-link-url"
-                placeholder="https://example.com"
-                ref={notesLinkInputRef}
-                value={linkDraft.url}
-                onChange={(event) => setLinkDraft({ ...linkDraft, url: event.target.value })}
-              />
-              <button className="primary" data-testid="notes-link-apply" type="submit">
-                Insert link
-              </button>
-              <button data-testid="notes-link-cancel" type="button" onClick={() => setLinkDraft(null)}>
-                Cancel
-              </button>
-            </form>
-          )}
-          <textarea
-            aria-labelledby="notes-heading"
-            data-testid="card-notes-input"
-            ref={notesInputRef}
-            value={draft.body}
-            onChange={(event) => setDraft({ ...draft, body: event.target.value })}
-            rows={10}
-          />
-        </section>
-        <section className="editor-section activity">
-          <h3>Activity</h3>
-          {draft.activity.length === 0 && <p className="muted">No activity yet.</p>}
-          {draft.activity.slice(0, 8).map((event) => (
-            <p key={event.id}>
-              <span>{new Date(event.createdAt).toLocaleString()}</span>
-              {event.message}
-            </p>
-          ))}
-        </section>
+          </aside>
+        </div>
+
         <footer>
           <div className="destructive-actions">
             <button data-testid="archive-card" disabled={saving} onClick={() => void onArchive(draft)}>
@@ -2342,6 +2471,7 @@ function Icon({ name }: { name: IconName }) {
       </>
     ),
     check: <path d="m5 12 4 4L19 6" />,
+    "chevron-down": <path d="m6 9 6 6 6-6" />,
     "chevron-up-right": (
       <>
         <path d="M7 17 17 7" />
