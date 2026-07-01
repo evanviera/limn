@@ -1,37 +1,37 @@
 :root {
-  --app-bg: #12110f;
-  --pane-bg: #181816;
-  --pane-bg-2: #1d1d1a;
-  --pane-bg-3: #24231f;
-  --editor-bg: #151512;
-  --surface: #20201d;
-  --surface-raised: #272720;
-  --surface-hover: #2d2c25;
-  --border: #3a382f;
-  --border-soft: #2b2a24;
-  --text: #ebe8dc;
-  --text-strong: #fbf7ea;
-  --text-muted: #a8a293;
-  --text-faint: #827c70;
-  --accent: #4f7b61;
-  --accent-hover: #5f9273;
-  --accent-soft: rgba(95, 146, 115, 0.16);
-  --accent-border: rgba(118, 170, 139, 0.44);
-  --accent-link: #8cc89f;
-  --accent-link-hover: #ace0ba;
-  --accent-link-border: rgba(140, 200, 159, 0.62);
-  --selection: rgba(118, 170, 139, 0.32);
-  --success: #83c58d;
-  --success-soft: rgba(131, 197, 141, 0.12);
-  --success-border: rgba(131, 197, 141, 0.3);
-  --warning: #d0a557;
-  --warning-soft: rgba(208, 165, 87, 0.14);
-  --warning-border: rgba(208, 165, 87, 0.34);
-  --danger: #db7a68;
-  --danger-soft: rgba(219, 122, 104, 0.12);
-  --danger-border: rgba(219, 122, 104, 0.5);
-  --input-bg: #141411;
-  --overlay-bg: rgba(8, 8, 7, 0.68);
+  --app-bg: #101214;
+  --pane-bg: #16191c;
+  --pane-bg-2: #1b1f23;
+  --pane-bg-3: #22272b;
+  --editor-bg: #121416;
+  --surface: #1d2226;
+  --surface-raised: #242a2f;
+  --surface-hover: #2a3136;
+  --border: #3a4248;
+  --border-soft: #293036;
+  --text: #e9edf0;
+  --text-strong: #f8faf8;
+  --text-muted: #a7b0b7;
+  --text-faint: #77828a;
+  --accent: #4f9d75;
+  --accent-hover: #5cb684;
+  --accent-soft: rgba(79, 157, 117, 0.14);
+  --accent-border: rgba(105, 186, 138, 0.38);
+  --accent-link: #7bc7d9;
+  --accent-link-hover: #9fe1ee;
+  --accent-link-border: rgba(123, 199, 217, 0.6);
+  --selection: rgba(105, 186, 138, 0.3);
+  --success: #76c987;
+  --success-soft: rgba(118, 201, 135, 0.12);
+  --success-border: rgba(118, 201, 135, 0.32);
+  --warning: #d5a94e;
+  --warning-soft: rgba(213, 169, 78, 0.13);
+  --warning-border: rgba(213, 169, 78, 0.34);
+  --danger: #e27672;
+  --danger-soft: rgba(226, 118, 114, 0.12);
+  --danger-border: rgba(226, 118, 114, 0.46);
+  --input-bg: #111416;
+  --overlay-bg: rgba(5, 7, 8, 0.66);
   --button-border: rgba(255, 255, 255, 0.08);
   --empty-overlay: rgba(24, 24, 22, 0.64);
   --active-line: rgba(255, 255, 255, 0.035);
@@ -1100,11 +1100,11 @@ body.is-card-dragging * {
 .card-editor {
   display: grid;
   grid-template-rows: auto minmax(0, 1fr) auto;
-  width: min(1060px, 100vw);
+  width: min(1040px, 100vw);
   height: 100vh;
   overflow: hidden;
   color: var(--text);
-  background: var(--pane-bg);
+  background: var(--editor-bg);
   border-left: 1px solid var(--border-soft);
   box-shadow: var(--shadow);
   animation: panel-in var(--transition-panel);
@@ -1115,8 +1115,8 @@ body.is-card-dragging * {
   align-items: flex-start;
   justify-content: space-between;
   gap: var(--space-5);
-  padding: 16px 24px;
-  background: var(--pane-bg);
+  padding: 14px 22px;
+  background: rgba(18, 20, 22, 0.94);
   border-bottom: 1px solid var(--border-soft);
 }
 
@@ -1127,9 +1127,10 @@ body.is-card-dragging * {
 .card-editor-header h2 {
   overflow: hidden;
   margin: 0;
-  color: var(--text-strong);
-  font-size: var(--text-xl);
-  line-height: 1.12;
+  color: var(--text-muted);
+  font-size: var(--text-sm);
+  font-weight: var(--weight-medium);
+  line-height: 1.25;
   text-overflow: ellipsis;
   white-space: nowrap;
 }
@@ -1139,16 +1140,16 @@ body.is-card-dragging * {
 .card-editor-body {
   overflow-y: auto;
   display: grid;
-  grid-template-columns: minmax(0, 1fr) 300px;
+  grid-template-columns: minmax(0, 1fr) 280px;
   align-items: start;
-  gap: 32px;
-  padding: 24px;
+  gap: 28px;
+  padding: 22px 24px;
 }
 
 .card-editor-main {
   display: grid;
   align-content: start;
-  gap: 28px;
+  gap: 24px;
   min-width: 0;
 }
 
@@ -1157,9 +1158,9 @@ body.is-card-dragging * {
   top: 0;
   display: grid;
   align-content: start;
-  gap: 22px;
+  gap: 0;
   min-width: 0;
-  padding-left: 24px;
+  padding-left: 22px;
   border-left: 1px solid var(--border-soft);
 }
 
@@ -1168,21 +1169,36 @@ body.is-card-dragging * {
   align-items: center;
   justify-content: space-between;
   gap: var(--space-5);
-  padding: 14px 24px;
-  background: var(--pane-bg);
+  padding: 12px 22px;
+  background: rgba(18, 20, 22, 0.96);
   border-top: 1px solid var(--border-soft);
 }
 
 .destructive-actions {
   display: flex;
   flex-wrap: wrap;
-  gap: var(--space-4);
+  gap: var(--space-3);
+}
+
+.card-editor footer .primary {
+  min-width: 108px;
+}
+
+.card-editor .destructive-actions button {
+  color: var(--text-faint);
+  border-color: transparent;
+}
+
+.card-editor .destructive-actions button:hover:not(:disabled) {
+  color: var(--danger);
+  background: var(--danger-soft);
+  border-color: var(--danger-border);
 }
 
 /* Shared section rhythm for the main column and the metadata rail. */
 .main-section {
   display: grid;
-  gap: var(--space-5);
+  gap: var(--space-4);
   min-width: 0;
 }
 
@@ -1197,15 +1213,17 @@ body.is-card-dragging * {
 .field-label,
 .side-heading,
 .main-section-head h3 {
-  color: var(--text-muted);
+  color: var(--text-faint);
   font-size: var(--text-sm);
   font-weight: var(--weight-medium);
   letter-spacing: 0;
-  text-transform: uppercase;
+  text-transform: none;
 }
 
 .main-section-head h3 {
   margin: 0;
+  color: var(--text);
+  font-size: var(--text-base);
 }
 
 .main-section-sub {
@@ -1217,12 +1235,11 @@ body.is-card-dragging * {
 
 .section-empty {
   margin: 0;
-  padding: 14px var(--space-5);
+  padding: 12px 0;
   color: var(--text-muted);
-  text-align: center;
   background: transparent;
-  border: 1px dashed var(--border-soft);
-  border-radius: var(--radius-md);
+  border-top: 1px dashed var(--border-soft);
+  border-bottom: 1px dashed var(--border-soft);
   font-size: var(--text-sm);
 }
 
@@ -1231,10 +1248,19 @@ body.is-card-dragging * {
 }
 
 .title-field input {
-  height: 44px;
+  height: 48px;
+  padding: 0;
   color: var(--text-strong);
-  font-size: var(--text-lg);
+  background: transparent;
+  border-color: transparent;
+  border-bottom-color: var(--border-soft);
+  border-radius: 0;
+  font-size: var(--text-xl);
   font-weight: var(--weight-bold);
+}
+
+.title-field input:hover:not(:focus) {
+  border-bottom-color: var(--border);
 }
 
 /* --- Metadata rail --- */
@@ -1242,6 +1268,23 @@ body.is-card-dragging * {
   display: grid;
   gap: var(--space-3);
   min-width: 0;
+  padding-bottom: 18px;
+}
+
+.side-section + .side-section {
+  padding-top: 18px;
+  border-top: 1px solid var(--border-soft);
+}
+
+.side-heading {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-2);
+}
+
+.side-heading .icon {
+  width: 14px;
+  height: 14px;
 }
 
 .side-field {
@@ -1254,15 +1297,33 @@ body.is-card-dragging * {
   font-weight: var(--weight-medium);
 }
 
+.side-field-select,
+.side-field-date {
+  display: grid;
+  grid-template-columns: minmax(64px, auto) minmax(0, 1fr);
+  align-items: center;
+  gap: var(--space-3);
+}
+
+.side-field-date {
+  grid-template-columns: auto minmax(64px, auto) minmax(0, 1fr);
+}
+
+.side-field-date .icon {
+  width: 15px;
+  height: 15px;
+  color: var(--text-faint);
+}
+
 .status-toggle {
   display: flex;
   flex-direction: row;
   align-items: center;
   gap: var(--space-4);
-  min-height: 40px;
-  padding: 0 var(--space-5);
+  min-height: 38px;
+  padding: 0 var(--space-4);
   color: var(--text);
-  background: var(--surface);
+  background: transparent;
   border: 1px solid var(--border-soft);
   border-radius: var(--radius-md);
   font-size: var(--text-base);
@@ -1272,6 +1333,7 @@ body.is-card-dragging * {
 }
 
 .status-toggle:hover {
+  background: var(--surface);
   border-color: var(--border);
 }
 
@@ -1287,7 +1349,7 @@ body.is-card-dragging * {
 
 .assignee-list {
   display: grid;
-  gap: var(--space-2);
+  gap: var(--space-1);
   min-width: 0;
 }
 
@@ -1298,7 +1360,7 @@ body.is-card-dragging * {
   gap: var(--space-3);
   min-width: 0;
   min-height: 34px;
-  padding: var(--space-2) var(--space-3);
+  padding: var(--space-2);
   color: var(--text-muted);
   background: transparent;
   border: 1px solid transparent;
@@ -1314,7 +1376,7 @@ body.is-card-dragging * {
 
 .assignee-option.checked {
   color: var(--text-strong);
-  background: var(--surface);
+  background: rgba(255, 255, 255, 0.035);
   border-color: var(--border-soft);
 }
 
@@ -1338,7 +1400,7 @@ body.is-card-dragging * {
 /* --- Label chips --- */
 .label-field {
   display: grid;
-  gap: var(--space-3);
+  gap: var(--space-2);
   min-width: 0;
 }
 
@@ -1354,10 +1416,10 @@ body.is-card-dragging * {
   align-items: center;
   gap: var(--space-2);
   max-width: 100%;
-  padding: 2px 2px 2px 9px;
+  padding: 2px 2px 2px 8px;
   color: var(--text);
-  background: var(--accent-soft);
-  border: 1px solid var(--accent-border);
+  background: rgba(255, 255, 255, 0.035);
+  border: 1px solid var(--border-soft);
   border-radius: var(--radius-pill);
   font-size: var(--text-sm);
   font-weight: var(--weight-medium);
@@ -1402,22 +1464,27 @@ body.is-card-dragging * {
   display: flex;
   flex-wrap: wrap;
   justify-content: flex-end;
-  gap: var(--space-2);
+  gap: var(--space-1);
   min-width: 0;
+  padding: 2px;
+  background: var(--input-bg);
+  border: 1px solid var(--border-soft);
+  border-radius: var(--radius-md);
 }
 
 .notes-tool {
-  min-width: 32px;
+  min-width: 30px;
   min-height: 28px;
-  padding: 0 var(--space-3);
-  color: var(--text);
-  background: var(--surface);
-  border-color: var(--border-soft);
+  padding: 0 var(--space-2);
+  color: var(--text-muted);
+  background: transparent;
+  border-color: transparent;
   border-radius: var(--radius-sm);
 }
 
 .notes-editor textarea {
-  min-height: 170px;
+  min-height: 190px;
+  resize: vertical;
 }
 
 .notes-link-form {
@@ -1425,7 +1492,7 @@ body.is-card-dragging * {
   grid-template-columns: minmax(0, 1fr) auto auto;
   gap: var(--space-3);
   min-width: 0;
-  padding: var(--space-3);
+  padding: var(--space-2);
   background: var(--input-bg);
   border: 1px solid var(--border-soft);
   border-radius: var(--radius-md);
@@ -1591,35 +1658,40 @@ body.is-card-dragging * {
 /* --- Sub-task editor blocks (card editor, not the board card) --- */
 .subtask-list {
   display: grid;
-  gap: var(--space-3);
+  gap: 0;
   min-width: 0;
+  border-top: 1px solid var(--border-soft);
+  border-bottom: 1px solid var(--border-soft);
 }
 
 .subtask-block {
   display: grid;
   gap: var(--space-2);
   min-width: 0;
-  padding: var(--space-3) var(--space-4);
-  background: var(--surface);
-  border: 1px solid var(--border-soft);
-  border-radius: var(--radius-md);
-  transition: border-color var(--transition);
+  padding: var(--space-3) 0;
+  background: transparent;
+  border: 0;
+  border-radius: 0;
+  transition: background var(--transition);
+}
+
+.subtask-block + .subtask-block {
+  border-top: 1px solid var(--border-soft);
 }
 
 .subtask-block:focus-within {
-  border-color: var(--border);
+  background: rgba(255, 255, 255, 0.018);
 }
 
 .subtask-block.completed {
-  background: var(--success-soft);
-  border-color: var(--success-border);
+  background: transparent;
 }
 
 .subtask-head {
   display: grid;
   grid-template-columns: auto minmax(0, 1fr) auto auto;
   align-items: center;
-  gap: var(--space-3);
+  gap: var(--space-2);
   min-width: 0;
 }
 
@@ -1635,6 +1707,7 @@ body.is-card-dragging * {
 }
 
 .subtask-title:hover:not(:focus) {
+  background: var(--surface);
   border-color: var(--border-soft);
 }
 
@@ -1648,9 +1721,9 @@ body.is-card-dragging * {
 .subtask-expand {
   flex: none;
   gap: var(--space-2);
-  min-width: 32px;
-  height: 32px;
-  padding: 0 var(--space-3);
+  min-width: 30px;
+  height: 30px;
+  padding: 0 var(--space-2);
   color: var(--text-muted);
   background: transparent;
   border-color: transparent;
@@ -1677,8 +1750,8 @@ body.is-card-dragging * {
 .subtask-remove,
 .link-open {
   flex: none;
-  width: 32px;
-  min-width: 32px;
+  width: 30px;
+  min-width: 30px;
   padding: 0;
 }
 
@@ -1702,6 +1775,7 @@ body.is-card-dragging * {
   align-items: center;
   gap: var(--space-2);
   min-width: 0;
+  margin-left: 24px;
   padding-left: var(--space-2);
   color: var(--text-faint);
 }
@@ -1742,17 +1816,24 @@ body.is-card-dragging * {
   display: grid;
   gap: var(--space-2);
   min-width: 0;
-  margin: var(--space-1) 0 0 26px;
+  margin: var(--space-1) 0 0 30px;
   padding: var(--space-3) 0 var(--space-1) var(--space-4);
   border-left: 1px solid var(--border-soft);
 }
 
 .subtask-add-item {
   justify-self: start;
-  padding: var(--space-2) var(--space-3);
+  min-height: 28px;
+  padding: 0 var(--space-3);
   color: var(--text-muted);
   background: transparent;
-  border-style: dashed;
+  border-color: transparent;
+}
+
+.subtask-add-item:hover:not(:disabled) {
+  color: var(--text-strong);
+  background: var(--surface);
+  border-color: var(--border-soft);
 }
 
 .subtask-item-list {
@@ -1767,7 +1848,7 @@ body.is-card-dragging * {
   display: grid;
   grid-template-columns: auto minmax(120px, 1.3fr) minmax(120px, 1fr) auto;
   align-items: center;
-  gap: var(--space-3);
+  gap: var(--space-2);
   min-width: 0;
 }
 
@@ -1786,6 +1867,7 @@ body.is-card-dragging * {
 }
 
 .subtask-item-row .link-line {
+  margin-left: 0;
   padding-left: 0;
 }
 
@@ -1959,6 +2041,8 @@ body.is-card-dragging * {
 
   .destructive-actions {
     width: 100%;
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
   }
 
   .destructive-actions button,

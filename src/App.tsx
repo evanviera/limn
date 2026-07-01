@@ -39,6 +39,7 @@ const MAX_NAME_LENGTH = 80;
 type UpdateStatus = "idle" | "checking" | "available" | "downloading" | "restart-ready" | "not-available" | "error";
 type IconName =
   | "archive"
+  | "calendar"
   | "check"
   | "chevron-down"
   | "chevron-up-right"
@@ -46,7 +47,9 @@ type IconName =
   | "folder"
   | "plus"
   | "refresh"
+  | "save"
   | "settings"
+  | "tag"
   | "trash"
   | "users"
   | "x";
@@ -1812,8 +1815,8 @@ function CardEditor({
       >
         <header className="card-editor-header">
           <div className="card-editor-heading">
-            <p className="eyebrow">Card</p>
-            <h2>{draft.title || "Untitled card"}</h2>
+            <p className="eyebrow">Edit card</p>
+            <h2>{board ? `${board.name} / ${board.lists.find((list) => list.id === draft.listId)?.name ?? "Unlisted"}` : "Card details"}</h2>
           </div>
           <button aria-label="Close" className="icon-button" disabled={saving} title="Close" onClick={onClose}>
             <Icon name="x" />
@@ -1835,16 +1838,16 @@ function CardEditor({
             <section className="main-section" aria-labelledby="subtasks-heading">
               <div className="main-section-head">
                 <div>
-                  <h3 id="subtasks-heading">Sub-tasks</h3>
+                  <h3 id="subtasks-heading">Checklist</h3>
                   <p className="main-section-sub">
-                    {draft.subtasks.length === 0 ? "No checklist items yet." : `${completedSubtasks} of ${draft.subtasks.length} complete`}
+                    {draft.subtasks.length === 0 ? "No steps yet" : `${completedSubtasks} of ${draft.subtasks.length} complete`}
                   </p>
                 </div>
                 <button data-testid="add-subtask" onClick={addSubtask}>
-                  <Icon name="plus" /> Add sub-task
+                  <Icon name="plus" /> Add step
                 </button>
               </div>
-              {draft.subtasks.length === 0 && <p className="section-empty">No sub-tasks yet. Break this card into smaller steps.</p>}
+              {draft.subtasks.length === 0 && <p className="section-empty">Add a step when this card needs a checklist.</p>}
               {draft.subtasks.length > 0 && (
                 <div className="subtask-list">
                   {draft.subtasks.map((subtask) => {
@@ -1867,7 +1870,7 @@ function CardEditor({
                             data-testid={`subtask-${subtask.id}-title`}
                             value={subtask.title}
                             onChange={(event) => updateSubtask(subtask.id, { title: event.target.value })}
-                            placeholder="Sub-task"
+                            placeholder="Step"
                           />
                           <button
                             className="subtask-expand"
@@ -1969,7 +1972,7 @@ function CardEditor({
                               data-testid={`subtask-${subtask.id}-add-item`}
                               onClick={() => addSubtaskItem(subtask.id)}
                             >
-                              <Icon name="plus" /> Add item
+                              <Icon name="plus" /> Add detail
                             </button>
                           </div>
                         )}
@@ -2030,7 +2033,7 @@ function CardEditor({
                     onChange={(event) => setLinkDraft({ ...linkDraft, url: event.target.value })}
                   />
                   <button className="primary" data-testid="notes-link-apply" type="submit">
-                    Insert link
+                    Apply
                   </button>
                   <button data-testid="notes-link-cancel" type="button" onClick={() => setLinkDraft(null)}>
                     Cancel
@@ -2064,7 +2067,7 @@ function CardEditor({
 
             <div className="side-section">
               <span className="side-heading">Details</span>
-              <label className="side-field">
+              <label className="side-field side-field-select">
                 <span>Board</span>
                 <select
                   data-testid="card-board-select"
@@ -2081,7 +2084,7 @@ function CardEditor({
                   ))}
                 </select>
               </label>
-              <label className="side-field">
+              <label className="side-field side-field-select">
                 <span>List</span>
                 <select data-testid="card-list-select" value={draft.listId} onChange={(event) => setDraft({ ...draft, listId: event.target.value })}>
                   {board?.lists.map((list) => (
@@ -2091,7 +2094,8 @@ function CardEditor({
                   ))}
                 </select>
               </label>
-              <label className="side-field">
+              <label className="side-field side-field-date">
+                <Icon name="calendar" />
                 <span>Due date</span>
                 <input data-testid="card-due-input" type="date" value={draft.due} onChange={(event) => setDraft({ ...draft, due: event.target.value })} />
               </label>
@@ -2119,7 +2123,7 @@ function CardEditor({
             </div>
 
             <div className="side-section">
-              <span className="side-heading">Labels</span>
+              <span className="side-heading"><Icon name="tag" /> Labels</span>
               <div className="label-field">
                 {draft.labels.length > 0 && (
                   <div className="label-chips">
@@ -2196,7 +2200,9 @@ function CardEditor({
                 <Spinner /> Saving…
               </>
             ) : (
-              "Save card"
+              <>
+                <Icon name="save" /> Save
+              </>
             )}
           </button>
         </footer>
@@ -2470,6 +2476,14 @@ function Icon({ name }: { name: IconName }) {
         <path d="M7 4h10l1 3H6z" />
       </>
     ),
+    calendar: (
+      <>
+        <path d="M8 3v4" />
+        <path d="M16 3v4" />
+        <path d="M4 8h16" />
+        <path d="M5 5h14v16H5z" />
+      </>
+    ),
     check: <path d="m5 12 4 4L19 6" />,
     "chevron-down": <path d="m6 9 6 6 6-6" />,
     "chevron-up-right": (
@@ -2504,6 +2518,13 @@ function Icon({ name }: { name: IconName }) {
         <path d="M6 15a6 6 0 0 0 10 3l4-4" />
       </>
     ),
+    save: (
+      <>
+        <path d="M5 4h12l2 2v14H5z" />
+        <path d="M8 4v6h8V4" />
+        <path d="M8 20v-6h8v6" />
+      </>
+    ),
     settings: (
       <>
         <path d="M12 8a4 4 0 1 0 0 8 4 4 0 0 0 0-8z" />
@@ -2515,6 +2536,12 @@ function Icon({ name }: { name: IconName }) {
         <path d="M12 18v3" />
         <path d="m18.4 5.6-2.1 2.1" />
         <path d="m7.7 16.3-2.1 2.1" />
+      </>
+    ),
+    tag: (
+      <>
+        <path d="M4 12V5h7l9 9-7 7z" />
+        <path d="M8.5 8.5h.01" />
       </>
     ),
     trash: (
