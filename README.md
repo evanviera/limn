@@ -62,6 +62,14 @@ npm run tauri:build:release
 
 The draft release should include macOS install/update assets and a Windows installer asset, typically the Tauri NSIS `.exe`.
 
+### Windows Signing
+
+Windows release builds should be Authenticode-signed before publishing. This is separate from the Tauri updater signature: the updater key proves update metadata/artifacts are valid to Limn, while Authenticode signing identifies the Windows executable and installer to Windows and Microsoft Defender SmartScreen.
+
+Unsigned Windows installers can be installed, but users should expect the "Windows protected your PC" / unknown publisher warning. An EV code signing certificate usually receives immediate SmartScreen reputation. A standard OV code signing certificate is cheaper, but may still show SmartScreen warnings until the certificate or submitted file earns reputation.
+
+Once a Windows certificate is available, configure the release workflow to sign the Tauri Windows artifacts using the certificate provider's supported flow, such as importing a PFX into the Windows runner certificate store, using Azure Key Vault, or setting Tauri's Windows `signCommand`.
+
 ## Usage
 
 1. Launch Limn.

@@ -1,0 +1,4 @@
+interface:
+  display_name: "Release Limn"
+  short_description: "Cut validated Limn releases"
+  default_prompt: "Use $release-limn to cut the next Limn release."
