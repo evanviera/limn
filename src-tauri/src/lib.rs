@@ -607,6 +607,12 @@ fn default_settings(root: &Path) -> Result<String, String> {
         "schemaVersion": 1,
         "workspaceName": name,
         "slackWebhookUrl": "",
+        "slackNotifications": {
+            "cardMovedToDone": true,
+            "cardCompleted": true,
+            "cardAssigned": true,
+            "subtaskCompleted": true
+        },
         "createdAt": now,
         "updatedAt": now
     }))

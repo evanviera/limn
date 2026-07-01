@@ -1,7 +1,14 @@
 import { invoke } from "./ipc.js";
-import type { Board, Card, MembersFile, Subtask, SubtaskListItem, WorkspaceFiles, WorkspaceSettings, WriteResult } from "./types";
+import type { Board, Card, MembersFile, SlackNotificationSettings, Subtask, SubtaskListItem, WorkspaceFiles, WorkspaceSettings, WriteResult } from "./types";
 
 const SCHEMA_VERSION = 1;
+
+const DEFAULT_SLACK_NOTIFICATIONS: SlackNotificationSettings = {
+  cardMovedToDone: true,
+  cardCompleted: true,
+  cardAssigned: true,
+  subtaskCompleted: true
+};
 
 export interface WorkspaceData {
   settings: WorkspaceSettings;
@@ -110,6 +117,7 @@ export function createDefaultSettings(workspaceName: string): WorkspaceSettings 
     schemaVersion: SCHEMA_VERSION,
     workspaceName,
     slackWebhookUrl: "",
+    slackNotifications: { ...DEFAULT_SLACK_NOTIFICATIONS },
     createdAt: now,
     updatedAt: now
   };
@@ -197,9 +205,9 @@ export function addActivity(card: Card, type: Card["activity"][number]["type"], 
 
 export function parseWorkspace(files: WorkspaceFiles): WorkspaceData {
   const diagnostics = [...(files.warnings ?? [])];
-  const settingsResult = safeJson<WorkspaceSettings>(files.settings, createDefaultSettings("Limn Workspace"));
+  const settingsResult = safeJson<Partial<WorkspaceSettings> & { slackNotifications?: unknown }>(files.settings, createDefaultSettings("Limn Workspace"));
   const membersResult = safeJson<MembersFile>(files.members, { schemaVersion: SCHEMA_VERSION, members: [] });
-  const settings = settingsResult.value;
+  const settings = normalizeWorkspaceSettings(settingsResult.value);
   const membersFile = membersResult.value;
   const boards: Board[] = [];
   const cards: Card[] = [];
@@ -240,6 +248,32 @@ export function parseWorkspace(files: WorkspaceFiles): WorkspaceData {
     cards,
     diagnostics
   };
+}
+
+function normalizeWorkspaceSettings(settings: Partial<WorkspaceSettings> & { slackNotifications?: unknown }): WorkspaceSettings {
+  const fallback = createDefaultSettings("Limn Workspace");
+  return {
+    schemaVersion: typeof settings.schemaVersion === "number" ? settings.schemaVersion : fallback.schemaVersion,
+    workspaceName: typeof settings.workspaceName === "string" ? settings.workspaceName : fallback.workspaceName,
+    slackWebhookUrl: typeof settings.slackWebhookUrl === "string" ? settings.slackWebhookUrl : fallback.slackWebhookUrl,
+    slackNotifications: normalizeSlackNotifications(settings.slackNotifications),
+    createdAt: typeof settings.createdAt === "string" ? settings.createdAt : fallback.createdAt,
+    updatedAt: typeof settings.updatedAt === "string" ? settings.updatedAt : fallback.updatedAt
+  };
+}
+
+function normalizeSlackNotifications(value: unknown): SlackNotificationSettings {
+  const settings = value && typeof value === "object" ? value as Partial<Record<keyof SlackNotificationSettings, unknown>> : {};
+  return {
+    cardMovedToDone: booleanOrDefault(settings.cardMovedToDone, DEFAULT_SLACK_NOTIFICATIONS.cardMovedToDone),
+    cardCompleted: booleanOrDefault(settings.cardCompleted, DEFAULT_SLACK_NOTIFICATIONS.cardCompleted),
+    cardAssigned: booleanOrDefault(settings.cardAssigned, DEFAULT_SLACK_NOTIFICATIONS.cardAssigned),
+    subtaskCompleted: booleanOrDefault(settings.subtaskCompleted, DEFAULT_SLACK_NOTIFICATIONS.subtaskCompleted)
+  };
+}
+
+function booleanOrDefault(value: unknown, fallback: boolean): boolean {
+  return typeof value === "boolean" ? value : fallback;
 }
 
 function safeJson<T>(content: string, fallback: T): { ok: boolean; value: T } {

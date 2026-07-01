@@ -1146,6 +1146,29 @@ body.is-card-dragging * {
   gap: var(--space-3);
 }
 
+.settings-toggles {
+  display: grid;
+  gap: var(--space-3);
+  min-width: min(320px, 100%);
+}
+
+.settings-toggle {
+  display: flex;
+  align-items: center;
+  gap: var(--space-3);
+  min-height: 2.25rem;
+  color: var(--text);
+  font-size: var(--text-sm);
+  font-weight: var(--weight-semibold);
+}
+
+.settings-toggle input {
+  width: 1rem;
+  height: 1rem;
+  margin: 0;
+  accent-color: var(--accent);
+}
+
 .member-row {
   display: grid;
   grid-template-columns: auto minmax(160px, 1fr) 58px auto;

@@ -41,6 +41,7 @@ const MAX_NAME_LENGTH = 80;
 const THEME_STORAGE_KEY = "limn-theme";
 type ThemeMode = "dark" | "light";
 type UpdateStatus = "idle" | "checking" | "available" | "downloading" | "restart-ready" | "not-available" | "error";
+type SlackNotificationKey = keyof WorkspaceSettings["slackNotifications"];
 type IconName =
   | "archive"
   | "calendar"
@@ -529,7 +530,7 @@ export default function App() {
       const result = await persistCard(moved, card);
 
       if (result && !result.conflict && list?.name.trim().toLowerCase() === "done") {
-        await sendSlack(`➡️ Card moved to Done: ${moved.title}\nBoard: ${activeBoard.name}`);
+        await sendSlack("cardMovedToDone", `➡️ Card moved to Done: ${moved.title}\nBoard: ${activeBoard.name}`);
       }
     } catch (reason) {
       setError(`Move failed: ${errorText(reason)}`);
@@ -541,6 +542,7 @@ export default function App() {
     if (!card) {
       return;
     }
+    const subtask = card.subtasks.find((item) => item.id === subtaskId);
     const next = {
       ...card,
       subtasks: card.subtasks.map((subtask) => (subtask.id === subtaskId ? { ...subtask, completed } : subtask)),
@@ -548,6 +550,9 @@ export default function App() {
     };
     try {
       await persistCard(next, card);
+      if (completed && subtask && !subtask.completed) {
+        await sendSlack("subtaskCompleted", `☑️ Step completed: ${subtask.title || "Untitled step"}\nCard: ${card.title}\nBoard: ${boardName(card.boardId)}`);
+      }
     } catch (reason) {
       setError(`Sub-task update failed: ${errorText(reason)}`);
     }
@@ -557,24 +562,40 @@ export default function App() {
     const previous = cards.find((card) => card.id === nextCard.id);
     const normalized = { ...nextCard, updatedAt: timestamp() };
     let withActivity = previous ? normalized : addActivity(normalized, "created", "Created card");
-    const slackMessages: string[] = [];
+    const slackMessages: Array<{ key: SlackNotificationKey; message: string }> = [];
 
     if (previous && previous.completed !== normalized.completed && normalized.completed) {
       withActivity = addActivity(withActivity, "completed", "Marked complete");
-      slackMessages.push(
-        `✅ Task completed: ${normalized.title}\nAssigned to: ${assigneeNames(normalized)}\nBoard: ${boardName(normalized.boardId)}`
-      );
+      slackMessages.push({
+        key: "cardCompleted",
+        message: `✅ Task completed: ${normalized.title}\nAssigned to: ${assigneeNames(normalized)}\nBoard: ${boardName(normalized.boardId)}`
+      });
     }
 
     if (previous && previous.assignees.join(",") !== normalized.assignees.join(",")) {
       withActivity = addActivity(withActivity, "assigned", `Assigned to ${assigneeNames(normalized)}`);
-      slackMessages.push(`👤 Card assigned: ${normalized.title}\nAssigned to: ${assigneeNames(normalized)}\nBoard: ${boardName(normalized.boardId)}`);
+      slackMessages.push({
+        key: "cardAssigned",
+        message: `👤 Card assigned: ${normalized.title}\nAssigned to: ${assigneeNames(normalized)}\nBoard: ${boardName(normalized.boardId)}`
+      });
+    }
+
+    if (previous) {
+      const previousSubtasks = new Map(previous.subtasks.map((subtask) => [subtask.id, subtask]));
+      for (const subtask of normalized.subtasks) {
+        if (subtask.completed && previousSubtasks.get(subtask.id)?.completed === false) {
+          slackMessages.push({
+            key: "subtaskCompleted",
+            message: `☑️ Step completed: ${subtask.title || "Untitled step"}\nCard: ${normalized.title}\nBoard: ${boardName(normalized.boardId)}`
+          });
+        }
+      }
     }
 
     const result = await persistCard(withActivity, previous);
     if (result && !result.conflict) {
-      for (const message of slackMessages) {
-        await sendSlack(message);
+      for (const slackMessage of slackMessages) {
+        await sendSlack(slackMessage.key, slackMessage.message);
       }
     }
   }
@@ -609,8 +630,12 @@ export default function App() {
     setNoticeKind("info");
   }
 
-  async function sendSlack(message: string) {
-    const webhookUrl = settingsRef.current?.slackWebhookUrl.trim();
+  async function sendSlack(notification: SlackNotificationKey, message: string) {
+    const currentSettings = settingsRef.current;
+    const webhookUrl = currentSettings?.slackWebhookUrl.trim();
+    if (currentSettings?.slackNotifications?.[notification] === false) {
+      return;
+    }
     if (!webhookUrl) {
       return;
     }
@@ -1699,6 +1724,16 @@ function SettingsView({
 
   useEffect(() => setDraft(settings), [settings]);
 
+  function setSlackNotification(key: SlackNotificationKey, enabled: boolean) {
+    setDraft((current) => ({
+      ...current,
+      slackNotifications: {
+        ...current.slackNotifications,
+        [key]: enabled
+      }
+    }));
+  }
+
   return (
     <section>
       <header className="content-header">
@@ -1744,6 +1779,51 @@ function SettingsView({
           <input value={workspacePath} readOnly />
         </label>
       </div>
+      <section className="settings-panel" aria-labelledby="slack-notifications-heading">
+        <div>
+          <p className="eyebrow">Slack</p>
+          <h2 id="slack-notifications-heading">Notifications</h2>
+          <p className="muted">Choose which workspace actions post to the configured Slack channel.</p>
+        </div>
+        <div className="settings-toggles">
+          <label className="settings-toggle">
+            <input
+              checked={draft.slackNotifications.cardMovedToDone}
+              data-testid="slack-notify-card-moved"
+              type="checkbox"
+              onChange={(event) => setSlackNotification("cardMovedToDone", event.target.checked)}
+            />
+            Card moved to Done
+          </label>
+          <label className="settings-toggle">
+            <input
+              checked={draft.slackNotifications.cardCompleted}
+              data-testid="slack-notify-card-completed"
+              type="checkbox"
+              onChange={(event) => setSlackNotification("cardCompleted", event.target.checked)}
+            />
+            Card marked complete
+          </label>
+          <label className="settings-toggle">
+            <input
+              checked={draft.slackNotifications.cardAssigned}
+              data-testid="slack-notify-card-assigned"
+              type="checkbox"
+              onChange={(event) => setSlackNotification("cardAssigned", event.target.checked)}
+            />
+            Card assignment changed
+          </label>
+          <label className="settings-toggle">
+            <input
+              checked={draft.slackNotifications.subtaskCompleted}
+              data-testid="slack-notify-subtask-completed"
+              type="checkbox"
+              onChange={(event) => setSlackNotification("subtaskCompleted", event.target.checked)}
+            />
+            Step marked complete
+          </label>
+        </div>
+      </section>
       <section className="settings-panel" aria-labelledby="updates-heading">
         <div>
           <p className="eyebrow">Application</p>

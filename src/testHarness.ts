@@ -32,6 +32,12 @@ const settings: WorkspaceSettings = {
   schemaVersion: 1,
   workspaceName: "limn-e2e-workspace",
   slackWebhookUrl: "",
+  slackNotifications: {
+    cardMovedToDone: true,
+    cardCompleted: true,
+    cardAssigned: true,
+    subtaskCompleted: true
+  },
   createdAt: now,
   updatedAt: now
 };

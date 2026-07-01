@@ -116,6 +116,12 @@ const workspace = parseWorkspace({
 });
 
 assert.equal(workspace.settings.workspaceName, "Limn Workspace");
+assert.deepEqual(workspace.settings.slackNotifications, {
+  cardMovedToDone: true,
+  cardCompleted: true,
+  cardAssigned: true,
+  subtaskCompleted: true
+});
 assert.deepEqual(workspace.membersFile.members, []);
 assert.equal(workspace.boards.length, 1);
 assert.equal(workspace.cards.length, 1);
@@ -135,6 +141,12 @@ try {
     schemaVersion: 1,
     workspaceName: "Acceptance Workspace",
     slackWebhookUrl: "http://127.0.0.1:9/slack",
+    slackNotifications: {
+      cardMovedToDone: true,
+      cardCompleted: false,
+      cardAssigned: true,
+      subtaskCompleted: false
+    },
     createdAt: "2026-06-27T00:00:00.000Z",
     updatedAt: "2026-06-27T00:00:00.000Z"
   };
@@ -185,6 +197,7 @@ try {
 
   const reloaded = await readWorkspaceFiles(workspaceRoot);
   assert.equal(reloaded.settings.workspaceName, "Acceptance Workspace");
+  assert.deepEqual(reloaded.settings.slackNotifications, settings.slackNotifications);
   assert.equal(reloaded.membersFile.members.length, 2);
   assert.equal(reloaded.boards[0].lists.length, 3);
   assert.equal(reloaded.cards.length, 1);

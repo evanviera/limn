@@ -4,8 +4,16 @@ export interface WorkspaceSettings {
   schemaVersion: number;
   workspaceName: string;
   slackWebhookUrl: string;
+  slackNotifications: SlackNotificationSettings;
   createdAt: string;
   updatedAt: string;
+}
+
+export interface SlackNotificationSettings {
+  cardMovedToDone: boolean;
+  cardCompleted: boolean;
+  cardAssigned: boolean;
+  subtaskCompleted: boolean;
 }
 
 export interface Member {

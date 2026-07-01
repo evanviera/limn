@@ -81,7 +81,7 @@ Once a Windows certificate is available, configure the release workflow to sign 
 
 ## Slack
 
-Limn posts through the Tauri backend so browser CORS does not block incoming webhook calls. When a card is marked complete, Limn posts:
+Limn posts through the Tauri backend so browser CORS does not block incoming webhook calls. Workspace settings include toggles for each Slack notification type. When a card is marked complete, Limn posts:
 
 ```text
 ✅ Task completed: <card title>
@@ -89,7 +89,7 @@ Assigned to: <assignees>
 Board: <board name>
 ```
 
-It also posts simple alerts when a card is assigned or moved to a list named `Done`.
+It also posts simple alerts when a card is assigned, moved to a list named `Done`, or when a card step is marked complete.
 
 ## Known Limitations
 
