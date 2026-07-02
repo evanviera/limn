@@ -213,11 +213,11 @@ test.describe("smoke", () => {
     await page.getByTestId("nav-members").click();
     await page.getByTestId("member-name-input").fill("Ada Lovelace");
     await page.getByTestId("add-member").click();
-    await page.getByTestId("member-ada-lovelace-slack-handle").fill("ada");
+    await page.getByTestId("member-ada-lovelace-slack-handle").fill("U024BE7LH");
     await expect.poll(async () => {
       const member = (await snapshot(page)).members.members[0] as { slackHandle?: string };
       return member.slackHandle;
-    }).toBe("ada");
+    }).toBe("U024BE7LH");
 
     await page.getByTestId("nav-settings").click();
     await page.getByTestId("slack-webhook-input").fill("https://hooks.slack.com/services/FAKE/FAKE/FAKE");
@@ -233,7 +233,7 @@ test.describe("smoke", () => {
 
     await expect.poll(async () => (await snapshot(page)).slack.length).toBe(1);
     let posts = (await snapshot(page)).slack;
-    expect(posts[0].message).toContain("Assigned to: @ada");
+    expect(posts[0].message).toContain("Assigned to: <@U024BE7LH>");
 
     await page.getByTestId(/card-open-.*/).click();
     await page.getByTestId("card-completed-input").check();
@@ -241,7 +241,7 @@ test.describe("smoke", () => {
 
     await expect.poll(async () => (await snapshot(page)).slack.length).toBe(2);
     posts = (await snapshot(page)).slack;
-    expect(posts[1].message).toContain("Assigned to: @ada");
+    expect(posts[1].message).toContain("Assigned to: <@U024BE7LH>");
   });
 
   test("manual update check reports when Limn is up to date", async ({ page }) => {

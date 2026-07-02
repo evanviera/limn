@@ -1675,6 +1675,11 @@ function MembersView({ members, onSave, onRemove }: { members: Member[]; onSave:
         <button className="primary" data-testid="add-member">Add member</button>
         {validation && <p className="form-error" id="member-name-error">{validation}</p>}
       </form>
+      <p className="muted">
+        To @mention someone in Slack notifications, enter their Slack member ID
+        (in Slack: open their profile → ⋮ → Copy member ID). A display name or
+        handle won't ping them.
+      </p>
       <div className="member-list">
         {members.length === 0 && <p className="muted">No members yet.</p>}
         {members.map((member) => (
@@ -1691,8 +1696,8 @@ function MembersView({ members, onSave, onRemove }: { members: Member[]; onSave:
               data-testid={`member-${member.id}-slack-handle`}
               value={member.slackHandle ?? ""}
               onChange={(event) => void onSave({ ...member, slackHandle: event.target.value })}
-              aria-label={`${member.name} Slack handle`}
-              placeholder="@slack-handle"
+              aria-label={`${member.name} Slack member ID`}
+              placeholder="Slack member ID (U024BE7LH)"
             />
             <input
               type="color"
@@ -3051,15 +3056,27 @@ function errorText(reason: unknown) {
   return reason instanceof Error ? reason.message : String(reason);
 }
 
+// Slack only renders a real @mention (a ping) when the message text contains
+// the `<@MEMBER_ID>` syntax, where MEMBER_ID is the internal Slack member ID
+// (e.g. "U024BE7LH"). Plain "@handle" text is never resolved into a mention, so
+// we wrap member IDs in the mention syntax. Values that aren't member IDs fall
+// back to plain "@text" so the assignee is still shown (just not pinged).
 function slackTag(handle?: string) {
   const trimmed = handle?.trim() ?? "";
   if (!trimmed) {
     return "";
   }
-  if (trimmed.startsWith("@") || (trimmed.startsWith("<@") && trimmed.endsWith(">"))) {
+  // Already in `<@…>` mention form — pass through untouched.
+  if (trimmed.startsWith("<@") && trimmed.endsWith(">")) {
     return trimmed;
   }
-  return `@${trimmed}`;
+  // Accept a member ID with or without a leading "@". Slack member IDs start
+  // with U (users) or W (Enterprise Grid users) followed by uppercase alnum.
+  const id = trimmed.replace(/^@/, "");
+  if (/^[UW][A-Z0-9]{6,}$/.test(id)) {
+    return `<@${id}>`;
+  }
+  return trimmed.startsWith("@") ? trimmed : `@${trimmed}`;
 }
 
 function initials(name: string) {
