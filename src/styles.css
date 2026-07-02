@@ -1105,38 +1105,63 @@ body.is-card-dragging * {
   border-bottom: 1px solid var(--border-soft);
 }
 
-.member-list,
-.settings-grid {
+.member-list {
   display: grid;
   gap: var(--space-4);
   width: min(760px, 100%);
 }
 
-.settings-grid {
-  margin-bottom: var(--space-5);
-  padding-bottom: var(--space-5);
-  border-bottom: 1px solid var(--border-soft);
-}
-
-.settings-panel {
-  display: grid;
-  grid-template-columns: minmax(0, 1fr) auto;
-  gap: var(--space-5);
-  align-items: start;
+.settings-page {
   width: min(760px, 100%);
-  margin-bottom: var(--space-5);
-  padding-bottom: var(--space-5);
+}
+
+.settings-page-header {
+  width: 100%;
+}
+
+.settings-header-actions {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: flex-end;
+  gap: var(--space-3);
+}
+
+.settings-section {
+  display: grid;
+  gap: var(--space-4);
+  width: 100%;
+  padding: var(--space-5) 0 var(--space-6);
   border-bottom: 1px solid var(--border-soft);
 }
 
-.settings-panel h2 {
-  margin: 0 0 var(--space-3);
+.settings-section-row {
+  grid-template-columns: minmax(0, 1fr) auto;
+  gap: var(--space-6);
+  align-items: start;
+}
+
+.settings-section-header {
+  min-width: 0;
+}
+
+.settings-section-header h2 {
+  margin: 0;
   color: var(--text-strong);
   font-size: var(--text-lg);
 }
 
-.settings-panel p {
+.settings-section-header p {
   margin: 0;
+}
+
+.settings-fields {
+  display: grid;
+  gap: var(--space-4);
+}
+
+.settings-readonly-path {
+  overflow: hidden;
+  text-overflow: ellipsis;
 }
 
 .settings-actions {
@@ -1146,20 +1171,23 @@ body.is-card-dragging * {
   gap: var(--space-3);
 }
 
-.settings-toggles {
+.settings-toggle-grid {
   display: grid;
+  grid-template-columns: repeat(2, minmax(220px, 1fr));
   gap: var(--space-3);
-  min-width: min(320px, 100%);
+  padding-top: var(--space-2);
 }
 
 .settings-toggle {
   display: flex;
   align-items: center;
   gap: var(--space-3);
-  min-height: 2.25rem;
+  min-width: 0;
+  min-height: 2rem;
   color: var(--text);
   font-size: var(--text-sm);
   font-weight: var(--weight-semibold);
+  line-height: 1.25;
 }
 
 .settings-toggle input {
@@ -2226,7 +2254,8 @@ body.is-card-dragging * {
 
   .banner-actions,
   .notes-toolbar,
-  .settings-actions {
+  .settings-actions,
+  .settings-header-actions {
     justify-content: stretch;
   }
 
@@ -2236,11 +2265,13 @@ body.is-card-dragging * {
 
   .banner-actions button,
   .notes-link-form button,
-  .settings-actions button {
+  .settings-actions button,
+  .settings-header-actions button {
     width: 100%;
   }
 
-  .settings-panel {
+  .settings-section-row,
+  .settings-toggle-grid {
     grid-template-columns: 1fr;
   }
 

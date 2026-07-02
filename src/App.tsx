@@ -1735,97 +1735,126 @@ function SettingsView({
   }
 
   return (
-    <section>
-      <header className="content-header">
+    <section className="settings-page">
+      <header className="content-header settings-page-header">
         <div>
           <p className="eyebrow">Workspace</p>
           <h1>Settings</h1>
         </div>
-        <button
-          data-testid="reload-workspace"
-          disabled={reloading}
-          onClick={() => {
-            setReloading(true);
-            void onReload().finally(() => setReloading(false));
-          }}
-        >
-          {reloading ? (
-            <>
-              <Spinner /> Reloading…
-            </>
-          ) : (
-            <>
-              <Icon name="refresh" /> Reload
-            </>
-          )}
-        </button>
-      </header>
-      <div className="settings-grid">
-        <label>
-          Workspace name
-          <input value={draft.workspaceName} onChange={(event) => setDraft({ ...draft, workspaceName: event.target.value })} />
-        </label>
-        <label>
-          Slack incoming webhook URL
-          <input
-            data-testid="slack-webhook-input"
-            value={draft.slackWebhookUrl}
-            onChange={(event) => setDraft({ ...draft, slackWebhookUrl: event.target.value })}
-            placeholder="https://hooks.slack.com/services/..."
-          />
-        </label>
-        <label>
-          Workspace folder
-          <input value={workspacePath} readOnly />
-        </label>
-      </div>
-      <section className="settings-panel" aria-labelledby="slack-notifications-heading">
-        <div>
-          <p className="eyebrow">Slack</p>
-          <h2 id="slack-notifications-heading">Notifications</h2>
-          <p className="muted">Choose which workspace actions post to the configured Slack channel.</p>
+        <div className="settings-header-actions">
+          <button
+            data-testid="reload-workspace"
+            disabled={reloading}
+            onClick={() => {
+              setReloading(true);
+              void onReload().finally(() => setReloading(false));
+            }}
+          >
+            {reloading ? (
+              <>
+                <Spinner /> Reloading…
+              </>
+            ) : (
+              <>
+                <Icon name="refresh" /> Reload
+              </>
+            )}
+          </button>
+          <button
+            className="primary"
+            data-testid="save-settings"
+            disabled={saving}
+            onClick={() => {
+              setSaving(true);
+              void onSave(draft).finally(() => setSaving(false));
+            }}
+          >
+            {saving ? (
+              <>
+                <Spinner /> Saving…
+              </>
+            ) : (
+              "Save settings"
+            )}
+          </button>
         </div>
-        <div className="settings-toggles">
-          <label className="settings-toggle">
-            <input
-              checked={draft.slackNotifications.cardMovedToDone}
-              data-testid="slack-notify-card-moved"
-              type="checkbox"
-              onChange={(event) => setSlackNotification("cardMovedToDone", event.target.checked)}
-            />
-            Card moved to Done
+      </header>
+
+      <section className="settings-section" aria-labelledby="workspace-settings-heading">
+        <div className="settings-section-header">
+          <p className="eyebrow">Workspace</p>
+          <h2 id="workspace-settings-heading">General</h2>
+        </div>
+        <div className="settings-fields">
+          <label>
+            Workspace name
+            <input value={draft.workspaceName} onChange={(event) => setDraft({ ...draft, workspaceName: event.target.value })} />
           </label>
-          <label className="settings-toggle">
-            <input
-              checked={draft.slackNotifications.cardCompleted}
-              data-testid="slack-notify-card-completed"
-              type="checkbox"
-              onChange={(event) => setSlackNotification("cardCompleted", event.target.checked)}
-            />
-            Card marked complete
-          </label>
-          <label className="settings-toggle">
-            <input
-              checked={draft.slackNotifications.cardAssigned}
-              data-testid="slack-notify-card-assigned"
-              type="checkbox"
-              onChange={(event) => setSlackNotification("cardAssigned", event.target.checked)}
-            />
-            Card assignment changed
-          </label>
-          <label className="settings-toggle">
-            <input
-              checked={draft.slackNotifications.subtaskCompleted}
-              data-testid="slack-notify-subtask-completed"
-              type="checkbox"
-              onChange={(event) => setSlackNotification("subtaskCompleted", event.target.checked)}
-            />
-            Step marked complete
+          <label>
+            Workspace folder
+            <input className="settings-readonly-path" title={workspacePath} value={workspacePath} readOnly />
           </label>
         </div>
       </section>
-      <section className="settings-panel" aria-labelledby="updates-heading">
-        <div>
+
+      <section className="settings-section" aria-labelledby="slack-settings-heading">
+        <div className="settings-section-header">
+          <p className="eyebrow">Slack</p>
+          <h2 id="slack-settings-heading">Notifications</h2>
+        </div>
+        <div className="settings-fields">
+          <label>
+            Incoming webhook URL
+            <input
+              data-testid="slack-webhook-input"
+              value={draft.slackWebhookUrl}
+              onChange={(event) => setDraft({ ...draft, slackWebhookUrl: event.target.value })}
+              placeholder="https://hooks.slack.com/services/..."
+            />
+          </label>
+          <div className="settings-toggle-grid" aria-label="Slack notification events">
+            <label className="settings-toggle">
+              <input
+                checked={draft.slackNotifications.cardMovedToDone}
+                data-testid="slack-notify-card-moved"
+                type="checkbox"
+                onChange={(event) => setSlackNotification("cardMovedToDone", event.target.checked)}
+              />
+              Card moved to Done
+            </label>
+            <label className="settings-toggle">
+              <input
+                checked={draft.slackNotifications.cardCompleted}
+                data-testid="slack-notify-card-completed"
+                type="checkbox"
+                onChange={(event) => setSlackNotification("cardCompleted", event.target.checked)}
+              />
+              Card marked complete
+            </label>
+            <label className="settings-toggle">
+              <input
+                checked={draft.slackNotifications.cardAssigned}
+                data-testid="slack-notify-card-assigned"
+                type="checkbox"
+                onChange={(event) => setSlackNotification("cardAssigned", event.target.checked)}
+              />
+              Card assignment changed
+            </label>
+            <label className="settings-toggle">
+              <input
+                checked={draft.slackNotifications.subtaskCompleted}
+                data-testid="slack-notify-subtask-completed"
+                type="checkbox"
+                onChange={(event) => setSlackNotification("subtaskCompleted", event.target.checked)}
+              />
+              Step marked complete
+            </label>
+          </div>
+        </div>
+      </section>
+
+      <section className="settings-section settings-section-row" aria-labelledby="updates-heading">
+        <div className="settings-section-header">
           <p className="eyebrow">Application</p>
           <h2 id="updates-heading">Updates</h2>
           <p className={updateStatus === "error" ? "error" : "muted"} data-testid="update-status">
@@ -1860,23 +1889,6 @@ function SettingsView({
           )}
         </div>
       </section>
-      <button
-        className="primary"
-        data-testid="save-settings"
-        disabled={saving}
-        onClick={() => {
-          setSaving(true);
-          void onSave(draft).finally(() => setSaving(false));
-        }}
-      >
-        {saving ? (
-          <>
-            <Spinner /> Saving…
-          </>
-        ) : (
-          "Save settings"
-        )}
-      </button>
     </section>
   );
 }
