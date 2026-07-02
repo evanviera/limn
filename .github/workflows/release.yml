@@ -84,6 +84,6 @@ jobs:
           tagName: ${{ env.RELEASE_TAG }}
           releaseName: Limn ${{ env.RELEASE_TAG }}
           releaseBody: "See the assets below to download and install Limn."
-          releaseDraft: true
+          releaseDraft: false
           prerelease: false
           uploadUpdaterJson: true

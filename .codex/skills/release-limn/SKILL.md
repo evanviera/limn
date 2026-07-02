@@ -1,6 +1,6 @@
 ---
 name: release-limn
-description: Release automation for the Limn Tauri app. Use when Codex needs to cut a Limn release, bump all versioned files, run release validation, commit the release prep, create the vX.Y.Z tag, push main and the tag, watch GitHub Actions, publish the draft GitHub release, or verify the updater feed.
+description: Release automation for the Limn Tauri app. Use when Codex needs to cut a Limn production release, bump all versioned files, run release validation, commit the release prep, create the vX.Y.Z tag, push main and the tag, watch GitHub Actions, or verify the updater feed.
 ---
 
 # Release Limn
@@ -17,7 +17,7 @@ From the Limn repo root:
 .codex/skills/release-limn/scripts/cut-release.sh 0.1.3
 ```
 
-The script bumps all versioned files through `npm run release:version`, runs the release checks, commits `Prepare vX.Y.Z release`, creates tag `vX.Y.Z`, and pushes `main` plus the tag.
+The script bumps all versioned files through `npm run release:version`, runs the release checks, commits `Prepare vX.Y.Z release`, creates tag `vX.Y.Z`, and pushes `main` plus the tag. The Release workflow is expected to create a non-draft GitHub release (`releaseDraft: false`) so the release goes directly to production after the workflow uploads assets.
 
 Use `--skip-e2e` only when the user explicitly accepts that risk. Use `--no-push` for a local rehearsal that still commits and tags.
 
@@ -44,9 +44,9 @@ Use `--skip-e2e` only when the user explicitly accepts that risk. Use `--no-push
    - Use `gh run watch <run-id> --exit-status`.
    - Confirm both macOS and Windows jobs pass.
 
-5. Publish and verify the GitHub release.
-   - Inspect the draft: `gh release view vX.Y.Z --json isDraft,assets,url,tagName,name`.
-   - Publish only after the workflow is green: `gh release edit vX.Y.Z --draft=false`.
+5. Verify the production GitHub release.
+   - Inspect the release: `gh release view vX.Y.Z --json isDraft,isPrerelease,assets,url,tagName,name`.
+   - Confirm `isDraft` and `isPrerelease` are both `false`.
    - Verify the updater feed:
 
 ```sh
