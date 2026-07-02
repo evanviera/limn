@@ -90,6 +90,7 @@ Board: <board name>
 ```
 
 It also posts simple alerts when a card is assigned, moved to a list named `Done`, or when a card step is marked complete.
+If an assigned member has a Slack handle configured in Members, Limn uses that handle in the `Assigned to` line so Slack can tag them.
 
 ## Known Limitations
 

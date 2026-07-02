@@ -1199,7 +1199,7 @@ body.is-card-dragging * {
 
 .member-row {
   display: grid;
-  grid-template-columns: auto minmax(160px, 1fr) 58px auto;
+  grid-template-columns: auto minmax(150px, 1fr) minmax(140px, 0.75fr) 58px auto;
   gap: var(--space-4);
   align-items: center;
   min-width: 0;

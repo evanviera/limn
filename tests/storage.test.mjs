@@ -153,7 +153,7 @@ try {
   const membersFile = {
     schemaVersion: 1,
     members: [
-      { id: "ada", name: "Ada Lovelace", color: "#2563eb" },
+      { id: "ada", name: "Ada Lovelace", color: "#2563eb", slackHandle: "@ada" },
       { id: "grace", name: "Grace Hopper", color: "#0f766e" }
     ]
   };
@@ -199,6 +199,7 @@ try {
   assert.equal(reloaded.settings.workspaceName, "Acceptance Workspace");
   assert.deepEqual(reloaded.settings.slackNotifications, settings.slackNotifications);
   assert.equal(reloaded.membersFile.members.length, 2);
+  assert.equal(reloaded.membersFile.members[0].slackHandle, "@ada");
   assert.equal(reloaded.boards[0].lists.length, 3);
   assert.equal(reloaded.cards.length, 1);
   assert.equal(reloaded.cards[0].title, "Draft release notes");

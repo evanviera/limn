@@ -202,6 +202,48 @@ test.describe("smoke", () => {
     expect((await snapshot(page)).externalLinks).toContain("https://www.example.org/status");
   });
 
+  test("Slack notifications tag assigned member handles", async ({ page }) => {
+    await openApp(page);
+    await openWorkspace(page);
+
+    await page.getByTestId("create-board").click();
+    await page.getByTestId("text-dialog-input").fill("Slack Board");
+    await page.getByTestId("text-dialog-submit").click();
+
+    await page.getByTestId("nav-members").click();
+    await page.getByTestId("member-name-input").fill("Ada Lovelace");
+    await page.getByTestId("add-member").click();
+    await page.getByTestId("member-ada-lovelace-slack-handle").fill("ada");
+    await expect.poll(async () => {
+      const member = (await snapshot(page)).members.members[0] as { slackHandle?: string };
+      return member.slackHandle;
+    }).toBe("ada");
+
+    await page.getByTestId("nav-settings").click();
+    await page.getByTestId("slack-webhook-input").fill("https://hooks.slack.com/services/FAKE/FAKE/FAKE");
+    await page.getByTestId("save-settings").click();
+    await expect.poll(async () => (await snapshot(page)).settings.slackWebhookUrl).toBe("https://hooks.slack.com/services/FAKE/FAKE/FAKE");
+
+    await page.locator('[data-testid^="board-nav-"]').first().click();
+    await page.getByTestId("add-card-todo").click();
+    await page.getByTestId("text-dialog-input").fill("Notify Ada");
+    await page.getByTestId("text-dialog-submit").click();
+    await page.getByTestId("assignee-ada-lovelace").check();
+    await page.getByTestId("save-card").click();
+
+    await expect.poll(async () => (await snapshot(page)).slack.length).toBe(1);
+    let posts = (await snapshot(page)).slack;
+    expect(posts[0].message).toContain("Assigned to: @ada");
+
+    await page.getByTestId(/card-open-.*/).click();
+    await page.getByTestId("card-completed-input").check();
+    await page.getByTestId("save-card").click();
+
+    await expect.poll(async () => (await snapshot(page)).slack.length).toBe(2);
+    posts = (await snapshot(page)).slack;
+    expect(posts[1].message).toContain("Assigned to: @ada");
+  });
+
   test("manual update check reports when Limn is up to date", async ({ page }) => {
     await openApp(page);
     await openWorkspace(page);

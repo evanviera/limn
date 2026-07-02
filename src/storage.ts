@@ -1,5 +1,5 @@
 import { invoke } from "./ipc.js";
-import type { Board, Card, MembersFile, SlackNotificationSettings, Subtask, SubtaskListItem, WorkspaceFiles, WorkspaceSettings, WriteResult } from "./types";
+import type { Board, Card, Member, MembersFile, SlackNotificationSettings, Subtask, SubtaskListItem, WorkspaceFiles, WorkspaceSettings, WriteResult } from "./types";
 
 const SCHEMA_VERSION = 1;
 
@@ -242,7 +242,7 @@ export function parseWorkspace(files: WorkspaceFiles): WorkspaceData {
     settings,
     membersFile: {
       schemaVersion: membersFile.schemaVersion ?? SCHEMA_VERSION,
-      members: Array.isArray(membersFile.members) ? membersFile.members : []
+      members: normalizeMembers(membersFile.members)
     },
     boards,
     cards,
@@ -270,6 +270,29 @@ function normalizeSlackNotifications(value: unknown): SlackNotificationSettings 
     cardAssigned: booleanOrDefault(settings.cardAssigned, DEFAULT_SLACK_NOTIFICATIONS.cardAssigned),
     subtaskCompleted: booleanOrDefault(settings.subtaskCompleted, DEFAULT_SLACK_NOTIFICATIONS.subtaskCompleted)
   };
+}
+
+function normalizeMembers(value: unknown): Member[] {
+  if (!Array.isArray(value)) {
+    return [];
+  }
+
+  return value.flatMap((item) => {
+    if (!item || typeof item !== "object") {
+      return [];
+    }
+    const member = item as Partial<Record<keyof Member, unknown>>;
+    if (typeof member.id !== "string" || typeof member.name !== "string" || typeof member.color !== "string") {
+      return [];
+    }
+
+    return [{
+      id: member.id,
+      name: member.name,
+      color: member.color,
+      slackHandle: typeof member.slackHandle === "string" ? member.slackHandle : undefined
+    }];
+  });
 }
 
 function booleanOrDefault(value: unknown, fallback: boolean): boolean {

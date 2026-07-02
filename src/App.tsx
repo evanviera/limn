@@ -530,7 +530,7 @@ export default function App() {
       const result = await persistCard(moved, card);
 
       if (result && !result.conflict && list?.name.trim().toLowerCase() === "done") {
-        await sendSlack("cardMovedToDone", `➡️ Card moved to Done: ${moved.title}\nBoard: ${activeBoard.name}`);
+        await sendSlack("cardMovedToDone", `➡️ Card moved to Done: ${moved.title}\nAssigned to: ${assigneeSlackTags(moved)}\nBoard: ${activeBoard.name}`);
       }
     } catch (reason) {
       setError(`Move failed: ${errorText(reason)}`);
@@ -551,7 +551,7 @@ export default function App() {
     try {
       await persistCard(next, card);
       if (completed && subtask && !subtask.completed) {
-        await sendSlack("subtaskCompleted", `☑️ Step completed: ${subtask.title || "Untitled step"}\nCard: ${card.title}\nBoard: ${boardName(card.boardId)}`);
+        await sendSlack("subtaskCompleted", `☑️ Step completed: ${subtask.title || "Untitled step"}\nCard: ${card.title}\nAssigned to: ${assigneeSlackTags(card)}\nBoard: ${boardName(card.boardId)}`);
       }
     } catch (reason) {
       setError(`Sub-task update failed: ${errorText(reason)}`);
@@ -568,7 +568,7 @@ export default function App() {
       withActivity = addActivity(withActivity, "completed", "Marked complete");
       slackMessages.push({
         key: "cardCompleted",
-        message: `✅ Task completed: ${normalized.title}\nAssigned to: ${assigneeNames(normalized)}\nBoard: ${boardName(normalized.boardId)}`
+        message: `✅ Task completed: ${normalized.title}\nAssigned to: ${assigneeSlackTags(normalized)}\nBoard: ${boardName(normalized.boardId)}`
       });
     }
 
@@ -576,7 +576,7 @@ export default function App() {
       withActivity = addActivity(withActivity, "assigned", `Assigned to ${assigneeNames(normalized)}`);
       slackMessages.push({
         key: "cardAssigned",
-        message: `👤 Card assigned: ${normalized.title}\nAssigned to: ${assigneeNames(normalized)}\nBoard: ${boardName(normalized.boardId)}`
+        message: `👤 Card assigned: ${normalized.title}\nAssigned to: ${assigneeSlackTags(normalized)}\nBoard: ${boardName(normalized.boardId)}`
       });
     }
 
@@ -586,7 +586,7 @@ export default function App() {
         if (subtask.completed && previousSubtasks.get(subtask.id)?.completed === false) {
           slackMessages.push({
             key: "subtaskCompleted",
-            message: `☑️ Step completed: ${subtask.title || "Untitled step"}\nCard: ${normalized.title}\nBoard: ${boardName(normalized.boardId)}`
+            message: `☑️ Step completed: ${subtask.title || "Untitled step"}\nCard: ${normalized.title}\nAssigned to: ${assigneeSlackTags(normalized)}\nBoard: ${boardName(normalized.boardId)}`
           });
         }
       }
@@ -651,6 +651,16 @@ export default function App() {
       return "Unassigned";
     }
     return card.assignees.map((id) => members.find((member) => member.id === id)?.name ?? id).join(", ");
+  }
+
+  function assigneeSlackTags(card: Card) {
+    if (card.assignees.length === 0) {
+      return "Unassigned";
+    }
+    return card.assignees.map((id) => {
+      const member = members.find((item) => item.id === id);
+      return slackTag(member?.slackHandle) || member?.name || id;
+    }).join(", ");
   }
 
   function boardName(boardId: string) {
@@ -1676,6 +1686,13 @@ function MembersView({ members, onSave, onRemove }: { members: Member[]; onSave:
               value={member.name}
               onChange={(event) => void onSave({ ...member, name: event.target.value })}
               aria-label={`${member.name} name`}
+            />
+            <input
+              data-testid={`member-${member.id}-slack-handle`}
+              value={member.slackHandle ?? ""}
+              onChange={(event) => void onSave({ ...member, slackHandle: event.target.value })}
+              aria-label={`${member.name} Slack handle`}
+              placeholder="@slack-handle"
             />
             <input
               type="color"
@@ -3032,6 +3049,17 @@ function readStoredThemeMode(): ThemeMode {
 // stringified Error object (e.g. "Error: …") prefix to the user.
 function errorText(reason: unknown) {
   return reason instanceof Error ? reason.message : String(reason);
+}
+
+function slackTag(handle?: string) {
+  const trimmed = handle?.trim() ?? "";
+  if (!trimmed) {
+    return "";
+  }
+  if (trimmed.startsWith("@") || (trimmed.startsWith("<@") && trimmed.endsWith(">"))) {
+    return trimmed;
+  }
+  return `@${trimmed}`;
 }
 
 function initials(name: string) {
