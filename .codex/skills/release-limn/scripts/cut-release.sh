@@ -59,8 +59,8 @@ if ! [[ "$version" =~ ^[0-9]+\.[0-9]+\.[0-9]+([-+][0-9A-Za-z.-]+)?$ ]]; then
   exit 2
 fi
 
-script_dir="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
-repo_root="$(cd "$script_dir/../../../.." && pwd)"
+script_dir="$(CDPATH= cd -P -- "$(dirname -- "${BASH_SOURCE[0]}")" && pwd -P)"
+repo_root="$(CDPATH= cd -P -- "$script_dir/../../../.." && pwd -P)"
 cd "$repo_root"
 
 if [ ! -f package.json ] || [ ! -f src-tauri/tauri.conf.json ]; then
