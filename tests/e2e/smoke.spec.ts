@@ -206,6 +206,53 @@ test.describe("smoke", () => {
     expect((await snapshot(page)).externalLinks).toContain("https://www.example.org/status");
   });
 
+  test("right-click context menus expose board, editor, and card actions", async ({ page }) => {
+    await openApp(page);
+    await openWorkspace(page);
+
+    await page.getByTestId("create-board").click();
+    await page.getByTestId("text-dialog-input").fill("Context Board");
+    await page.getByTestId("text-dialog-submit").click();
+
+    const contextMenu = page.getByTestId("context-menu");
+    await page.getByTestId(/board-nav-.*/).click({ button: "right" });
+    await expect(contextMenu).toBeVisible();
+    await expect(contextMenu.getByRole("menuitem", { name: "Rename board" })).toBeVisible();
+    await page.keyboard.press("Escape");
+
+    await page.getByTestId("list-todo").click({ button: "right" });
+    await expect(contextMenu).toBeVisible();
+    await contextMenu.getByRole("menuitem", { name: "Add card" }).click();
+    await page.getByTestId("text-dialog-input").fill("Context card");
+    await page.getByTestId("text-dialog-submit").click();
+
+    await expect(page.getByTestId("card-title-input")).toBeVisible();
+    await page.getByTestId("card-labels-input").fill("urgent");
+    await page.keyboard.press("Enter");
+    await expect(page.locator(".label-chip", { hasText: "urgent" })).toBeVisible();
+
+    await page.getByTestId("card-notes-input").click({ button: "right" });
+    await expect(contextMenu).toBeVisible();
+    await contextMenu.getByRole("menuitem", { name: "Bold" }).click();
+    await expect(page.getByTestId("card-notes-input")).toHaveValue("**bold text**");
+
+    await page.locator(".label-chip", { hasText: "urgent" }).click({ button: "right" });
+    await expect(contextMenu).toBeVisible();
+    await contextMenu.getByRole("menuitem", { name: "Remove label" }).click();
+    await expect(page.locator(".label-chip", { hasText: "urgent" })).toBeHidden();
+
+    await page.getByTestId("save-card").click();
+    await expect(page.getByTestId("card-title-input")).toBeHidden();
+
+    const card = page.locator(".task-card", { hasText: "Context card" }).first();
+    await card.click({ button: "right" });
+    await expect(contextMenu).toBeVisible();
+    await contextMenu.getByRole("menuitem", { name: "Mark complete" }).click();
+
+    await expect(page.locator(".task-card.completed", { hasText: "Context card" })).toBeVisible();
+    expect((await snapshot(page)).cards[0].content).toContain("completed: true");
+  });
+
   test("manually written Markdown note links render on list cards", async ({ page }) => {
     await openApp(page);
     await openWorkspace(page);

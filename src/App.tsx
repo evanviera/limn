@@ -49,6 +49,8 @@ type IconName =
   | "check"
   | "chevron-down"
   | "chevron-up-right"
+  | "clipboard"
+  | "copy"
   | "edit"
   | "folder"
   | "maximize"
@@ -63,6 +65,26 @@ type IconName =
   | "trash"
   | "users"
   | "x";
+
+type ContextMenuItem =
+  | {
+      type?: "item";
+      label: string;
+      icon?: IconName;
+      danger?: boolean;
+      disabled?: boolean;
+      onSelect: () => void | Promise<void>;
+    }
+  | { type: "separator" };
+
+interface ContextMenuState {
+  x: number;
+  y: number;
+  label?: string;
+  items: ContextMenuItem[];
+}
+
+type OpenContextMenu = (event: ReactMouseEvent<HTMLElement>, items: ContextMenuItem[], label?: string) => void;
 
 interface TextDialogState {
   title: string;
@@ -118,6 +140,7 @@ export default function App() {
   const [updateMessage, setUpdateMessage] = useState("");
   const [updateProgress, setUpdateProgress] = useState<DownloadProgress | null>(null);
   const [themeMode, setThemeMode] = useState<ThemeMode>(() => readStoredThemeMode());
+  const [contextMenu, setContextMenu] = useState<ContextMenuState | null>(null);
   const hasCheckedForUpdatesRef = useRef(false);
 
   const activeBoard = boards.find((board) => board.id === activeBoardId) ?? boards[0] ?? null;
@@ -170,6 +193,33 @@ export default function App() {
     hasCheckedForUpdatesRef.current = true;
     void checkForUpdates(false);
   }, [updaterAvailable]);
+
+  useEffect(() => {
+    if (!contextMenu) {
+      return;
+    }
+
+    function closeContextMenu() {
+      setContextMenu(null);
+    }
+
+    function closeOnEscape(event: KeyboardEvent) {
+      if (event.key === "Escape") {
+        closeContextMenu();
+      }
+    }
+
+    window.addEventListener("pointerdown", closeContextMenu);
+    window.addEventListener("resize", closeContextMenu);
+    window.addEventListener("scroll", closeContextMenu, true);
+    window.addEventListener("keydown", closeOnEscape);
+    return () => {
+      window.removeEventListener("pointerdown", closeContextMenu);
+      window.removeEventListener("resize", closeContextMenu);
+      window.removeEventListener("scroll", closeContextMenu, true);
+      window.removeEventListener("keydown", closeOnEscape);
+    };
+  }, [contextMenu]);
 
   useEffect(() => {
     if (!workspacePath) {
@@ -754,6 +804,102 @@ export default function App() {
     setConfirmDialog(nextDialog);
   }
 
+  const openContextMenu: OpenContextMenu = (event, items, label) => {
+    const hasEnabledAction = items.some((item) => item.type !== "separator" && !item.disabled);
+    if (!hasEnabledAction) {
+      return;
+    }
+
+    event.preventDefault();
+    event.stopPropagation();
+
+    const menuWidth = 240;
+    const estimatedHeight = Math.min(380, 10 + items.length * 36);
+    setContextMenu({
+      x: Math.max(8, Math.min(event.clientX, window.innerWidth - menuWidth - 8)),
+      y: Math.max(8, Math.min(event.clientY, window.innerHeight - estimatedHeight - 8)),
+      label,
+      items
+    });
+  };
+
+  function handleDefaultContextMenu(event: ReactMouseEvent<HTMLElement>) {
+    const target = event.target;
+    if (isEditableTextControl(target)) {
+      openContextMenu(event, textControlContextItems(target));
+      return;
+    }
+
+    openContextMenu(event, workspaceContextItems());
+  }
+
+  function workspaceContextItems(): ContextMenuItem[] {
+    const items: ContextMenuItem[] = [
+      { label: "Open workspace", icon: "folder", onSelect: () => void openWorkspace() }
+    ];
+
+    if (workspacePath) {
+      items.push(
+        { label: "Show workspace folder", icon: "folder", onSelect: () => void openWorkspaceFolder(workspacePath) },
+        { label: "Reload workspace", icon: "refresh", onSelect: () => void refreshWorkspace() }
+      );
+    }
+
+    if (settings) {
+      items.push(
+        { type: "separator" },
+        { label: "Create board", icon: "plus", onSelect: () => void addBoard() },
+        { label: "Members", icon: "users", onSelect: () => setView("members") },
+        { label: "Settings", icon: "settings", onSelect: () => setView("settings") },
+        {
+          label: themeMode === "dark" ? "Switch to light mode" : "Switch to dark mode",
+          icon: themeMode === "dark" ? "sun" : "moon",
+          onSelect: () => setThemeMode((current) => (current === "dark" ? "light" : "dark"))
+        }
+      );
+    }
+
+    return items;
+  }
+
+  function boardNavContextItems(board: Board): ContextMenuItem[] {
+    return [
+      {
+        label: "Open board",
+        icon: "folder",
+        onSelect: () => {
+          setActiveBoardId(board.id);
+          setView("board");
+        }
+      },
+      { label: "Rename board", icon: "edit", onSelect: () => void renameBoard(board) },
+      { label: "Copy board name", icon: "copy", onSelect: () => void copyText(board.name) },
+      { type: "separator" },
+      { label: "Delete board", icon: "trash", danger: true, onSelect: () => void removeBoard(board) }
+    ];
+  }
+
+  async function copyText(text: string) {
+    const value = text.trim();
+    if (!value || !navigator.clipboard?.writeText) {
+      return;
+    }
+    await navigator.clipboard.writeText(value);
+  }
+
+  async function runContextMenuItem(item: ContextMenuItem) {
+    if (item.type === "separator" || item.disabled) {
+      return;
+    }
+
+    setContextMenu(null);
+    try {
+      await item.onSelect();
+    } catch (reason) {
+      setError(errorText(reason));
+    }
+  }
+
   async function handleMenuCommand(command: string) {
     try {
       switch (command) {
@@ -893,13 +1039,17 @@ export default function App() {
       showCommandNotice("Open a card before changing completion.", "warning");
       return;
     }
-    const completed = !selectedCard.completed;
+    await toggleCardCompleted(selectedCard);
+  }
+
+  async function toggleCardCompleted(card: Card) {
+    const completed = !card.completed;
     const next = addActivity(
-      { ...selectedCard, completed, updatedAt: timestamp() },
+      { ...card, completed, updatedAt: timestamp() },
       completed ? "completed" : "updated",
       completed ? "Marked complete" : "Marked incomplete"
     );
-    await persistCard(next, selectedCard);
+    await persistCard(next, card);
   }
 
   function showCommandNotice(message: string, kind: "info" | "warning") {
@@ -925,7 +1075,7 @@ export default function App() {
 
   if (!workspacePath || !settings) {
     return (
-      <main className="welcome">
+      <main className="welcome" onContextMenu={handleDefaultContextMenu}>
         <section className="welcome-panel">
           <p className="eyebrow">Limn</p>
           <h1>Local-first boards for a small trusted team.</h1>
@@ -941,12 +1091,19 @@ export default function App() {
           </button>
           {error && <p className="error">{error}</p>}
         </section>
+        {contextMenu && (
+          <ContextMenu
+            menu={contextMenu}
+            onClose={() => setContextMenu(null)}
+            onPick={(item) => void runContextMenuItem(item)}
+          />
+        )}
       </main>
     );
   }
 
   return (
-    <div className="app-frame">
+    <div className="app-frame" onContextMenu={handleDefaultContextMenu}>
       <WindowsTitlebar />
       <div className="app-shell">
         <aside className="sidebar">
@@ -978,6 +1135,7 @@ export default function App() {
               className={board.id === activeBoard?.id && view === "board" ? "active" : ""}
               data-testid={`board-nav-${board.id}`}
               key={board.id}
+              onContextMenu={(event) => openContextMenu(event, boardNavContextItems(board), board.name)}
               onClick={() => {
                 setActiveBoardId(board.id);
                 setView("board");
@@ -1075,13 +1233,18 @@ export default function App() {
             onMoveCard={moveCard}
             onOpenCard={setSelectedCardId}
             onToggleSubtask={toggleSubtask}
+            onToggleCardCompleted={toggleCardCompleted}
+            onArchiveCard={archiveCard}
+            onDeleteCard={removeCard}
+            onOpenContextMenu={openContextMenu}
+            onCopyText={copyText}
           />
         )}
         {view === "board" && !activeBoard && (
           <EmptyState title="No board selected" body="Create a board to start adding lists and cards." action="Create board" onAction={addBoard} />
         )}
         {view === "members" && (
-          <MembersView members={members} onSave={saveMember} onRemove={removeMember} />
+          <MembersView members={members} onSave={saveMember} onRemove={removeMember} onOpenContextMenu={openContextMenu} onCopyText={copyText} />
         )}
         {view === "settings" && (
           <SettingsView
@@ -1097,6 +1260,8 @@ export default function App() {
             onCheckForUpdates={checkForUpdates}
             onInstallUpdate={installAvailableUpdate}
             onRestartAfterUpdate={restartAfterUpdate}
+            onOpenContextMenu={openContextMenu}
+            onCopyText={copyText}
           />
         )}
         </main>
@@ -1110,6 +1275,8 @@ export default function App() {
             onClose={() => setSelectedCardId(null)}
             onArchive={archiveCard}
             onDelete={removeCard}
+            onOpenContextMenu={openContextMenu}
+            onCopyText={copyText}
           />
         )}
         {textDialog && (
@@ -1139,6 +1306,13 @@ export default function App() {
                 setError(errorText(reason));
               }
             }}
+          />
+        )}
+        {contextMenu && (
+          <ContextMenu
+            menu={contextMenu}
+            onClose={() => setContextMenu(null)}
+            onPick={(item) => void runContextMenuItem(item)}
           />
         )}
       </div>
@@ -1186,6 +1360,11 @@ interface BoardViewProps {
   onMoveCard: (cardId: string, listId: string) => Promise<void>;
   onOpenCard: (cardId: string) => void;
   onToggleSubtask: (cardId: string, subtaskId: string, completed: boolean) => Promise<void>;
+  onToggleCardCompleted: (card: Card) => Promise<void>;
+  onArchiveCard: (card: Card) => Promise<void>;
+  onDeleteCard: (card: Card) => Promise<void>;
+  onOpenContextMenu: OpenContextMenu;
+  onCopyText: (text: string) => Promise<void>;
 }
 
 function BoardView(props: BoardViewProps) {
@@ -1394,10 +1573,54 @@ function BoardView(props: BoardViewProps) {
     props.onOpenCard(cardId);
   }
 
+  function boardContextItems(): ContextMenuItem[] {
+    return [
+      { label: "Add list", icon: "plus", onSelect: () => void props.onAddList() },
+      { label: "Rename board", icon: "edit", onSelect: () => void props.onRenameBoard(props.board) },
+      { label: "Copy board name", icon: "copy", onSelect: () => void props.onCopyText(props.board.name) },
+      { type: "separator" },
+      { label: "Delete board", icon: "trash", danger: true, onSelect: () => void props.onDeleteBoard(props.board) }
+    ];
+  }
+
+  function listContextItems(list: BoardList): ContextMenuItem[] {
+    return [
+      { label: "Add card", icon: "plus", onSelect: () => void props.onAddCard(list.id) },
+      { label: "Rename list", icon: "edit", onSelect: () => void props.onRenameList(list) },
+      { label: "Copy list name", icon: "copy", onSelect: () => void props.onCopyText(list.name) },
+      { type: "separator" },
+      { label: "Delete list", icon: "trash", danger: true, onSelect: () => void props.onDeleteList(list) }
+    ];
+  }
+
+  function cardContextItems(card: Card): ContextMenuItem[] {
+    const moveItems = props.board.lists
+      .filter((list) => list.id !== card.listId)
+      .map<ContextMenuItem>((list) => ({
+        label: `Move to ${list.name}`,
+        icon: "chevron-up-right",
+        onSelect: () => void props.onMoveCard(card.id, list.id)
+      }));
+
+    return [
+      { label: "Open card", icon: "edit", onSelect: () => props.onOpenCard(card.id) },
+      {
+        label: card.completed ? "Mark incomplete" : "Mark complete",
+        icon: "check",
+        onSelect: () => void props.onToggleCardCompleted(card)
+      },
+      { label: "Copy title", icon: "copy", onSelect: () => void props.onCopyText(card.title) },
+      ...(moveItems.length > 0 ? [{ type: "separator" } satisfies ContextMenuItem, ...moveItems] : []),
+      { type: "separator" },
+      { label: "Archive card", icon: "archive", onSelect: () => void props.onArchiveCard(card) },
+      { label: "Delete card", icon: "trash", danger: true, onSelect: () => void props.onDeleteCard(card) }
+    ];
+  }
+
   const dragPreviewCard = dragPreview ? props.cards.find((card) => card.id === dragPreview.cardId) : null;
 
   return (
-    <section className="board-view">
+    <section className="board-view" onContextMenu={(event) => props.onOpenContextMenu(event, boardContextItems(), props.board.name)}>
       <header className="content-header">
         <div>
           <p className="eyebrow">Board</p>
@@ -1429,6 +1652,7 @@ function BoardView(props: BoardViewProps) {
               data-list-id={list.id}
               data-testid={`list-${list.id}`}
               key={list.id}
+              onContextMenu={(event) => props.onOpenContextMenu(event, listContextItems(list), list.name)}
             >
               <header className="column-header">
                 <h2>{list.name}</h2>
@@ -1450,13 +1674,21 @@ function BoardView(props: BoardViewProps) {
                     data-testid={`card-${card.id}`}
                     key={card.id}
                     onClick={() => openCard(card.id)}
+                    onContextMenu={(event) => props.onOpenContextMenu(event, cardContextItems(card), card.title)}
                     onPointerCancel={cancelPointerDrag}
                     onPointerDown={(event) => beginPointerDrag(event, card.id)}
                     onPointerMove={updatePointerDrag}
                     onPointerUp={finishPointerDrag}
                     onMouseDown={(event) => beginMouseDrag(event, card.id)}
                   >
-                    <TaskCardBody card={card} members={props.members} onOpen={openCard} onToggleSubtask={props.onToggleSubtask} />
+                    <TaskCardBody
+                      card={card}
+                      members={props.members}
+                      onOpen={openCard}
+                      onToggleSubtask={props.onToggleSubtask}
+                      onOpenContextMenu={props.onOpenContextMenu}
+                      onCopyText={props.onCopyText}
+                    />
                   </article>
                 ))}
               </div>
@@ -1488,12 +1720,16 @@ function TaskCardBody({
   card,
   members,
   onOpen,
-  onToggleSubtask
+  onToggleSubtask,
+  onOpenContextMenu,
+  onCopyText
 }: {
   card: Card;
   members: Member[];
   onOpen?: (cardId: string) => void;
   onToggleSubtask?: (cardId: string, subtaskId: string, completed: boolean) => void;
+  onOpenContextMenu?: OpenContextMenu;
+  onCopyText?: (text: string) => Promise<void>;
 }) {
   const doneCount = card.subtasks.filter((subtask) => subtask.completed).length;
   const noteText = card.body.trim();
@@ -1539,6 +1775,28 @@ function TaskCardBody({
               <li
                 key={subtask.id}
                 className={`card-subtask ${subtask.completed ? "completed" : ""}`}
+                onContextMenu={(event) => {
+                  if (!onOpenContextMenu) {
+                    return;
+                  }
+                  onOpenContextMenu(event, [
+                    {
+                      label: subtask.completed ? "Mark step incomplete" : "Mark step complete",
+                      icon: "check",
+                      disabled: !onToggleSubtask,
+                      onSelect: () => onToggleSubtask?.(card.id, subtask.id, !subtask.completed)
+                    },
+                    { label: "Open card", icon: "edit", disabled: !onOpen, onSelect: () => onOpen?.(card.id) },
+                    { label: "Copy step title", icon: "copy", onSelect: () => void onCopyText?.(title) },
+                    ...(subtaskUrl
+                      ? ([
+                          { type: "separator" },
+                          { label: "Open step link", icon: "chevron-up-right", onSelect: () => void openExternal(subtaskUrl) },
+                          { label: "Copy step link", icon: "copy", onSelect: () => void onCopyText?.(subtaskUrl) }
+                        ] satisfies ContextMenuItem[])
+                      : [])
+                  ], title);
+                }}
               >
                 <div className="card-subtask-main">
                   <input
@@ -1556,6 +1814,16 @@ function TaskCardBody({
                       data-testid={`card-subtask-${subtask.id}-link`}
                       href={subtaskUrl}
                       onPointerDown={(event) => event.stopPropagation()}
+                      onContextMenu={(event) => {
+                        if (!onOpenContextMenu) {
+                          return;
+                        }
+                        onOpenContextMenu(event, [
+                          { label: "Open step link", icon: "chevron-up-right", onSelect: () => void openExternal(subtaskUrl) },
+                          { label: "Copy step link", icon: "copy", onSelect: () => void onCopyText?.(subtaskUrl) },
+                          { label: "Copy step title", icon: "copy", onSelect: () => void onCopyText?.(title) }
+                        ], title);
+                      }}
                       onClick={(event) => {
                         event.preventDefault();
                         event.stopPropagation();
@@ -1581,6 +1849,16 @@ function TaskCardBody({
                               data-testid={`card-subtask-item-${item.id}-link`}
                               href={itemUrl}
                               onPointerDown={(event) => event.stopPropagation()}
+                              onContextMenu={(event) => {
+                                if (!onOpenContextMenu) {
+                                  return;
+                                }
+                                onOpenContextMenu(event, [
+                                  { label: "Open detail link", icon: "chevron-up-right", onSelect: () => void openExternal(itemUrl) },
+                                  { label: "Copy detail link", icon: "copy", onSelect: () => void onCopyText?.(itemUrl) },
+                                  { label: "Copy detail text", icon: "copy", onSelect: () => void onCopyText?.(itemText) }
+                                ], itemText);
+                              }}
                               onClick={(event) => {
                                 event.preventDefault();
                                 event.stopPropagation();
@@ -1604,7 +1882,7 @@ function TaskCardBody({
       )}
       {noteText && (
         <p className="card-notes-preview" data-testid={`card-notes-${card.id}`}>
-          <RichNoteText text={noteText} testIdPrefix={`card-note-link-${card.id}`} />
+          <RichNoteText text={noteText} testIdPrefix={`card-note-link-${card.id}`} onOpenContextMenu={onOpenContextMenu} onCopyText={onCopyText} />
         </p>
       )}
       <footer>
@@ -1620,7 +1898,17 @@ function TaskCardBody({
   );
 }
 
-function RichNoteText({ text, testIdPrefix }: { text: string; testIdPrefix: string }) {
+function RichNoteText({
+  text,
+  testIdPrefix,
+  onOpenContextMenu,
+  onCopyText
+}: {
+  text: string;
+  testIdPrefix: string;
+  onOpenContextMenu?: OpenContextMenu;
+  onCopyText?: (text: string) => Promise<void>;
+}) {
   const nodes: ReactNode[] = [];
   const inlinePattern = /\[([^\]\n]+)\]\(([^)\s]+)\)|\*\*([^*\n]+)\*\*|\*([^*\n]+)\*|((?:https?:\/\/|www\.)[^\s<]+)/gi;
   let index = 0;
@@ -1649,6 +1937,16 @@ function RichNoteText({ text, testIdPrefix }: { text: string; testIdPrefix: stri
           key={`${matchStart}-${linkIndex}`}
           onMouseDown={(event) => event.stopPropagation()}
           onPointerDown={(event) => event.stopPropagation()}
+          onContextMenu={(event) => {
+            if (!onOpenContextMenu) {
+              return;
+            }
+            onOpenContextMenu(event, [
+              { label: "Open link", icon: "chevron-up-right", onSelect: () => void openExternal(link.url) },
+              { label: "Copy link", icon: "copy", onSelect: () => void onCopyText?.(link.url) },
+              { label: "Copy link text", icon: "copy", onSelect: () => void onCopyText?.(label) }
+            ], label);
+          }}
           onClick={(event) => {
             event.preventDefault();
             event.stopPropagation();
@@ -1707,12 +2005,35 @@ function LinkIcon() {
   );
 }
 
-function MembersView({ members, onSave, onRemove }: { members: Member[]; onSave: (member: Member) => Promise<void>; onRemove: (id: string) => Promise<void> }) {
+function MembersView({
+  members,
+  onSave,
+  onRemove,
+  onOpenContextMenu,
+  onCopyText
+}: {
+  members: Member[];
+  onSave: (member: Member) => Promise<void>;
+  onRemove: (id: string) => Promise<void>;
+  onOpenContextMenu: OpenContextMenu;
+  onCopyText: (text: string) => Promise<void>;
+}) {
   const [name, setName] = useState("");
   const [validation, setValidation] = useState("");
+  const nameInputRef = useRef<HTMLInputElement>(null);
 
   return (
-    <section>
+    <section
+      onContextMenu={(event) => {
+        if (isEditableTextControl(event.target)) {
+          onOpenContextMenu(event, textControlContextItems(event.target));
+          return;
+        }
+        onOpenContextMenu(event, [
+          { label: "Add member", icon: "plus", onSelect: () => nameInputRef.current?.focus() }
+        ], "Members");
+      }}
+    >
       <header className="content-header">
         <div>
           <p className="eyebrow">Workspace</p>
@@ -1742,6 +2063,7 @@ function MembersView({ members, onSave, onRemove }: { members: Member[]; onSave:
           aria-describedby={validation ? "member-name-error" : undefined}
           aria-invalid={validation ? true : undefined}
           data-testid="member-name-input"
+          ref={nameInputRef}
           value={name}
           onChange={(event) => {
             setName(event.target.value);
@@ -1762,7 +2084,27 @@ function MembersView({ members, onSave, onRemove }: { members: Member[]; onSave:
       <div className="member-list">
         {members.length === 0 && <p className="muted">No members yet.</p>}
         {members.map((member) => (
-          <div className="member-row" key={member.id}>
+          <div
+            className="member-row"
+            key={member.id}
+            onContextMenu={(event) => {
+              if (isEditableTextControl(event.target)) {
+                onOpenContextMenu(event, textControlContextItems(event.target));
+                return;
+              }
+              onOpenContextMenu(event, [
+                { label: "Copy member name", icon: "copy", onSelect: () => void onCopyText(member.name) },
+                {
+                  label: "Copy Slack member ID",
+                  icon: "copy",
+                  disabled: !member.slackHandle?.trim(),
+                  onSelect: () => void onCopyText(member.slackHandle ?? "")
+                },
+                { type: "separator" },
+                { label: "Remove member", icon: "trash", danger: true, onSelect: () => void onRemove(member.id) }
+              ], member.name);
+            }}
+          >
             <span className="avatar" style={{ background: member.color }}>
               {initials(member.name)}
             </span>
@@ -1804,7 +2146,9 @@ function SettingsView({
   updateStatus,
   onCheckForUpdates,
   onInstallUpdate,
-  onRestartAfterUpdate
+  onRestartAfterUpdate,
+  onOpenContextMenu,
+  onCopyText
 }: {
   settings: WorkspaceSettings;
   workspacePath: string;
@@ -1818,6 +2162,8 @@ function SettingsView({
   onCheckForUpdates: (showNoUpdate?: boolean) => Promise<AppUpdate | null>;
   onInstallUpdate: () => Promise<void>;
   onRestartAfterUpdate: () => Promise<void>;
+  onOpenContextMenu: OpenContextMenu;
+  onCopyText: (text: string) => Promise<void>;
 }) {
   const [draft, setDraft] = useState(settings);
   const [reloading, setReloading] = useState(false);
@@ -1836,7 +2182,22 @@ function SettingsView({
   }
 
   return (
-    <section className="settings-page">
+    <section
+      className="settings-page"
+      onContextMenu={(event) => {
+        if (isEditableTextControl(event.target)) {
+          onOpenContextMenu(event, textControlContextItems(event.target));
+          return;
+        }
+        onOpenContextMenu(event, [
+          { label: "Save settings", icon: "save", disabled: saving, onSelect: () => void onSave(draft) },
+          { label: "Reload workspace", icon: "refresh", disabled: reloading, onSelect: () => void onReload() },
+          { label: "Copy workspace path", icon: "copy", onSelect: () => void onCopyText(workspacePath) },
+          { type: "separator" },
+          { label: "Check for updates", icon: "refresh", disabled: !updaterAvailable || updateStatus === "checking" || updateStatus === "downloading", onSelect: () => void onCheckForUpdates(true) }
+        ], "Settings");
+      }}
+    >
       <header className="content-header settings-page-header">
         <div>
           <p className="eyebrow">Workspace</p>
@@ -1881,7 +2242,21 @@ function SettingsView({
         </div>
       </header>
 
-      <section className="settings-section" aria-labelledby="workspace-settings-heading">
+      <section
+        className="settings-section"
+        aria-labelledby="workspace-settings-heading"
+        onContextMenu={(event) => {
+          if (isEditableTextControl(event.target)) {
+            onOpenContextMenu(event, textControlContextItems(event.target));
+            return;
+          }
+          onOpenContextMenu(event, [
+            { label: "Save settings", icon: "save", disabled: saving, onSelect: () => void onSave(draft) },
+            { label: "Copy workspace path", icon: "copy", onSelect: () => void onCopyText(workspacePath) },
+            { label: "Reload workspace", icon: "refresh", disabled: reloading, onSelect: () => void onReload() }
+          ], "Workspace");
+        }}
+      >
         <div className="settings-section-header">
           <p className="eyebrow">Workspace</p>
           <h2 id="workspace-settings-heading">General</h2>
@@ -1898,7 +2273,25 @@ function SettingsView({
         </div>
       </section>
 
-      <section className="settings-section" aria-labelledby="slack-settings-heading">
+      <section
+        className="settings-section"
+        aria-labelledby="slack-settings-heading"
+        onContextMenu={(event) => {
+          if (isEditableTextControl(event.target)) {
+            onOpenContextMenu(event, textControlContextItems(event.target));
+            return;
+          }
+          onOpenContextMenu(event, [
+            { label: "Save settings", icon: "save", disabled: saving, onSelect: () => void onSave(draft) },
+            {
+              label: "Copy webhook URL",
+              icon: "copy",
+              disabled: !draft.slackWebhookUrl.trim(),
+              onSelect: () => void onCopyText(draft.slackWebhookUrl)
+            }
+          ], "Slack");
+        }}
+      >
         <div className="settings-section-header">
           <p className="eyebrow">Slack</p>
           <h2 id="slack-settings-heading">Notifications</h2>
@@ -1954,7 +2347,15 @@ function SettingsView({
         </div>
       </section>
 
-      <section className="settings-section settings-section-row" aria-labelledby="updates-heading">
+      <section
+        className="settings-section settings-section-row"
+        aria-labelledby="updates-heading"
+        onContextMenu={(event) => onOpenContextMenu(event, [
+          { label: "Check for updates", icon: "refresh", disabled: !updaterAvailable || updateStatus === "checking" || updateStatus === "downloading", onSelect: () => void onCheckForUpdates(true) },
+          { label: "Install update", icon: "save", disabled: updateStatus !== "available", onSelect: () => void onInstallUpdate() },
+          { label: "Restart Limn", icon: "refresh", disabled: updateStatus !== "restart-ready", onSelect: () => void onRestartAfterUpdate() }
+        ], "Updates")}
+      >
         <div className="settings-section-header">
           <p className="eyebrow">Application</p>
           <h2 id="updates-heading">Updates</h2>
@@ -2001,7 +2402,9 @@ function CardEditor({
   onSave,
   onClose,
   onArchive,
-  onDelete
+  onDelete,
+  onOpenContextMenu,
+  onCopyText
 }: {
   card: Card;
   boards: Board[];
@@ -2010,6 +2413,8 @@ function CardEditor({
   onClose: () => void;
   onArchive: (card: Card) => Promise<void>;
   onDelete: (card: Card) => Promise<void>;
+  onOpenContextMenu: OpenContextMenu;
+  onCopyText: (text: string) => Promise<void>;
 }) {
   const [draft, setDraft] = useState(card);
   const [saving, setSaving] = useState(false);
@@ -2255,6 +2660,68 @@ function CardEditor({
     });
   }
 
+  function cardEditorContextItems(): ContextMenuItem[] {
+    return [
+      { label: "Save card", icon: "save", disabled: saving, onSelect: () => void onSave(draft) },
+      {
+        label: draft.completed ? "Mark incomplete" : "Mark complete",
+        icon: "check",
+        disabled: saving,
+        onSelect: () => {
+          setDraft((current) => ({ ...current, completed: !current.completed }));
+        }
+      },
+      { label: "Copy title", icon: "copy", disabled: !draft.title.trim(), onSelect: () => void onCopyText(draft.title) },
+      { label: "Close editor", icon: "x", onSelect: onClose },
+      { type: "separator" },
+      { label: "Archive card", icon: "archive", disabled: saving, onSelect: () => void onArchive(draft) },
+      { label: "Delete card", icon: "trash", danger: true, disabled: saving, onSelect: () => void onDelete(draft) }
+    ];
+  }
+
+  function subtaskContextItems(subtask: Subtask, isExpanded: boolean): ContextMenuItem[] {
+    const title = subtask.title || subtask.url || "Untitled step";
+    return [
+      {
+        label: subtask.completed ? "Mark step incomplete" : "Mark step complete",
+        icon: "check",
+        onSelect: () => updateSubtask(subtask.id, { completed: !subtask.completed })
+      },
+      {
+        label: isExpanded ? "Hide details" : "Show details",
+        icon: "chevron-down",
+        onSelect: () => toggleSubtaskExpanded(subtask.id)
+      },
+      { label: "Add detail", icon: "plus", onSelect: () => addSubtaskItem(subtask.id) },
+      { label: "Copy step title", icon: "copy", disabled: !title.trim(), onSelect: () => void onCopyText(title) },
+      ...(subtask.url.trim()
+        ? ([
+            { type: "separator" },
+            { label: "Open step link", icon: "chevron-up-right", onSelect: () => void openExternal(subtask.url) },
+            { label: "Copy step link", icon: "copy", onSelect: () => void onCopyText(subtask.url) }
+          ] satisfies ContextMenuItem[])
+        : []),
+      { type: "separator" },
+      { label: "Remove step", icon: "trash", danger: true, onSelect: () => removeSubtask(subtask.id) }
+    ];
+  }
+
+  function subtaskItemContextItems(subtask: Subtask, item: SubtaskListItem): ContextMenuItem[] {
+    const text = item.text || item.url || "Untitled detail";
+    return [
+      { label: "Copy detail text", icon: "copy", disabled: !text.trim(), onSelect: () => void onCopyText(text) },
+      ...(item.url.trim()
+        ? ([
+            { type: "separator" },
+            { label: "Open detail link", icon: "chevron-up-right", onSelect: () => void openExternal(item.url) },
+            { label: "Copy detail link", icon: "copy", onSelect: () => void onCopyText(item.url) }
+          ] satisfies ContextMenuItem[])
+        : []),
+      { type: "separator" },
+      { label: "Remove detail", icon: "trash", danger: true, onSelect: () => removeSubtaskItem(subtask.id, item.id) }
+    ];
+  }
+
   return (
     <div className="modal-backdrop" onMouseDown={onClose}>
       <aside
@@ -2265,6 +2732,13 @@ function CardEditor({
         role="dialog"
         tabIndex={-1}
         onMouseDown={(event) => event.stopPropagation()}
+        onContextMenu={(event) => {
+          if (isEditableTextControl(event.target)) {
+            onOpenContextMenu(event, textControlContextItems(event.target));
+            return;
+          }
+          onOpenContextMenu(event, cardEditorContextItems(), draft.title || "Card");
+        }}
       >
         <header className="card-editor-header">
           <div className="card-editor-heading">
@@ -2308,7 +2782,17 @@ function CardEditor({
                     const itemCount = subtask.items.length;
                     const hasUrl = subtask.url.trim().length > 0;
                     return (
-                      <div key={subtask.id} className={`subtask-block ${subtask.completed ? "completed" : ""}`}>
+                      <div
+                        key={subtask.id}
+                        className={`subtask-block ${subtask.completed ? "completed" : ""}`}
+                        onContextMenu={(event) => {
+                          if (isEditableTextControl(event.target)) {
+                            onOpenContextMenu(event, textControlContextItems(event.target));
+                            return;
+                          }
+                          onOpenContextMenu(event, subtaskContextItems(subtask, isExpanded), subtask.title || "Step");
+                        }}
+                      >
                         <div className="subtask-head">
                           <input
                             className="subtask-check"
@@ -2376,7 +2860,17 @@ function CardEditor({
                                 {subtask.items.map((item) => {
                                   const itemHasUrl = item.url.trim().length > 0;
                                   return (
-                                    <li key={item.id} className="subtask-item-row">
+                                    <li
+                                      key={item.id}
+                                      className="subtask-item-row"
+                                      onContextMenu={(event) => {
+                                        if (isEditableTextControl(event.target)) {
+                                          onOpenContextMenu(event, textControlContextItems(event.target));
+                                          return;
+                                        }
+                                        onOpenContextMenu(event, subtaskItemContextItems(subtask, item), item.text || "Detail");
+                                      }}
+                                    >
                                       <span className="subtask-item-bullet" aria-hidden="true" />
                                       <input
                                         className="subtask-item-text"
@@ -2499,6 +2993,13 @@ function CardEditor({
                 ref={notesInputRef}
                 value={draft.body}
                 onChange={(event) => setDraft({ ...draft, body: event.target.value })}
+                onContextMenu={(event) => onOpenContextMenu(event, [
+                  ...textControlContextItems(event.currentTarget),
+                  { type: "separator" },
+                  { label: "Bold", icon: "edit", onSelect: formatNotesAsBold },
+                  { label: "Italic", icon: "edit", onSelect: formatNotesAsItalic },
+                  { label: "Create link", icon: "chevron-up-right", onSelect: formatNotesAsLink }
+                ], "Notes")}
                 rows={8}
               />
             </section>
@@ -2507,7 +3008,17 @@ function CardEditor({
           <aside className="card-editor-side" aria-label="Card properties">
             <div className="side-section">
               <span className="side-heading">Status</span>
-              <label className="status-toggle" data-checked={draft.completed}>
+              <label
+                className="status-toggle"
+                data-checked={draft.completed}
+                onContextMenu={(event) => onOpenContextMenu(event, [
+                  {
+                    label: draft.completed ? "Mark incomplete" : "Mark complete",
+                    icon: "check",
+                    onSelect: () => setDraft({ ...draft, completed: !draft.completed })
+                  }
+                ], "Status")}
+              >
                 <input
                   data-testid="card-completed-input"
                   type="checkbox"
@@ -2547,7 +3058,13 @@ function CardEditor({
                   ))}
                 </select>
               </label>
-              <label className="side-field side-field-date">
+              <label
+                className="side-field side-field-date"
+                onContextMenu={(event) => onOpenContextMenu(event, [
+                  { label: "Clear due date", icon: "x", disabled: !draft.due, onSelect: () => setDraft({ ...draft, due: "" }) },
+                  { label: "Copy due date", icon: "copy", disabled: !draft.due, onSelect: () => void onCopyText(draft.due) }
+                ], "Due date")}
+              >
                 <Icon name="calendar" />
                 <span>Due date</span>
                 <input data-testid="card-due-input" type="date" value={draft.due} onChange={(event) => setDraft({ ...draft, due: event.target.value })} />
@@ -2559,7 +3076,18 @@ function CardEditor({
               <div className="assignee-list">
                 {members.length === 0 && <p className="empty-inline">Add members before assigning cards.</p>}
                 {members.map((member) => (
-                  <label key={member.id} className={`assignee-option ${draft.assignees.includes(member.id) ? "checked" : ""}`}>
+                  <label
+                    key={member.id}
+                    className={`assignee-option ${draft.assignees.includes(member.id) ? "checked" : ""}`}
+                    onContextMenu={(event) => onOpenContextMenu(event, [
+                      {
+                        label: draft.assignees.includes(member.id) ? "Unassign member" : "Assign member",
+                        icon: "users",
+                        onSelect: () => updateAssignee(member.id, !draft.assignees.includes(member.id))
+                      },
+                      { label: "Copy member name", icon: "copy", onSelect: () => void onCopyText(member.name) }
+                    ], member.name)}
+                  >
                     <input
                       checked={draft.assignees.includes(member.id)}
                       data-testid={`assignee-${member.id}`}
@@ -2581,7 +3109,15 @@ function CardEditor({
                 {draft.labels.length > 0 && (
                   <div className="label-chips">
                     {draft.labels.map((label) => (
-                      <span className="label-chip" key={label}>
+                      <span
+                        className="label-chip"
+                        key={label}
+                        onContextMenu={(event) => onOpenContextMenu(event, [
+                          { label: "Copy label", icon: "copy", onSelect: () => void onCopyText(label) },
+                          { type: "separator" },
+                          { label: "Remove label", icon: "x", danger: true, onSelect: () => removeLabel(label) }
+                        ], label)}
+                      >
                         <span className="label-chip-text">{label}</span>
                         <button
                           className="label-chip-remove"
@@ -2662,6 +3198,143 @@ function CardEditor({
       </aside>
     </div>
   );
+}
+
+function ContextMenu({
+  menu,
+  onClose,
+  onPick
+}: {
+  menu: ContextMenuState;
+  onClose: () => void;
+  onPick: (item: ContextMenuItem) => void;
+}) {
+  return (
+    <div
+      aria-label={menu.label ? `${menu.label} options` : "Context menu"}
+      className="context-menu"
+      data-testid="context-menu"
+      role="menu"
+      style={{ left: menu.x, top: menu.y }}
+      onContextMenu={(event) => event.preventDefault()}
+      onMouseDown={(event) => event.stopPropagation()}
+      onPointerDown={(event) => event.stopPropagation()}
+    >
+      {menu.label && <div className="context-menu-label">{menu.label}</div>}
+      {menu.items.map((item, index) => {
+        if (item.type === "separator") {
+          return <div className="context-menu-separator" key={`separator-${index}`} role="separator" />;
+        }
+
+        return (
+          <button
+            className={item.danger ? "danger" : ""}
+            disabled={item.disabled}
+            key={`${item.label}-${index}`}
+            role="menuitem"
+            type="button"
+            onClick={() => onPick(item)}
+          >
+            {item.icon && <Icon name={item.icon} />}
+            <span>{item.label}</span>
+          </button>
+        );
+      })}
+      <button className="sr-only" type="button" onClick={onClose}>
+        Close menu
+      </button>
+    </div>
+  );
+}
+
+function isEditableTextControl(value: EventTarget | null): value is HTMLInputElement | HTMLTextAreaElement {
+  if (!(value instanceof HTMLInputElement || value instanceof HTMLTextAreaElement)) {
+    return false;
+  }
+
+  if (value instanceof HTMLTextAreaElement) {
+    return true;
+  }
+
+  return ["", "email", "password", "search", "tel", "text", "url"].includes(value.type);
+}
+
+function textControlContextItems(control: HTMLInputElement | HTMLTextAreaElement): ContextMenuItem[] {
+  const selection = getTextSelection(control);
+  const hasSelection = selection.start !== selection.end;
+  const editable = !control.readOnly && !control.disabled;
+
+  return [
+    {
+      label: "Cut",
+      icon: "clipboard",
+      disabled: !editable || !hasSelection,
+      onSelect: async () => {
+        await writeClipboard(control.value.slice(selection.start, selection.end));
+        replaceTextControlSelection(control, "");
+      }
+    },
+    {
+      label: "Copy",
+      icon: "copy",
+      disabled: !hasSelection,
+      onSelect: () => writeClipboard(control.value.slice(selection.start, selection.end))
+    },
+    {
+      label: "Paste",
+      icon: "clipboard",
+      disabled: !editable || !navigator.clipboard?.readText,
+      onSelect: async () => {
+        const text = await navigator.clipboard.readText();
+        replaceTextControlSelection(control, text);
+      }
+    },
+    {
+      label: "Select all",
+      icon: "check",
+      disabled: control.value.length === 0,
+      onSelect: () => {
+        control.focus();
+        control.select();
+      }
+    }
+  ];
+}
+
+function getTextSelection(control: HTMLInputElement | HTMLTextAreaElement): { start: number; end: number } {
+  return {
+    start: control.selectionStart ?? 0,
+    end: control.selectionEnd ?? 0
+  };
+}
+
+function replaceTextControlSelection(control: HTMLInputElement | HTMLTextAreaElement, text: string) {
+  const selection = getTextSelection(control);
+  const nextValue = `${control.value.slice(0, selection.start)}${text}${control.value.slice(selection.end)}`;
+  const nextCursor = selection.start + text.length;
+  setNativeControlValue(control, nextValue);
+  control.dispatchEvent(new InputEvent("input", { bubbles: true, inputType: text ? "insertText" : "deleteContentBackward", data: text }));
+  window.requestAnimationFrame(() => {
+    control.focus();
+    control.setSelectionRange(nextCursor, nextCursor);
+  });
+}
+
+function setNativeControlValue(control: HTMLInputElement | HTMLTextAreaElement, value: string) {
+  const prototype = Object.getPrototypeOf(control) as HTMLInputElement | HTMLTextAreaElement;
+  const descriptor = Object.getOwnPropertyDescriptor(prototype, "value");
+  if (descriptor?.set) {
+    descriptor.set.call(control, value);
+    return;
+  }
+  control.value = value;
+}
+
+async function writeClipboard(text: string) {
+  if (!navigator.clipboard?.writeText) {
+    return;
+  }
+  await navigator.clipboard.writeText(text);
 }
 
 function updateBannerMessage(status: UpdateStatus, update: AppUpdate | null, message: string, progress: DownloadProgress | null): string {
@@ -2943,6 +3616,18 @@ function Icon({ name }: { name: IconName }) {
       <>
         <path d="M7 17 17 7" />
         <path d="M9 7h8v8" />
+      </>
+    ),
+    clipboard: (
+      <>
+        <path d="M9 4h6l1 2h3v15H5V6h3z" />
+        <path d="M9 4v3h6V4" />
+      </>
+    ),
+    copy: (
+      <>
+        <path d="M8 8h11v11H8z" />
+        <path d="M5 16H4V5h11v1" />
       </>
     ),
     edit: (
