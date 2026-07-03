@@ -86,30 +86,51 @@ test.describe("smoke", () => {
     await expect(page.getByTestId("add-attachment")).toBeVisible();
     await expect(page.getByText("No files yet")).toBeVisible();
 
-    await queueAttachmentPick(page, ["/mock/uploads/screenshot.png"]);
+    await queueAttachmentPick(page, [
+      "/mock/uploads/screenshot.png",
+      "/mock/uploads/design-spec.pdf",
+      "/mock/uploads/final-cover.jpg"
+    ]);
     await page.getByTestId("add-attachment").click();
 
-    const attachmentOpen = page.locator('[data-testid^="attachment-"][data-testid$="-open"]');
-    await expect(attachmentOpen).toContainText("screenshot.png");
+    const attachmentOpen = page.locator('[data-testid^="attachment-"][data-testid$="-open"]').first();
+    await expect(page.locator('[data-testid^="attachment-"][data-testid$="-open"]')).toContainText([
+      "screenshot.png",
+      "design-spec.pdf",
+      "final-cover.jpg"
+    ]);
+    await expect(page.locator('[data-testid^="attachment-"][data-testid$="-thumbnail"]')).toHaveCount(2);
 
-    await expect.poll(async () => (await snapshot(page)).attachments.length).toBe(1);
+    await expect.poll(async () => (await snapshot(page)).attachments.length).toBe(3);
     const afterAdd = await snapshot(page);
     expect(afterAdd.attachments[0].path).toContain("/att_");
-    expect(afterAdd.attachments[0].path).toContain("-screenshot.png");
+    expect(afterAdd.attachments.map((attachment) => attachment.path)).toEqual(
+      expect.arrayContaining([
+        expect.stringContaining("-screenshot.png"),
+        expect.stringContaining("-design-spec.pdf"),
+        expect.stringContaining("-final-cover.jpg")
+      ])
+    );
     expect(afterAdd.attachments[0].size).toBeGreaterThan(0);
     expect(afterAdd.cards[0].content).toContain('"name":"screenshot.png"');
+    expect(afterAdd.cards[0].content).toContain('"name":"design-spec.pdf"');
+    expect(afterAdd.cards[0].content).toContain('"name":"final-cover.jpg"');
     expect(afterAdd.cards[0].content).toContain('"storedName"');
-    expect(afterAdd.cards[0].content).toContain("Attached screenshot.png");
+    expect(afterAdd.cards[0].content).toContain("Attached 3 files");
 
     // Opening an attachment routes through the native open command (recorded as an
     // external link by the harness).
     await attachmentOpen.click();
     await expect.poll(async () => (await snapshot(page)).externalLinks.some((link) => link.startsWith("attachment://"))).toBe(true);
 
-    await page.locator('[data-testid^="attachment-"][data-testid$="-remove"]').click();
-    await expect(page.getByText("No files yet")).toBeVisible();
-    await expect.poll(async () => (await snapshot(page)).attachments.length).toBe(0);
-    expect((await snapshot(page)).cards[0].content).toContain("attachments: []");
+    await page.getByRole("button", { name: "Close" }).click();
+    const cardCover = page.getByTestId(/card-.*-image-cover/);
+    await expect(cardCover).toBeVisible();
+    await expect(cardCover).toHaveAttribute("alt", "final-cover.jpg");
+
+    await page.locator(".task-card", { hasText: "Collect artifacts" }).click();
+    await page.locator('[data-testid^="attachment-"][data-testid$="-remove"]').nth(2).click();
+    await expect.poll(async () => page.getByTestId(/card-.*-image-cover/).getAttribute("alt")).toBe("screenshot.png");
   });
 
   test("right-click context menus expose board, editor, and card actions", async ({ page }) => {

@@ -38,6 +38,7 @@ const CARD_EDITOR_SPLITTER_KEY_STEP = 24;
 
 export function CardEditor({
   card,
+  workspacePath,
   boards,
   members,
   onSave,
@@ -51,6 +52,7 @@ export function CardEditor({
   onCopyText
 }: {
   card: Card;
+  workspacePath: string | null;
   boards: Board[];
   members: Member[];
   onSave: (card: Card) => Promise<void>;
@@ -907,6 +909,8 @@ export function CardEditor({
 
             <CardAttachments
               attachments={card.attachments}
+              workspacePath={workspacePath}
+              cardId={card.id}
               busy={attachmentBusy}
               onAdd={() => void runAttachmentAction(() => onAddAttachments(card.id))}
               onOpen={(attachment) => void onOpenAttachment(card.id, attachment)}

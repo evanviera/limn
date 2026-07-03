@@ -1,5 +1,5 @@
 import { invoke } from "./ipc.js";
-import type { Attachment, Board, BoardGroup, Card, Member, MembersFile, SlackNotificationSettings, Subtask, SubtaskListItem, WorkspaceFiles, WorkspaceSettings, WriteResult } from "./types";
+import type { Attachment, AttachmentPreviewData, Board, BoardGroup, Card, Member, MembersFile, SlackNotificationSettings, Subtask, SubtaskListItem, WorkspaceFiles, WorkspaceSettings, WriteResult } from "./types";
 
 const SCHEMA_VERSION = 1;
 
@@ -103,6 +103,10 @@ export async function deleteAttachmentFile(path: string, cardId: string, storedN
 
 export async function openAttachmentFile(path: string, cardId: string, storedName: string): Promise<void> {
   await invoke("open_attachment", { path, cardId, storedName });
+}
+
+export async function loadAttachmentPreview(path: string, cardId: string, storedName: string): Promise<AttachmentPreviewData> {
+  return invoke<AttachmentPreviewData>("read_attachment_preview", { path, cardId, storedName });
 }
 
 // The last path segment of an OS path, used to show the original file name.

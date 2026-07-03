@@ -1,5 +1,7 @@
 import type { Attachment } from "../types";
+import { isImageAttachment } from "../lib/attachments";
 import { formatFileSize } from "../lib/format";
+import { AttachmentImagePreview } from "./AttachmentImagePreview";
 import { Icon } from "./icons";
 import type { ContextMenuItem, OpenContextMenu } from "./contextMenu";
 
@@ -8,6 +10,8 @@ import type { ContextMenuItem, OpenContextMenu } from "./contextMenu";
 // props, so it extracts and tests mechanically.
 export function CardAttachments({
   attachments,
+  workspacePath,
+  cardId,
   busy,
   onAdd,
   onOpen,
@@ -16,6 +20,8 @@ export function CardAttachments({
   onCopyText
 }: {
   attachments: Attachment[];
+  workspacePath: string | null;
+  cardId: string;
   busy: boolean;
   onAdd: () => void;
   onOpen: (attachment: Attachment) => void;
@@ -53,7 +59,7 @@ export function CardAttachments({
           {attachments.map((attachment) => (
             <li
               key={attachment.id}
-              className="attachment-row"
+              className={`attachment-row ${isImageAttachment(attachment) ? "has-image-preview" : ""}`}
               data-testid={`attachment-${attachment.id}`}
               onContextMenu={(event) => onOpenContextMenu(event, attachmentContextItems(attachment), attachment.name)}
             >
@@ -63,7 +69,17 @@ export function CardAttachments({
                 title={`Open ${attachment.name}`}
                 onClick={() => onOpen(attachment)}
               >
-                <Icon name="paperclip" />
+                {isImageAttachment(attachment) ? (
+                  <AttachmentImagePreview
+                    attachment={attachment}
+                    cardId={cardId}
+                    className="attachment-image-preview"
+                    testId={`attachment-${attachment.id}-thumbnail`}
+                    workspacePath={workspacePath}
+                  />
+                ) : (
+                  <Icon name="paperclip" />
+                )}
                 <span className="attachment-name">{attachment.name}</span>
                 <span className="attachment-size">{formatFileSize(attachment.size)}</span>
               </button>

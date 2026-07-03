@@ -1404,6 +1404,7 @@ export default function App() {
             board={activeBoard}
             cards={visibleCards}
             members={members}
+            workspacePath={workspacePath}
             onAddList={addList}
             onRenameBoard={renameBoard}
             onDeleteBoard={removeBoard}
@@ -1449,6 +1450,7 @@ export default function App() {
         {selectedCard && (
           <CardEditor
             card={selectedCard}
+            workspacePath={workspacePath}
             boards={boards}
             members={members}
             onSave={saveCardFromEditor}
@@ -1502,4 +1504,3 @@ export default function App() {
     </div>
   );
 }
-

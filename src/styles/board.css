@@ -151,6 +151,16 @@ body.is-card-dragging * {
   box-shadow: inset 2px 0 0 var(--success);
 }
 
+.task-card-cover {
+  display: block;
+  width: 100%;
+  aspect-ratio: 16 / 9;
+  object-fit: cover;
+  background: var(--surface);
+  border: 1px solid var(--border-soft);
+  border-radius: var(--radius-md);
+}
+
 .task-card h3 {
   overflow-wrap: anywhere;
   margin: 0;

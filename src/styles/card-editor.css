@@ -804,6 +804,27 @@
   color: var(--text-muted);
 }
 
+.attachment-image-preview {
+  display: block;
+  width: 52px;
+  height: 38px;
+  object-fit: cover;
+  background: var(--surface);
+  border: 1px solid var(--border-soft);
+  border-radius: var(--radius-md);
+}
+
+.attachment-image-loading {
+  background:
+    linear-gradient(90deg, transparent, var(--surface-hover), transparent),
+    var(--surface);
+  background-size: 200% 100%, auto;
+}
+
+.attachment-image-failed {
+  background: var(--empty-overlay);
+}
+
 .attachment-name {
   min-width: 0;
   overflow: hidden;

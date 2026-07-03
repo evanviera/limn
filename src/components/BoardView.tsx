@@ -2,7 +2,9 @@ import { useEffect, useRef, useState } from "react";
 import type { MouseEvent as ReactMouseEvent, PointerEvent as ReactPointerEvent } from "react";
 import type { Board, BoardList, Card, Member } from "../types";
 import { openExternal } from "../storage";
+import { latestImageAttachment } from "../lib/attachments";
 import { compareCardsByDueDate, countLabel, initials } from "../lib/format";
+import { AttachmentImagePreview } from "./AttachmentImagePreview";
 import { Icon } from "./icons";
 import { EmptyState } from "./dialogs";
 import { RichNoteText } from "./RichNoteText";
@@ -12,6 +14,7 @@ export interface BoardViewProps {
   board: Board;
   cards: Card[];
   members: Member[];
+  workspacePath: string | null;
   onAddList: () => Promise<void>;
   onRenameBoard: (board: Board) => Promise<void>;
   onDeleteBoard: (board: Board) => Promise<void>;
@@ -344,6 +347,7 @@ export function BoardView(props: BoardViewProps) {
                     <TaskCardBody
                       card={card}
                       members={props.members}
+                      workspacePath={props.workspacePath}
                       onOpen={openCard}
                       onToggleSubtask={props.onToggleSubtask}
                       onOpenContextMenu={props.onOpenContextMenu}
@@ -369,7 +373,7 @@ export function BoardView(props: BoardViewProps) {
             width: dragPreview.width
           }}
         >
-          <TaskCardBody card={dragPreviewCard} members={props.members} />
+          <TaskCardBody card={dragPreviewCard} members={props.members} workspacePath={props.workspacePath} />
         </article>
       )}
     </section>
@@ -378,6 +382,7 @@ export function BoardView(props: BoardViewProps) {
 export function TaskCardBody({
   card,
   members,
+  workspacePath,
   onOpen,
   onToggleSubtask,
   onOpenContextMenu,
@@ -385,6 +390,7 @@ export function TaskCardBody({
 }: {
   card: Card;
   members: Member[];
+  workspacePath?: string | null;
   onOpen?: (cardId: string) => void;
   onToggleSubtask?: (cardId: string, subtaskId: string, completed: boolean) => void;
   onOpenContextMenu?: OpenContextMenu;
@@ -392,8 +398,18 @@ export function TaskCardBody({
 }) {
   const doneCount = card.subtasks.filter((subtask) => subtask.completed).length;
   const noteText = card.body.trim();
+  const coverAttachment = workspacePath ? latestImageAttachment(card.attachments) : null;
   return (
     <>
+      {coverAttachment && (
+        <AttachmentImagePreview
+          attachment={coverAttachment}
+          cardId={card.id}
+          className="task-card-cover"
+          testId={`card-${card.id}-image-cover`}
+          workspacePath={workspacePath ?? null}
+        />
+      )}
       <h3>
         {card.completed && (
           <>

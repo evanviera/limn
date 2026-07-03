@@ -9,7 +9,13 @@ use std::{
 };
 use tauri::{AppHandle, Emitter, Manager, State, Window};
 
+mod attachments;
 mod menu;
+
+use attachments::{
+    add_attachment, delete_attachment, open_attachment, pick_attachment_files,
+    read_attachment_preview,
+};
 
 #[derive(Default)]
 struct WatchState {
@@ -173,70 +179,6 @@ fn delete_card_file(path: String, file_name: String) -> Result<(), String> {
 }
 
 #[tauri::command]
-fn pick_attachment_files() -> Result<Vec<String>, String> {
-    Ok(rfd::FileDialog::new()
-        .set_title("Add attachments")
-        .pick_files()
-        .map(|paths| {
-            paths
-                .into_iter()
-                .map(|path| path.to_string_lossy().to_string())
-                .collect()
-        })
-        .unwrap_or_default())
-}
-
-#[tauri::command]
-fn add_attachment(
-    path: String,
-    card_id: String,
-    stored_name: String,
-    source_path: String,
-) -> Result<u64, String> {
-    let root = workspace_root(&path)?;
-    validate_path_segment(&card_id)?;
-    validate_path_segment(&stored_name)?;
-
-    let source = PathBuf::from(&source_path);
-    if !source.is_file() {
-        return Err("Attachment source file was not found".to_string());
-    }
-
-    let dir = root.join("attachments").join(&card_id);
-    fs::create_dir_all(&dir).map_err(display_err)?;
-    let bytes = fs::copy(&source, dir.join(&stored_name)).map_err(display_err)?;
-    Ok(bytes)
-}
-
-#[tauri::command]
-fn delete_attachment(path: String, card_id: String, stored_name: String) -> Result<(), String> {
-    let root = workspace_root(&path)?;
-    validate_path_segment(&card_id)?;
-    validate_path_segment(&stored_name)?;
-
-    let dir = root.join("attachments").join(&card_id);
-    let target = dir.join(&stored_name);
-    if target.exists() {
-        fs::remove_file(&target).map_err(display_err)?;
-    }
-    remove_dir_if_empty(&dir);
-    Ok(())
-}
-
-#[tauri::command]
-fn open_attachment(path: String, card_id: String, stored_name: String) -> Result<(), String> {
-    let root = workspace_root(&path)?;
-    validate_path_segment(&card_id)?;
-    validate_path_segment(&stored_name)?;
-
-    let target = root.join("attachments").join(&card_id).join(&stored_name);
-    if !target.exists() {
-        return Err("Attachment file does not exist".to_string());
-    }
-    open::that(target).map_err(display_err)
-}
-
-#[tauri::command]
 fn delete_board_file(path: String, file_name: String) -> Result<(), String> {
     let root = workspace_root(&path)?;
     validate_file_name(&file_name, "json")?;
@@ -394,6 +336,7 @@ pub fn run() {
             add_attachment,
             delete_attachment,
             open_attachment,
+            read_attachment_preview,
             save_last_workspace,
             get_last_workspace,
             watch_workspace,
@@ -405,7 +348,6 @@ pub fn run() {
         .run(tauri::generate_context!())
         .expect("error while running Limn");
 }
-
 
 fn workspace_root(path: &str) -> Result<PathBuf, String> {
     let root = PathBuf::from(path);
@@ -495,27 +437,6 @@ fn validate_file_name(file_name: &str, extension: &str) -> Result<(), String> {
     Ok(())
 }
 
-// Guard a single path segment (a card id or stored attachment name) so it can be
-// safely joined onto the workspace path without escaping it.
-fn validate_path_segment(segment: &str) -> Result<(), String> {
-    if segment.is_empty()
-        || segment.contains('/')
-        || segment.contains('\\')
-        || segment.starts_with('.')
-    {
-        return Err("Invalid attachment path".to_string());
-    }
-    Ok(())
-}
-
-fn remove_dir_if_empty(dir: &Path) {
-    if let Ok(mut entries) = fs::read_dir(dir) {
-        if entries.next().is_none() {
-            let _ = fs::remove_dir(dir);
-        }
-    }
-}
-
 fn extract_frontmatter_value(content: &str, key: &str) -> Option<String> {
     let mut lines = content.lines();
     if lines.next()? != "---" {
@@ -550,7 +471,6 @@ fn last_workspace_file(app: &AppHandle) -> Result<PathBuf, String> {
 fn display_err<E: std::fmt::Display>(error: E) -> String {
     error.to_string()
 }
-
 
 #[cfg(test)]
 mod tests;

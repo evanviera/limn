@@ -1,4 +1,4 @@
-import type { Board, Card, MembersFile, WorkspaceFiles, WorkspaceSettings, WriteResult } from "./types";
+import type { AttachmentPreviewData, Board, Card, MembersFile, WorkspaceFiles, WorkspaceSettings, WriteResult } from "./types";
 import type { DownloadProgress } from "./updater";
 
 type HarnessEvent<T = unknown> = { event: string; id: number; payload: T };
@@ -158,6 +158,15 @@ function updatedAt(content: string): string | null {
   return match?.[1]?.trim().replace(/^"|"$/g, "") ?? null;
 }
 
+function attachmentPreview(storedName: string): AttachmentPreviewData {
+  const svg = `<svg xmlns="http://www.w3.org/2000/svg" width="80" height="48" viewBox="0 0 80 48"><rect width="80" height="48" fill="#2f6fed"/><circle cx="58" cy="16" r="8" fill="#ffd166"/><path d="M0 48 24 24l14 12 12-10 30 22z" fill="#f4f7fb"/></svg>`;
+  const extension = storedName.split(".").pop()?.toLowerCase();
+  if (!["avif", "bmp", "gif", "jpeg", "jpg", "png", "svg", "webp"].includes(extension ?? "")) {
+    throw new Error("Attachment is not a supported image type");
+  }
+  return { mimeType: "image/svg+xml", bytes: Array.from(new TextEncoder().encode(svg)) };
+}
+
 window.__LIMN_TEST_IPC__ = {
   async invoke<T>(command: string, args?: Record<string, unknown>): Promise<T> {
     switch (command) {
@@ -242,6 +251,14 @@ window.__LIMN_TEST_IPC__ = {
         externalLinks.push(`attachment://${cardId}/${storedName}`);
         updateDebugState();
         return undefined as T;
+      }
+      case "read_attachment_preview": {
+        const cardId = String(args?.cardId ?? "");
+        const storedName = String(args?.storedName ?? "");
+        if (!attachments.has(`${cardId}/${storedName}`)) {
+          throw new Error("Attachment file does not exist");
+        }
+        return attachmentPreview(storedName) as T;
       }
       case "post_slack":
         if (typeof args?.webhookUrl !== "string" || typeof args?.message !== "string") {

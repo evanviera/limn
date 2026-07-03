@@ -30,8 +30,7 @@ fn card_write_uses_conflict_copy_when_updated_at_changed() {
     init_workspace(path.clone()).expect("workspace initializes");
 
     let original = card_markdown("card_test", "2026-06-27T00:00:00.000Z", "Original");
-    write_card_file(path.clone(), "card_test.md".to_string(), original, None)
-        .expect("card writes");
+    write_card_file(path.clone(), "card_test.md".to_string(), original, None).expect("card writes");
 
     let changed = card_markdown("card_test", "2026-06-27T01:00:00.000Z", "Changed elsewhere");
     write_card_file(
@@ -70,8 +69,7 @@ fn repeated_conflicts_get_distinct_copy_names() {
     init_workspace(path.clone()).expect("workspace initializes");
 
     let original = card_markdown("card_test", "2026-06-27T00:00:00.000Z", "Original");
-    write_card_file(path.clone(), "card_test.md".to_string(), original, None)
-        .expect("card writes");
+    write_card_file(path.clone(), "card_test.md".to_string(), original, None).expect("card writes");
 
     let changed = card_markdown("card_test", "2026-06-27T01:00:00.000Z", "Changed elsewhere");
     write_card_file(
@@ -141,7 +139,10 @@ fn attachments_are_copied_and_deleted_with_their_card() {
 
     let stored = root.join("attachments/card_att/att_1-source.txt");
     assert!(stored.exists());
-    assert_eq!(fs::read(&stored).expect("stored reads"), b"hello attachment");
+    assert_eq!(
+        fs::read(&stored).expect("stored reads"),
+        b"hello attachment"
+    );
 
     write_card_file(
         path.clone(),
@@ -180,6 +181,51 @@ fn delete_attachment_removes_file_and_empty_folder() {
     .expect("attachment deletes");
     assert!(!root.join("attachments/card_x/att_2-logo.png").exists());
     assert!(!root.join("attachments/card_x").exists());
+
+    let _ = fs::remove_dir_all(root);
+}
+
+#[test]
+fn image_attachment_preview_reads_only_supported_images() {
+    let root = test_workspace("attachment_preview");
+    let path = root.to_string_lossy().to_string();
+    init_workspace(path.clone()).expect("workspace initializes");
+
+    let source = root.join("logo.png");
+    fs::write(&source, b"png-bytes").expect("source writes");
+    add_attachment(
+        path.clone(),
+        "card_x".to_string(),
+        "att_2-logo.png".to_string(),
+        source.to_string_lossy().to_string(),
+    )
+    .expect("attachment copies");
+
+    let preview = read_attachment_preview(
+        path.clone(),
+        "card_x".to_string(),
+        "att_2-logo.png".to_string(),
+    )
+    .expect("image preview reads");
+    assert_eq!(preview.mime_type, "image/png");
+    assert_eq!(preview.bytes, b"png-bytes");
+
+    let source = root.join("notes.txt");
+    fs::write(&source, b"text").expect("source writes");
+    add_attachment(
+        path.clone(),
+        "card_x".to_string(),
+        "att_3-notes.txt".to_string(),
+        source.to_string_lossy().to_string(),
+    )
+    .expect("attachment copies");
+    let unsupported = read_attachment_preview(
+        path.clone(),
+        "card_x".to_string(),
+        "att_3-notes.txt".to_string(),
+    )
+    .expect_err("text preview rejected");
+    assert!(unsupported.contains("supported image"));
 
     let _ = fs::remove_dir_all(root);
 }

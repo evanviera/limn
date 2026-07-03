@@ -84,6 +84,11 @@ export interface Attachment {
   addedAt: string;
 }
 
+export interface AttachmentPreviewData {
+  mimeType: string;
+  bytes: number[];
+}
+
 export interface Card {
   id: string;
   title: string;
