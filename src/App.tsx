@@ -1,5 +1,12 @@
 import { useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
-import type { FormEvent as ReactFormEvent, MouseEvent as ReactMouseEvent, ReactNode } from "react";
+import type {
+  ClipboardEvent as ReactClipboardEvent,
+  CSSProperties,
+  FormEvent as ReactFormEvent,
+  KeyboardEvent as ReactKeyboardEvent,
+  MouseEvent as ReactMouseEvent,
+  ReactNode
+} from "react";
 import type { PointerEvent as ReactPointerEvent } from "react";
 import { getCurrentWindow } from "@tauri-apps/api/window";
 import { listen } from "./ipc";
@@ -40,9 +47,16 @@ const memberColors = ["#2563eb", "#0f766e", "#b45309", "#be123c", "#7c3aed", "#4
 const MAX_NAME_LENGTH = 80;
 const WORKSPACE_WATCH_REFRESH_DELAY_MS = 75;
 const THEME_STORAGE_KEY = "limn-theme";
+const CARD_EDITOR_SIDE_WIDTH_DEFAULT = 280;
+const CARD_EDITOR_SIDE_WIDTH_MIN = 240;
+const CARD_EDITOR_SIDE_WIDTH_MAX = 460;
+const CARD_EDITOR_MAIN_WIDTH_MIN = 380;
+const CARD_EDITOR_SPLITTER_WIDTH = 13;
+const CARD_EDITOR_SPLITTER_KEY_STEP = 24;
 type ThemeMode = "dark" | "light";
 type UpdateStatus = "idle" | "checking" | "available" | "downloading" | "restart-ready" | "not-available" | "error";
 type SlackNotificationKey = keyof WorkspaceSettings["slackNotifications"];
+type NoteLinkDraft = { mode: "selection" | "link"; label: string; url: string };
 type IconName =
   | "archive"
   | "calendar"
@@ -2068,11 +2082,11 @@ function RichNoteText({
   onCopyText?: (text: string) => Promise<void>;
 }) {
   const nodes: ReactNode[] = [];
-  const inlinePattern = /\[([^\]\n]+)\]\(([^)\s]+)\)|\*\*([^*\n]+)\*\*|\*([^*\n]+)\*|((?:https?:\/\/|www\.)[^\s<]+)/gi;
   let index = 0;
   let linkIndex = 0;
 
-  for (const match of text.matchAll(inlinePattern)) {
+  NOTE_INLINE_PATTERN.lastIndex = 0;
+  for (const match of text.matchAll(NOTE_INLINE_PATTERN)) {
     const matchStart = match.index ?? 0;
     const rawMatch = match[0];
     if (matchStart > index) {
@@ -2136,6 +2150,8 @@ function RichNoteText({
   return <>{nodes}</>;
 }
 
+const NOTE_INLINE_PATTERN = /\[([^\]\n]+)\]\(([^)\s]+)\)|\*\*([^*\n]+)\*\*|\*([^*\n]+)\*|((?:https?:\/\/|www\.)[^\s<]+)/gi;
+
 function buildNoteLink(rawUrl: string): { url: string; href: string; trailing: string } | null {
   let url = rawUrl.trim();
   let trailing = "";
@@ -2152,6 +2168,160 @@ function buildNoteLink(rawUrl: string): { url: string; href: string; trailing: s
 
   const href = normalizeUrl(url);
   return /^https?:\/\//i.test(href) ? { url, href, trailing } : null;
+}
+
+function renderNoteEditorHtml(text: string): string {
+  let html = "";
+  let index = 0;
+
+  NOTE_INLINE_PATTERN.lastIndex = 0;
+  for (const match of text.matchAll(NOTE_INLINE_PATTERN)) {
+    const matchStart = match.index ?? 0;
+    const rawMatch = match[0];
+    if (matchStart > index) {
+      html += escapeNoteHtml(text.slice(index, matchStart));
+    }
+
+    const markdownLabel = match[1];
+    const markdownUrl = match[2];
+    const boldText = match[3];
+    const italicText = match[4];
+    const bareUrl = match[5];
+    const link = buildNoteLink(markdownUrl || bareUrl || "");
+
+    if (link) {
+      html += noteAnchorHtml(markdownLabel || link.url, link, Boolean(bareUrl));
+      if (link.trailing) {
+        html += escapeNoteHtml(link.trailing);
+      }
+    } else if (boldText) {
+      html += `<strong>${escapeNoteHtml(boldText)}</strong>`;
+    } else if (italicText) {
+      html += `<em>${escapeNoteHtml(italicText)}</em>`;
+    } else {
+      html += escapeNoteHtml(rawMatch);
+    }
+
+    index = matchStart + rawMatch.length;
+  }
+
+  if (index < text.length) {
+    html += escapeNoteHtml(text.slice(index));
+  }
+
+  return html;
+}
+
+function noteAnchorHtml(label: string, link: { url: string; href: string }, bare: boolean): string {
+  return `<a href="${escapeNoteAttribute(link.href)}" data-note-link="true" data-note-url="${escapeNoteAttribute(link.url)}" data-note-original-text="${escapeNoteAttribute(label)}" data-note-bare="${bare ? "true" : "false"}" contenteditable="false" tabindex="0">${escapeNoteHtml(label)}</a>`;
+}
+
+function escapeNoteHtml(value: string): string {
+  return value
+    .replace(/&/g, "&amp;")
+    .replace(/</g, "&lt;")
+    .replace(/>/g, "&gt;")
+    .replace(/\n/g, "<br>");
+}
+
+function escapeNoteAttribute(value: string): string {
+  return escapeNoteHtml(value).replace(/"/g, "&quot;");
+}
+
+function serializeNoteEditor(root: HTMLElement): string {
+  const output = Array.from(root.childNodes).map(serializeNoteNode).join("");
+  return output.endsWith("\n") ? output.slice(0, -1) : output;
+}
+
+function noteEditorHtmlMatches(root: HTMLElement, html: string): boolean {
+  const template = document.createElement("template");
+  template.innerHTML = html;
+  const currentNodes = Array.from(root.childNodes);
+  const nextNodes = Array.from(template.content.childNodes);
+  return currentNodes.length === nextNodes.length && currentNodes.every((node, index) => node.isEqualNode(nextNodes[index]));
+}
+
+function serializeNoteNode(node: ChildNode): string {
+  if (node.nodeType === Node.TEXT_NODE) {
+    return node.textContent?.replace(/\u00a0/g, " ") ?? "";
+  }
+
+  if (!(node instanceof HTMLElement)) {
+    return "";
+  }
+
+  const tagName = node.tagName.toLowerCase();
+  if (tagName === "br") {
+    return "\n";
+  }
+
+  if (tagName === "a" && node.dataset.noteLink === "true") {
+    const label = serializeNoteChildren(node) || node.dataset.noteOriginalText || node.dataset.noteUrl || node.getAttribute("href") || "";
+    const url = node.dataset.noteUrl || node.getAttribute("href") || "";
+    if (node.dataset.noteBare === "true" && label === node.dataset.noteOriginalText) {
+      return label;
+    }
+    return `[${escapeMarkdownLinkLabel(label)}](${normalizeUrl(url)})`;
+  }
+
+  if (tagName === "strong" || tagName === "b") {
+    return `**${serializeNoteChildren(node)}**`;
+  }
+
+  if (tagName === "em" || tagName === "i") {
+    return `*${serializeNoteChildren(node)}*`;
+  }
+
+  if (tagName === "div" || tagName === "p") {
+    return `${serializeNoteChildren(node)}\n`;
+  }
+
+  return serializeNoteChildren(node);
+}
+
+function serializeNoteChildren(node: HTMLElement): string {
+  return Array.from(node.childNodes).map(serializeNoteNode).join("");
+}
+
+function escapeMarkdownLinkLabel(label: string): string {
+  return label.replace(/\]/g, "\\]");
+}
+
+function clampNumber(value: number, min: number, max: number): number {
+  return Math.min(Math.max(value, min), max);
+}
+
+function noteEditorRange(editor: HTMLElement): Range | null {
+  const selection = window.getSelection();
+  if (!selection || selection.rangeCount === 0) {
+    return null;
+  }
+
+  const range = selection.getRangeAt(0);
+  if (!editor.contains(range.commonAncestorContainer)) {
+    return null;
+  }
+
+  return range;
+}
+
+function endOfNoteEditorRange(editor: HTMLElement): Range {
+  const range = document.createRange();
+  range.selectNodeContents(editor);
+  range.collapse(false);
+  return range;
+}
+
+function selectNoteNodeContents(node: Node) {
+  const selection = window.getSelection();
+  if (!selection) {
+    return;
+  }
+
+  const range = document.createRange();
+  range.selectNodeContents(node);
+  selection.removeAllRanges();
+  selection.addRange(range);
 }
 
 function LinkIcon() {
@@ -2577,13 +2747,20 @@ function CardEditor({
   const [draft, setDraft] = useState(card);
   const [saving, setSaving] = useState(false);
   const [labelInput, setLabelInput] = useState("");
+  const [sideWidth, setSideWidth] = useState(CARD_EDITOR_SIDE_WIDTH_DEFAULT);
+  const [resizingColumns, setResizingColumns] = useState(false);
   // Which sub-tasks have their list-items section expanded. Kept out of the card
   // model since it's pure view state; reset whenever a different card opens.
   const [expandedSubtasks, setExpandedSubtasks] = useState<Set<string>>(() => new Set());
-  const [linkDraft, setLinkDraft] = useState<{ start: number; end: number; label: string; url: string } | null>(null);
+  const [linkDraft, setLinkDraft] = useState<NoteLinkDraft | null>(null);
   const editorRef = useRef<HTMLElement>(null);
-  const notesInputRef = useRef<HTMLTextAreaElement>(null);
+  const cardEditorBodyRef = useRef<HTMLDivElement>(null);
+  const notesInputRef = useRef<HTMLDivElement>(null);
   const notesLinkInputRef = useRef<HTMLInputElement>(null);
+  const notesLinkLabelInputRef = useRef<HTMLInputElement>(null);
+  const pendingNotesLinkRangeRef = useRef<Range | null>(null);
+  const activeNotesLinkRef = useRef<HTMLAnchorElement | null>(null);
+  const cardEditorBodyStyle = { "--card-editor-side-width": `${sideWidth}px` } as CSSProperties;
   const board = boards.find((item) => item.id === draft.boardId) ?? boards[0];
   const completedSubtasks = draft.subtasks.filter((subtask) => subtask.completed).length;
 
@@ -2591,7 +2768,18 @@ function CardEditor({
     setDraft(card);
     setLabelInput("");
     setExpandedSubtasks(new Set());
+    setLinkDraft(null);
+    activeNotesLinkRef.current = null;
+    pendingNotesLinkRangeRef.current = null;
   }, [card]);
+  useLayoutEffect(() => {
+    const input = notesInputRef.current;
+    if (!input) {
+      return;
+    }
+
+    input.innerHTML = renderNoteEditorHtml(card.body);
+  }, [card.id, card.body]);
   useModalKeys(editorRef, onClose);
   // Move focus into the dialog on open so keyboard users land inside it.
   useEffect(() => {
@@ -2721,75 +2909,291 @@ function CardEditor({
     setDraft((current) => ({ ...current, labels: current.labels.filter((item) => item !== label) }));
   }
 
-  function replaceNotesSelection(
-    buildReplacement: (selectedText: string) => { text: string; selectionStart: number; selectionEnd: number } | null
-  ) {
+  function cardEditorSideWidthFromPointer(clientX: number): number {
+    const body = cardEditorBodyRef.current;
+    if (!body) {
+      return sideWidth;
+    }
+
+    const rect = body.getBoundingClientRect();
+    const style = window.getComputedStyle(body);
+    const paddingLeft = Number.parseFloat(style.paddingLeft) || 0;
+    const paddingRight = Number.parseFloat(style.paddingRight) || 0;
+    const columnGap = Number.parseFloat(style.columnGap) || 0;
+    const dividerCenterOffset = CARD_EDITOR_SPLITTER_WIDTH / 2 + columnGap;
+    const requestedSideWidth = rect.right - paddingRight - clientX - dividerCenterOffset;
+    return clampNumber(requestedSideWidth, CARD_EDITOR_SIDE_WIDTH_MIN, cardEditorSideWidthMax());
+  }
+
+  function cardEditorSideWidthMax(): number {
+    const body = cardEditorBodyRef.current;
+    if (!body) {
+      return CARD_EDITOR_SIDE_WIDTH_MAX;
+    }
+
+    const rect = body.getBoundingClientRect();
+    const style = window.getComputedStyle(body);
+    const paddingLeft = Number.parseFloat(style.paddingLeft) || 0;
+    const paddingRight = Number.parseFloat(style.paddingRight) || 0;
+    const columnGap = Number.parseFloat(style.columnGap) || 0;
+    const usableWidth = rect.width - paddingLeft - paddingRight - CARD_EDITOR_SPLITTER_WIDTH - columnGap * 2;
+    return clampNumber(usableWidth - CARD_EDITOR_MAIN_WIDTH_MIN, CARD_EDITOR_SIDE_WIDTH_MIN, CARD_EDITOR_SIDE_WIDTH_MAX);
+  }
+
+  function resizeCardEditorSideWidth(clientX: number) {
+    setSideWidth(cardEditorSideWidthFromPointer(clientX));
+  }
+
+  function handleCardEditorSplitterPointerDown(event: ReactPointerEvent<HTMLDivElement>) {
+    event.preventDefault();
+    event.stopPropagation();
+    event.currentTarget.setPointerCapture(event.pointerId);
+    setResizingColumns(true);
+    resizeCardEditorSideWidth(event.clientX);
+  }
+
+  function handleCardEditorSplitterPointerMove(event: ReactPointerEvent<HTMLDivElement>) {
+    if (!resizingColumns) {
+      return;
+    }
+
+    event.preventDefault();
+    resizeCardEditorSideWidth(event.clientX);
+  }
+
+  function handleCardEditorSplitterPointerUp(event: ReactPointerEvent<HTMLDivElement>) {
+    if (event.currentTarget.hasPointerCapture(event.pointerId)) {
+      event.currentTarget.releasePointerCapture(event.pointerId);
+    }
+    setResizingColumns(false);
+  }
+
+  function handleCardEditorSplitterKeyDown(event: ReactKeyboardEvent<HTMLDivElement>) {
+    const step = event.shiftKey ? CARD_EDITOR_SPLITTER_KEY_STEP * 2 : CARD_EDITOR_SPLITTER_KEY_STEP;
+    const maxSideWidth = cardEditorSideWidthMax();
+    if (event.key === "ArrowLeft") {
+      event.preventDefault();
+      setSideWidth((current) => clampNumber(current + step, CARD_EDITOR_SIDE_WIDTH_MIN, maxSideWidth));
+    } else if (event.key === "ArrowRight") {
+      event.preventDefault();
+      setSideWidth((current) => clampNumber(current - step, CARD_EDITOR_SIDE_WIDTH_MIN, maxSideWidth));
+    } else if (event.key === "Home") {
+      event.preventDefault();
+      setSideWidth(CARD_EDITOR_SIDE_WIDTH_MIN);
+    } else if (event.key === "End") {
+      event.preventDefault();
+      setSideWidth(maxSideWidth);
+    } else if (event.key === "Enter") {
+      event.preventDefault();
+      setSideWidth(clampNumber(CARD_EDITOR_SIDE_WIDTH_DEFAULT, CARD_EDITOR_SIDE_WIDTH_MIN, maxSideWidth));
+    }
+  }
+
+  function syncNotesFromEditor(): string {
+    const input = notesInputRef.current;
+    if (!input) {
+      return draft.body;
+    }
+
+    const body = serializeNoteEditor(input);
+    setDraft((current) => (current.body === body ? current : { ...current, body }));
+    return body;
+  }
+
+  function placeNotesCaretAtEnd() {
     const input = notesInputRef.current;
     if (!input) {
       return;
     }
 
-    const start = input.selectionStart;
-    const end = input.selectionEnd;
-    const body = input.value;
-    const selectedText = body.slice(start, end);
-    const replacement = buildReplacement(selectedText);
-    if (!replacement) {
-      return;
-    }
-
-    const nextBody = `${body.slice(0, start)}${replacement.text}${body.slice(end)}`;
-    setDraft((current) => ({ ...current, body: nextBody }));
-    window.requestAnimationFrame(() => {
-      input.focus();
-      input.setSelectionRange(start + replacement.selectionStart, start + replacement.selectionEnd);
-    });
+    const range = endOfNoteEditorRange(input);
+    const selection = window.getSelection();
+    selection?.removeAllRanges();
+    selection?.addRange(range);
   }
 
-  function formatNotesAsBold() {
-    replaceNotesSelection((selectedText) => {
-      const text = selectedText || "bold text";
-      return {
-        text: `**${text}**`,
-        selectionStart: 2,
-        selectionEnd: 2 + text.length
-      };
-    });
-  }
-
-  function formatNotesAsItalic() {
-    replaceNotesSelection((selectedText) => {
-      const text = selectedText || "italic text";
-      return {
-        text: `*${text}*`,
-        selectionStart: 1,
-        selectionEnd: 1 + text.length
-      };
-    });
-  }
-
-  function formatNotesAsLink() {
+  function refreshNotesRenderingIfNeeded(body: string) {
     const input = notesInputRef.current;
     if (!input) {
       return;
     }
 
-    const start = input.selectionStart;
-    const end = input.selectionEnd;
-    const selectedText = input.value.slice(start, end);
-    const isSelectedUrl = /^(https?:\/\/|www\.)/i.test(selectedText);
+    const rendered = renderNoteEditorHtml(body);
+    if (noteEditorHtmlMatches(input, rendered)) {
+      return;
+    }
+
+    input.innerHTML = rendered;
+    placeNotesCaretAtEnd();
+  }
+
+  function handleNotesInput() {
+    const body = syncNotesFromEditor();
+    if (NOTE_INLINE_PATTERN.test(body)) {
+      NOTE_INLINE_PATTERN.lastIndex = 0;
+      refreshNotesRenderingIfNeeded(body);
+    }
+    NOTE_INLINE_PATTERN.lastIndex = 0;
+  }
+
+  function notesLinkFromTarget(target: EventTarget | null): HTMLAnchorElement | null {
+    if (!(target instanceof Element)) {
+      return null;
+    }
+
+    const link = target.closest<HTMLAnchorElement>('a[data-note-link="true"]');
+    return link && notesInputRef.current?.contains(link) ? link : null;
+  }
+
+  function clearActiveNotesLink() {
+    if (activeNotesLinkRef.current) {
+      activeNotesLinkRef.current.dataset.active = "false";
+    }
+    activeNotesLinkRef.current = null;
+  }
+
+  function editNotesLink(link: HTMLAnchorElement) {
+    clearActiveNotesLink();
+    activeNotesLinkRef.current = link;
+    link.dataset.active = "true";
+    pendingNotesLinkRangeRef.current = null;
     setLinkDraft({
-      start,
-      end,
-      label: selectedText || "link text",
-      url: isSelectedUrl ? normalizeUrl(selectedText) : ""
+      mode: "link",
+      label: link.textContent || link.dataset.noteOriginalText || "link text",
+      url: link.dataset.noteUrl || link.getAttribute("href") || ""
     });
     window.requestAnimationFrame(() => {
-      notesLinkInputRef.current?.focus();
+      notesLinkLabelInputRef.current?.focus();
+      notesLinkLabelInputRef.current?.select();
     });
   }
 
-  function applyNotesLink(event: ReactFormEvent<HTMLFormElement>) {
+  function insertFormattedNotesText(tagName: "strong" | "em", fallbackText: string) {
+    const input = notesInputRef.current;
+    if (!input) {
+      return;
+    }
+
+    input.focus();
+    const range = noteEditorRange(input) ?? endOfNoteEditorRange(input);
+    const selectedText = range.toString();
+    const wrapper = document.createElement(tagName);
+    wrapper.textContent = selectedText || fallbackText;
+    range.deleteContents();
+    range.insertNode(wrapper);
+    selectNoteNodeContents(wrapper);
+    syncNotesFromEditor();
+  }
+
+  function replaceNotesSelectionWithText(text: string) {
+    const input = notesInputRef.current;
+    if (!input) {
+      return;
+    }
+
+    input.focus();
+    const range = noteEditorRange(input) ?? endOfNoteEditorRange(input);
+    range.deleteContents();
+    const textNode = document.createTextNode(text);
+    range.insertNode(textNode);
+    range.setStartAfter(textNode);
+    range.collapse(true);
+    const selection = window.getSelection();
+    selection?.removeAllRanges();
+    selection?.addRange(range);
+    syncNotesFromEditor();
+  }
+
+  function selectAllNotes() {
+    const input = notesInputRef.current;
+    if (!input) {
+      return;
+    }
+
+    input.focus();
+    selectNoteNodeContents(input);
+  }
+
+  function handleNotesPaste(event: ReactClipboardEvent<HTMLDivElement>) {
+    event.preventDefault();
+    replaceNotesSelectionWithText(event.clipboardData.getData("text/plain"));
+  }
+
+  function handleNotesLinkClick(event: ReactMouseEvent<HTMLDivElement>) {
+    const link = notesLinkFromTarget(event.target);
+    if (!link) {
+      return;
+    }
+
+    event.preventDefault();
+    event.stopPropagation();
+    editNotesLink(link);
+  }
+
+  function handleNotesLinkKeyDown(event: ReactKeyboardEvent<HTMLDivElement>) {
+    const link = notesLinkFromTarget(event.target);
+    if (!link || (event.key !== "Enter" && event.key !== " ")) {
+      return;
+    }
+
+    event.preventDefault();
+    editNotesLink(link);
+  }
+
+  function noteEditorContextItems(): ContextMenuItem[] {
+    const selection = window.getSelection();
+    const hasSelection = Boolean(selection && !selection.isCollapsed && notesInputRef.current?.contains(selection.anchorNode));
+    return [
+      { label: "Copy", icon: "copy", disabled: !hasSelection, onSelect: () => void writeClipboard(selection?.toString() ?? "") },
+      { label: "Paste", icon: "clipboard", disabled: !navigator.clipboard?.readText, onSelect: async () => replaceNotesSelectionWithText(await navigator.clipboard.readText()) },
+      { label: "Select all", icon: "check", disabled: !draft.body, onSelect: selectAllNotes },
+      { type: "separator" },
+      { label: "Bold", icon: "edit", onSelect: formatNotesAsBold },
+      { label: "Italic", icon: "edit", onSelect: formatNotesAsItalic },
+      { label: "Create link", icon: "chevron-up-right", onSelect: formatNotesAsLink }
+    ];
+  }
+
+  function noteLinkContextItems(link: HTMLAnchorElement): ContextMenuItem[] {
+    const url = link.dataset.noteUrl || link.getAttribute("href") || "";
+    return [
+      { label: "Edit link", icon: "edit", onSelect: () => editNotesLink(link) },
+      { label: "Open link", icon: "chevron-up-right", onSelect: () => void openExternal(url) },
+      { label: "Copy link", icon: "copy", onSelect: () => void onCopyText(url) },
+      { label: "Remove link", icon: "x", onSelect: removeNotesLink }
+    ];
+  }
+
+  function handleNotesContextMenu(event: ReactMouseEvent<HTMLDivElement>) {
+    const link = notesLinkFromTarget(event.target);
+    if (link) {
+      editNotesLink(link);
+      onOpenContextMenu(event, noteLinkContextItems(link), link.textContent || "Link");
+      return;
+    }
+
+    onOpenContextMenu(event, noteEditorContextItems(), "Notes");
+  }
+
+  function updateNotesLinkDraft(patch: Partial<NoteLinkDraft>) {
+    setLinkDraft((current) => (current ? { ...current, ...patch } : current));
+  }
+
+  function makeNotesAnchor(label: string, url: string): HTMLAnchorElement {
+    const normalizedUrl = normalizeUrl(url);
+    const anchor = document.createElement("a");
+    anchor.href = normalizedUrl;
+    anchor.textContent = label;
+    anchor.contentEditable = "false";
+    anchor.tabIndex = 0;
+    anchor.dataset.noteLink = "true";
+    anchor.dataset.noteUrl = normalizedUrl;
+    anchor.dataset.noteOriginalText = label;
+    anchor.dataset.noteBare = "false";
+    return anchor;
+  }
+
+  function replaceNotesLinkDraft(event: ReactFormEvent<HTMLFormElement>) {
     event.preventDefault();
     if (!linkDraft) {
       return;
@@ -2800,22 +3204,89 @@ function CardEditor({
       return;
     }
 
-    const label = linkDraft.label || "link text";
-    const text = `[${label}](${normalizedUrl})`;
-    setDraft((current) => ({
-      ...current,
-      body: `${current.body.slice(0, linkDraft.start)}${text}${current.body.slice(linkDraft.end)}`
-    }));
-    setLinkDraft(null);
-    window.requestAnimationFrame(() => {
-      const input = notesInputRef.current;
-      if (!input) {
-        return;
-      }
-
+    const input = notesInputRef.current;
+    const label = linkDraft.label.trim() || "link text";
+    if (linkDraft.mode === "link" && activeNotesLinkRef.current) {
+      const link = activeNotesLinkRef.current;
+      link.href = normalizedUrl;
+      link.textContent = label;
+      link.dataset.noteUrl = normalizedUrl;
+      link.dataset.noteOriginalText = label;
+      link.dataset.noteBare = "false";
+      selectNoteNodeContents(link);
+    } else if (input) {
       input.focus();
-      input.setSelectionRange(linkDraft.start + 1, linkDraft.start + 1 + label.length);
+      const range = pendingNotesLinkRangeRef.current ?? noteEditorRange(input) ?? endOfNoteEditorRange(input);
+      const anchor = makeNotesAnchor(label, normalizedUrl);
+      range.deleteContents();
+      range.insertNode(anchor);
+      selectNoteNodeContents(anchor);
+    }
+
+    setLinkDraft(null);
+    clearActiveNotesLink();
+    pendingNotesLinkRangeRef.current = null;
+    syncNotesFromEditor();
+    window.requestAnimationFrame(() => {
+      notesInputRef.current?.focus();
     });
+  }
+
+  function formatNotesAsBold() {
+    insertFormattedNotesText("strong", "bold text");
+  }
+
+  function formatNotesAsItalic() {
+    insertFormattedNotesText("em", "italic text");
+  }
+
+  function formatNotesAsLink() {
+    const input = notesInputRef.current;
+    if (!input) {
+      return;
+    }
+
+    const activeLink = activeNotesLinkRef.current;
+    if (activeLink) {
+      editNotesLink(activeLink);
+      return;
+    }
+
+    input.focus();
+    const range = noteEditorRange(input) ?? endOfNoteEditorRange(input);
+    pendingNotesLinkRangeRef.current = range.cloneRange();
+    const selectedText = range.toString();
+    const isSelectedUrl = /^(https?:\/\/|www\.)/i.test(selectedText);
+    setLinkDraft({
+      mode: "selection",
+      label: selectedText || "link text",
+      url: isSelectedUrl ? normalizeUrl(selectedText) : ""
+    });
+    window.requestAnimationFrame(() => {
+      notesLinkInputRef.current?.focus();
+    });
+  }
+
+  function removeNotesLink() {
+    const link = activeNotesLinkRef.current;
+    if (!link) {
+      return;
+    }
+
+    const textNode = document.createTextNode(link.textContent || link.dataset.noteOriginalText || "");
+    link.replaceWith(textNode);
+    setLinkDraft(null);
+    clearActiveNotesLink();
+    syncNotesFromEditor();
+    notesInputRef.current?.focus();
+  }
+
+  function openNotesLinkDraft() {
+    if (!linkDraft?.url.trim()) {
+      return;
+    }
+
+    void openExternal(normalizeUrl(linkDraft.url));
   }
 
   function cardEditorContextItems(): ContextMenuItem[] {
@@ -2885,7 +3356,7 @@ function CardEditor({
       <aside
         aria-label="Edit card"
         aria-modal="true"
-        className="card-editor"
+        className={`card-editor ${resizingColumns ? "is-resizing-columns" : ""}`}
         ref={editorRef}
         role="dialog"
         tabIndex={-1}
@@ -2908,7 +3379,7 @@ function CardEditor({
           </button>
         </header>
 
-        <div className="card-editor-body">
+        <div className="card-editor-body" data-testid="card-editor-body" ref={cardEditorBodyRef} style={cardEditorBodyStyle}>
           <div className="card-editor-main">
             <label className="title-field">
               <span className="field-label">Title</span>
@@ -3128,42 +3599,88 @@ function CardEditor({
                 </div>
               </div>
               {linkDraft && (
-                <form className="notes-link-form" data-testid="notes-link-form" onSubmit={applyNotesLink}>
+                <form className="notes-link-form" data-testid="notes-link-form" onSubmit={replaceNotesLinkDraft}>
+                  <input
+                    aria-label="Link text"
+                    data-testid="notes-link-label"
+                    placeholder="Link text"
+                    ref={notesLinkLabelInputRef}
+                    value={linkDraft.label}
+                    onChange={(event) => updateNotesLinkDraft({ label: event.target.value })}
+                  />
                   <input
                     aria-label="Link URL"
                     data-testid="notes-link-url"
                     placeholder="https://example.com"
                     ref={notesLinkInputRef}
                     value={linkDraft.url}
-                    onChange={(event) => setLinkDraft({ ...linkDraft, url: event.target.value })}
+                    onChange={(event) => updateNotesLinkDraft({ url: event.target.value })}
                   />
                   <button className="primary" data-testid="notes-link-apply" type="submit">
-                    Apply
+                    {linkDraft.mode === "link" ? "Update" : "Apply"}
                   </button>
-                  <button data-testid="notes-link-cancel" type="button" onClick={() => setLinkDraft(null)}>
+                  {linkDraft.mode === "link" && (
+                    <>
+                      <button data-testid="notes-link-open" type="button" onClick={openNotesLinkDraft}>
+                        Open
+                      </button>
+                      <button data-testid="notes-link-remove" type="button" onClick={removeNotesLink}>
+                        Remove link
+                      </button>
+                    </>
+                  )}
+                  <button
+                    data-testid="notes-link-cancel"
+                    type="button"
+                    onClick={() => {
+                      setLinkDraft(null);
+                      clearActiveNotesLink();
+                      pendingNotesLinkRangeRef.current = null;
+                      notesInputRef.current?.focus();
+                    }}
+                  >
                     Cancel
                   </button>
                 </form>
               )}
-              <textarea
+              <div
                 aria-labelledby="notes-heading"
+                aria-multiline="true"
+                className="notes-rich-input"
+                contentEditable
                 data-testid="card-notes-input"
+                data-placeholder="Add notes"
                 ref={notesInputRef}
-                value={draft.body}
-                onChange={(event) => setDraft({ ...draft, body: event.target.value })}
-                onContextMenu={(event) => onOpenContextMenu(event, [
-                  ...textControlContextItems(event.currentTarget),
-                  { type: "separator" },
-                  { label: "Bold", icon: "edit", onSelect: formatNotesAsBold },
-                  { label: "Italic", icon: "edit", onSelect: formatNotesAsItalic },
-                  { label: "Create link", icon: "chevron-up-right", onSelect: formatNotesAsLink }
-                ], "Notes")}
-                rows={8}
+                role="textbox"
+                suppressContentEditableWarning
+                onClick={handleNotesLinkClick}
+                onInput={handleNotesInput}
+                onKeyDown={handleNotesLinkKeyDown}
+                onPaste={handleNotesPaste}
+                onContextMenu={handleNotesContextMenu}
               />
             </section>
           </div>
 
-          <aside className="card-editor-side" aria-label="Card properties">
+          <div
+            aria-label="Resize card detail columns"
+            aria-orientation="vertical"
+            aria-valuemax={CARD_EDITOR_SIDE_WIDTH_MAX}
+            aria-valuemin={CARD_EDITOR_SIDE_WIDTH_MIN}
+            aria-valuenow={Math.round(sideWidth)}
+            className="card-editor-splitter"
+            data-testid="card-editor-splitter"
+            role="separator"
+            tabIndex={0}
+            title="Resize columns"
+            onKeyDown={handleCardEditorSplitterKeyDown}
+            onPointerCancel={handleCardEditorSplitterPointerUp}
+            onPointerDown={handleCardEditorSplitterPointerDown}
+            onPointerMove={handleCardEditorSplitterPointerMove}
+            onPointerUp={handleCardEditorSplitterPointerUp}
+          />
+
+          <aside className="card-editor-side" aria-label="Card properties" data-testid="card-editor-side">
             <div className="side-section">
               <span className="side-heading">Status</span>
               <label

@@ -135,6 +135,40 @@ test.describe("smoke", () => {
     expect(titles).toEqual(["Earlier", "Later"]);
   });
 
+  test("card editor divider resizes the detail rail", async ({ page }) => {
+    await openApp(page);
+    await openWorkspace(page);
+
+    await page.getByTestId("create-board").click();
+    await page.getByTestId("text-dialog-input").fill("Resize Board");
+    await page.getByTestId("text-dialog-submit").click();
+
+    await page.getByTestId("add-card-todo").click();
+    await page.getByTestId("text-dialog-input").fill("Resizable card");
+    await page.getByTestId("text-dialog-submit").click();
+
+    const splitter = page.getByTestId("card-editor-splitter");
+    const side = page.getByTestId("card-editor-side");
+    await expect(splitter).toBeVisible();
+
+    const beforeBox = await side.boundingBox();
+    const splitterBox = await splitter.boundingBox();
+    expect(beforeBox).not.toBeNull();
+    expect(splitterBox).not.toBeNull();
+
+    await page.mouse.move(splitterBox!.x + splitterBox!.width / 2, splitterBox!.y + 40);
+    await page.mouse.down();
+    await page.mouse.move(splitterBox!.x - 120, splitterBox!.y + 40);
+    await page.mouse.up();
+
+    await expect.poll(async () => (await side.boundingBox())?.width ?? 0).toBeGreaterThan((beforeBox?.width ?? 0) + 60);
+
+    const widenedBox = await side.boundingBox();
+    await splitter.focus();
+    await page.keyboard.press("ArrowRight");
+    await expect.poll(async () => (await side.boundingBox())?.width ?? 0).toBeLessThan(widenedBox!.width);
+  });
+
   test("subtasks support unordered list items with optional links", async ({ page }) => {
     await openApp(page);
     await openWorkspace(page);
@@ -189,19 +223,49 @@ test.describe("smoke", () => {
       await page.waitForTimeout(50);
       await notesInput.focus();
       await notesInput.evaluate((element, selectedText) => {
-        const input = element as HTMLTextAreaElement;
-        const start = input.value.indexOf(selectedText);
-        input.setSelectionRange(start, start + selectedText.length);
+        const root = element as HTMLElement;
+        const walker = document.createTreeWalker(root, NodeFilter.SHOW_TEXT);
+        let node = walker.nextNode();
+        let offset = 0;
+        let startNode: Text | null = null;
+        let endNode: Text | null = null;
+        let startOffset = 0;
+        let endOffset = 0;
+        while (node) {
+          const textNode = node as Text;
+          const text = textNode.nodeValue ?? "";
+          const start = (root.textContent ?? "").indexOf(selectedText);
+          const end = start + selectedText.length;
+          if (!startNode && start >= offset && start <= offset + text.length) {
+            startNode = textNode;
+            startOffset = start - offset;
+          }
+          if (!endNode && end >= offset && end <= offset + text.length) {
+            endNode = textNode;
+            endOffset = end - offset;
+          }
+          offset += text.length;
+          node = walker.nextNode();
+        }
+        if (!startNode || !endNode) {
+          throw new Error(`Unable to select ${selectedText}`);
+        }
+        const range = document.createRange();
+        range.setStart(startNode, startOffset);
+        range.setEnd(endNode, endOffset);
+        const selection = window.getSelection();
+        selection?.removeAllRanges();
+        selection?.addRange(range);
       }, text);
     }
 
     await selectNotesText("Review");
     await page.getByTestId("notes-italic").click();
-    await expect(notesInput).toHaveValue("*Review* launch status at www.example.org/status.");
+    await expect(notesInput.locator("em")).toHaveText("Review");
 
     await selectNotesText("launch");
     await page.getByTestId("notes-bold").click();
-    await expect(notesInput).toHaveValue("*Review* **launch** status at www.example.org/status.");
+    await expect(notesInput.locator("strong")).toHaveText("launch");
 
     await selectNotesText("status");
     await page.getByTestId("notes-link").click();
@@ -209,7 +273,9 @@ test.describe("smoke", () => {
     await page.getByTestId("notes-link-url").fill("example.com/spec");
     await page.getByTestId("notes-link-apply").click();
 
-    await expect(notesInput).toHaveValue("*Review* **launch** [status](https://example.com/spec) at www.example.org/status.");
+    const editorLink = notesInput.getByRole("link", { name: "status", exact: true });
+    await expect(editorLink).toHaveAttribute("href", "https://example.com/spec");
+    await expect(notesInput).not.toContainText("[status](https://example.com/spec)");
     await page.getByTestId("save-card").click();
 
     const notes = page.getByTestId(/card-notes-.*/);
@@ -261,12 +327,29 @@ test.describe("smoke", () => {
     await page.keyboard.press("Enter");
     await expect(page.locator(".label-chip", { hasText: "urgent" })).toBeVisible();
 
-    await page.getByTestId("card-notes-input").click({ button: "right" });
+    const notesInputBox = await page.getByTestId("card-notes-input").boundingBox();
+    expect(notesInputBox).not.toBeNull();
+    await page.getByTestId("card-notes-input").dispatchEvent("contextmenu", {
+      bubbles: true,
+      button: 2,
+      cancelable: true,
+      clientX: notesInputBox!.x + 12,
+      clientY: notesInputBox!.y + 12
+    });
     await expect(contextMenu).toBeVisible();
     await contextMenu.getByRole("menuitem", { name: "Bold" }).click();
-    await expect(page.getByTestId("card-notes-input")).toHaveValue("**bold text**");
+    await expect(page.getByTestId("card-notes-input").locator("strong")).toHaveText("bold text");
 
-    await page.locator(".label-chip", { hasText: "urgent" }).click({ button: "right" });
+    const urgentLabel = page.locator(".label-chip", { hasText: "urgent" });
+    const urgentLabelBox = await urgentLabel.boundingBox();
+    expect(urgentLabelBox).not.toBeNull();
+    await urgentLabel.dispatchEvent("contextmenu", {
+      bubbles: true,
+      button: 2,
+      cancelable: true,
+      clientX: urgentLabelBox!.x + 12,
+      clientY: urgentLabelBox!.y + 12
+    });
     await expect(contextMenu).toBeVisible();
     await contextMenu.getByRole("menuitem", { name: "Remove label" }).click();
     await expect(page.locator(".label-chip", { hasText: "urgent" })).toBeHidden();
@@ -295,7 +378,10 @@ test.describe("smoke", () => {
     await page.getByTestId("text-dialog-input").fill("Publish update");
     await page.getByTestId("text-dialog-submit").click();
 
-    await page.getByTestId("card-notes-input").fill("Review the [launch spec](https://example.com/spec).\nTrack status at www.example.org/status.");
+    const notesInput = page.getByTestId("card-notes-input");
+    await notesInput.fill("Review the [launch spec](https://example.com/spec).\nTrack status at www.example.org/status.");
+    await expect(notesInput).toContainText("Review the launch spec.");
+    await expect(notesInput).not.toContainText("[launch spec](https://example.com/spec)");
     await page.getByTestId("save-card").click();
 
     const notes = page.getByTestId(/card-notes-.*/);
@@ -313,6 +399,47 @@ test.describe("smoke", () => {
     await bareLink.click();
     await expect(page.getByTestId("card-title-input")).toBeHidden();
     expect((await snapshot(page)).externalLinks).toContain("https://www.example.org/status");
+  });
+
+  test("note links can be edited and removed in the card editor", async ({ page }) => {
+    await openApp(page);
+    await openWorkspace(page);
+
+    await page.getByTestId("create-board").click();
+    await page.getByTestId("text-dialog-input").fill("Link Editing Board");
+    await page.getByTestId("text-dialog-submit").click();
+
+    await page.getByTestId("add-card-todo").click();
+    await page.getByTestId("text-dialog-input").fill("Publish update");
+    await page.getByTestId("text-dialog-submit").click();
+
+    const notesInput = page.getByTestId("card-notes-input");
+    await notesInput.fill("Review the [launch spec](https://example.com/spec).");
+    await expect(notesInput).toContainText("Review the launch spec.");
+    await expect(notesInput).not.toContainText("[launch spec](https://example.com/spec)");
+
+    const editorLink = notesInput.locator("a", { hasText: "launch spec" });
+    await expect(editorLink).toHaveAttribute("href", "https://example.com/spec");
+    await editorLink.click();
+
+    await expect(page.getByTestId("notes-link-form")).toBeVisible();
+    await page.getByTestId("notes-link-label").fill("release spec");
+    await page.getByTestId("notes-link-url").fill("example.com/release");
+    await page.getByTestId("notes-link-apply").click();
+
+    const updatedLink = notesInput.locator("a", { hasText: "release spec" });
+    await expect(updatedLink).toHaveAttribute("href", "https://example.com/release");
+    await updatedLink.click();
+    await page.getByTestId("notes-link-remove").click();
+
+    await expect(notesInput.locator("a", { hasText: "release spec" })).toHaveCount(0);
+    await expect(notesInput).toContainText("Review the release spec.");
+    await expect(notesInput).not.toContainText("[release spec](https://example.com/release)");
+
+    await page.getByTestId("save-card").click();
+    const saved = await snapshot(page);
+    expect(saved.cards[0].content).toContain("Review the release spec.");
+    expect(saved.cards[0].content).not.toContain("[release spec]");
   });
 
   test("Slack notifications tag assigned member handles", async ({ page }) => {

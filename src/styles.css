@@ -1485,9 +1485,9 @@ body.is-card-dragging * {
 .card-editor-body {
   overflow-y: auto;
   display: grid;
-  grid-template-columns: minmax(0, 1fr) 280px;
-  align-items: start;
-  gap: 28px;
+  grid-template-columns: minmax(380px, 1fr) 13px minmax(240px, var(--card-editor-side-width, 280px));
+  align-items: stretch;
+  gap: 16px;
   padding: 22px 24px;
 }
 
@@ -1505,8 +1505,49 @@ body.is-card-dragging * {
   align-content: start;
   gap: 0;
   min-width: 0;
-  padding-left: 22px;
-  border-left: 1px solid var(--border-soft);
+}
+
+.card-editor-splitter {
+  position: sticky;
+  top: 0;
+  align-self: stretch;
+  min-width: 13px;
+  width: 13px;
+  min-height: calc(100vh - 150px);
+  padding: 0;
+  background: transparent;
+  border: 0;
+  border-radius: var(--radius-pill);
+  cursor: col-resize;
+  touch-action: none;
+}
+
+.card-editor-splitter::before {
+  display: block;
+  width: 1px;
+  min-height: inherit;
+  height: 100%;
+  margin: 0 auto;
+  content: "";
+  background: var(--border-soft);
+  transition: background var(--transition), box-shadow var(--transition);
+}
+
+.card-editor-splitter:hover::before,
+.card-editor-splitter:focus-visible::before,
+.card-editor.is-resizing-columns .card-editor-splitter::before {
+  background: var(--focus);
+  box-shadow: 0 0 0 3px var(--focus-soft);
+}
+
+.card-editor-splitter:focus-visible {
+  outline: none;
+}
+
+.card-editor.is-resizing-columns,
+.card-editor.is-resizing-columns * {
+  cursor: col-resize;
+  user-select: none;
 }
 
 .card-editor footer {
@@ -1827,14 +1868,63 @@ body.is-card-dragging * {
   border-radius: var(--radius-sm);
 }
 
-.notes-editor textarea {
+.notes-editor textarea,
+.notes-rich-input {
   min-height: 190px;
   resize: vertical;
 }
 
+.notes-rich-input {
+  width: 100%;
+  max-height: min(42vh, 420px);
+  overflow: auto;
+  padding: 10px;
+  color: var(--text);
+  background: var(--input-bg);
+  border: 1px solid var(--border-soft);
+  border-radius: var(--radius-md);
+  outline: none;
+  font-size: var(--text-base);
+  line-height: 1.45;
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+  transition: border-color var(--transition), box-shadow var(--transition);
+}
+
+.notes-rich-input:focus {
+  border-color: var(--focus);
+  box-shadow: 0 0 0 3px var(--focus-soft);
+}
+
+.notes-rich-input:empty::before {
+  color: var(--text-faint);
+  content: attr(data-placeholder);
+  pointer-events: none;
+}
+
+.notes-rich-input a {
+  color: var(--accent-link);
+  cursor: pointer;
+  text-decoration: underline;
+  text-decoration-color: var(--accent-link-border);
+  text-underline-offset: 2px;
+}
+
+.notes-rich-input a:hover,
+.notes-rich-input a:focus-visible,
+.notes-rich-input a[data-active="true"] {
+  color: var(--accent-link-hover);
+  text-decoration-color: var(--accent-link-hover);
+}
+
+.notes-rich-input a[data-active="true"] {
+  border-radius: var(--radius-sm);
+  box-shadow: 0 0 0 3px var(--focus-soft);
+}
+
 .notes-link-form {
   display: grid;
-  grid-template-columns: minmax(0, 1fr) auto auto;
+  grid-template-columns: minmax(120px, 0.7fr) minmax(150px, 1fr) auto auto auto auto;
   gap: var(--space-3);
   min-width: 0;
   padding: var(--space-2);
@@ -2312,11 +2402,13 @@ body.is-card-dragging * {
     gap: 24px;
   }
 
+  .card-editor-splitter {
+    display: none;
+  }
+
   .card-editor-side {
     position: static;
-    padding-left: 0;
     padding-top: 20px;
-    border-left: 0;
     border-top: 1px solid var(--border-soft);
   }
 
