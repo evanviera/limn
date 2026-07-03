@@ -20,6 +20,7 @@ export interface HarnessSnapshot {
   cards: HarnessFile[];
   lastWorkspace: string | null;
   externalLinks: string[];
+  loadWorkspaceCount: number;
   slack: Array<{ webhookUrl: string; message: string }>;
   updater: {
     mode: "none" | "available" | "install-fail";

@@ -44,6 +44,42 @@ test.describe("smoke", () => {
     await expect.poll(async () => (await snapshot(page)).boards.length).toBeGreaterThan(0);
   });
 
+  test("external workspace change bursts reload once and show the latest board", async ({ page }) => {
+    await openApp(page);
+    await openWorkspace(page);
+
+    await page.getByTestId("create-board").click();
+    await page.getByTestId("text-dialog-input").fill("Sync Board");
+    await page.getByTestId("text-dialog-submit").click();
+    await expect.poll(async () => (await snapshot(page)).boards.length).toBe(1);
+    await page.waitForTimeout(200);
+
+    const beforeBurst = await snapshot(page);
+    const boardFile = beforeBurst.boards[0];
+    const board = JSON.parse(boardFile.content) as Record<string, unknown>;
+    const boardId = String(board.id);
+    const loadCountBeforeBurst = beforeBurst.loadWorkspaceCount;
+
+    await page.evaluate(({ fileName, baseBoard }) => {
+      const api = (window as {
+        __LIMN_E2E__?: {
+          externalEditBoard(fileName: string, board: Record<string, unknown>): void;
+        };
+      }).__LIMN_E2E__;
+      if (!api) {
+        throw new Error("Limn E2E harness not loaded");
+      }
+
+      api.externalEditBoard(fileName, { ...baseBoard, name: "Remote Sync 1", updatedAt: "2026-06-27T13:00:00.001Z" });
+      api.externalEditBoard(fileName, { ...baseBoard, name: "Remote Sync 2", updatedAt: "2026-06-27T13:00:00.002Z" });
+      api.externalEditBoard(fileName, { ...baseBoard, name: "Remote Sync 3", updatedAt: "2026-06-27T13:00:00.003Z" });
+    }, { fileName: boardFile.file_name, baseBoard: board });
+
+    await expect(page.getByTestId(`board-nav-${boardId}`)).toHaveText("Remote Sync 3");
+    await page.waitForTimeout(200);
+    expect((await snapshot(page)).loadWorkspaceCount).toBe(loadCountBeforeBurst + 1);
+  });
+
   test("cards in a list sort by due date", async ({ page }) => {
     await openApp(page);
     await openWorkspace(page);

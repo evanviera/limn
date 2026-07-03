@@ -16,6 +16,7 @@ interface HarnessSnapshot {
   cards: HarnessFile[];
   lastWorkspace: string | null;
   externalLinks: string[];
+  loadWorkspaceCount: number;
   slack: Array<{ webhookUrl: string; message: string }>;
   updater: {
     mode: UpdaterMode;
@@ -56,6 +57,7 @@ const updater = {
   restarted: false
 };
 let lastWorkspace: string | null = null;
+let loadWorkspaceCount = 0;
 
 if (new URLSearchParams(window.location.search).has("resetLimnE2e")) {
   sessionStorage.removeItem("limn-e2e-state");
@@ -77,6 +79,7 @@ if (new URLSearchParams(window.location.search).has("resetLimnE2e")) {
     slack.splice(0, slack.length, ...restored.slack);
     Object.assign(updater, restored.updater ?? { mode: "none", installed: false, restarted: false });
     lastWorkspace = restored.lastWorkspace;
+    loadWorkspaceCount = restored.loadWorkspaceCount ?? 0;
   }
 }
 
@@ -95,6 +98,7 @@ function snapshot(): HarnessSnapshot {
     cards: [...cards.entries()].sort().map(([file_name, content]) => ({ file_name, content })),
     lastWorkspace,
     externalLinks: [...externalLinks],
+    loadWorkspaceCount,
     slack: [...slack],
     updater: { ...updater }
   };
@@ -156,6 +160,7 @@ window.__LIMN_TEST_IPC__ = {
       case "watch_workspace":
         return undefined as T;
       case "load_workspace":
+        loadWorkspaceCount += 1;
         return loadFiles() as T;
       case "write_workspace_settings": {
         Object.assign(settings, JSON.parse(contentArg(args)) as WorkspaceSettings);

@@ -38,6 +38,7 @@ import {
 const memberColors = ["#2563eb", "#0f766e", "#b45309", "#be123c", "#7c3aed", "#4d7c0f"];
 
 const MAX_NAME_LENGTH = 80;
+const WORKSPACE_WATCH_REFRESH_DELAY_MS = 75;
 const THEME_STORAGE_KEY = "limn-theme";
 type ThemeMode = "dark" | "light";
 type UpdateStatus = "idle" | "checking" | "available" | "downloading" | "restart-ready" | "not-available" | "error";
@@ -133,7 +134,14 @@ export default function App() {
   selectedCardIdRef.current = selectedCardId;
   const cardsRef = useRef(cards);
   cardsRef.current = cards;
+  const membersRef = useRef(members);
+  membersRef.current = members;
   const pendingCardWriteRef = useRef<Record<string, string>>({});
+  const pendingMembersWriteRef = useRef<Member[] | null>(null);
+  const pendingSettingsWriteRef = useRef<WorkspaceSettings | null>(null);
+  const watchRefreshTimerRef = useRef<number | null>(null);
+  const watchRefreshInFlightRef = useRef(false);
+  const watchRefreshPendingRef = useRef(false);
   const visibleCards = useMemo(
     () => cards.filter((card) => !card.archived && card.boardId === activeBoard?.id),
     [activeBoard?.id, cards]
@@ -171,13 +179,14 @@ export default function App() {
     let unlisten: (() => void) | undefined;
     void watchWorkspace(workspacePath).catch((reason) => setError(errorText(reason)));
     void listen("workspace-changed", () => {
-      void refreshWorkspace(false);
+      scheduleWatchRefresh();
     }).then((dispose) => {
       unlisten = dispose;
     });
 
     return () => {
       unlisten?.();
+      clearScheduledWatchRefresh();
     };
   }, [workspacePath]);
 
@@ -232,33 +241,100 @@ export default function App() {
       return;
     }
     const data = await loadWorkspace(workspacePath);
-    settingsRef.current = data.settings;
-    setSettings(data.settings);
-    setMembers(data.membersFile.members);
+    let settingsToApply = data.settings;
+    let membersToApply = data.membersFile.members;
+    let cardsToApply = data.cards;
+    let openCardChangedOnDisk = false;
+    if (!showNotice && data.diagnostics.length === 0) {
+      // A silent (watch-driven) refresh: if the event only confirms our own
+      // just-written open card, preserve that object so the editor draft is not
+      // reset while the user continues typing.
+      const openId = selectedCardIdRef.current;
+      const before = openId ? cardsRef.current.find((card) => card.id === openId) : undefined;
+      const after = openId ? data.cards.find((card) => card.id === openId) : undefined;
+      const expectedSelfWrite = openId ? pendingCardWriteRef.current[openId] : undefined;
+      if (openId && before && expectedSelfWrite && after?.updatedAt === expectedSelfWrite) {
+        cardsToApply = data.cards.map((card) => (card.id === openId ? before : card));
+        delete pendingCardWriteRef.current[openId];
+      } else if (before && after && before.updatedAt !== after.updatedAt) {
+        openCardChangedOnDisk = true;
+      }
+
+      const currentSettings = settingsRef.current;
+      if (currentSettings && sameJson(data.settings, currentSettings)) {
+        settingsToApply = currentSettings;
+      }
+
+      const pendingSettings = pendingSettingsWriteRef.current;
+      if (pendingSettings && sameJson(data.settings, pendingSettings)) {
+        settingsToApply = settingsRef.current ?? data.settings;
+        pendingSettingsWriteRef.current = null;
+      }
+
+      if (sameJson(data.membersFile.members, membersRef.current)) {
+        membersToApply = membersRef.current;
+      }
+
+      const pendingMembers = pendingMembersWriteRef.current;
+      if (pendingMembers && sameJson(data.membersFile.members, pendingMembers)) {
+        membersToApply = membersRef.current;
+        pendingMembersWriteRef.current = null;
+      }
+    }
+    settingsRef.current = settingsToApply;
+    setSettings(settingsToApply);
+    setMembers(membersToApply);
     setBoards(data.boards);
-    setCards(data.cards);
+    setCards(cardsToApply);
     setActiveBoardId((current) => selectActiveBoardId(current, data.boards));
-    setSelectedCardId((current) => (current && data.cards.some((card) => card.id === current) ? current : null));
+    setSelectedCardId((current) => (current && cardsToApply.some((card) => card.id === current) ? current : null));
     if (showNotice) {
       setNotice(data.diagnostics.length > 0 ? `Workspace reloaded with warnings. ${data.diagnostics.join(" ")}` : "Workspace reloaded from disk.");
       setNoticeKind(data.diagnostics.length > 0 ? "warning" : "info");
     } else if (data.diagnostics.length > 0) {
       setNotice(data.diagnostics.join(" "));
       setNoticeKind("warning");
-    } else {
-      // A silent (watch-driven) refresh: if the card currently open in the
-      // editor changed on disk, warn before the user overwrites it.
-      const openId = selectedCardIdRef.current;
-      const before = openId ? cardsRef.current.find((card) => card.id === openId) : undefined;
-      const after = openId ? data.cards.find((card) => card.id === openId) : undefined;
-      const expectedSelfWrite = openId ? pendingCardWriteRef.current[openId] : undefined;
-      if (openId && expectedSelfWrite && after?.updatedAt === expectedSelfWrite) {
-        delete pendingCardWriteRef.current[openId];
-        return;
-      }
-      if (before && after && before.updatedAt !== after.updatedAt) {
-        setNotice("This card changed on disk. Reopen it to see the latest version.");
-        setNoticeKind("warning");
+    } else if (openCardChangedOnDisk) {
+      setNotice("This card changed on disk. Reopen it to see the latest version.");
+      setNoticeKind("warning");
+    }
+  }
+
+  function clearScheduledWatchRefresh() {
+    watchRefreshPendingRef.current = false;
+    if (watchRefreshTimerRef.current !== null) {
+      window.clearTimeout(watchRefreshTimerRef.current);
+      watchRefreshTimerRef.current = null;
+    }
+  }
+
+  function scheduleWatchRefresh() {
+    watchRefreshPendingRef.current = true;
+    if (watchRefreshTimerRef.current !== null || watchRefreshInFlightRef.current) {
+      return;
+    }
+
+    watchRefreshTimerRef.current = window.setTimeout(() => {
+      watchRefreshTimerRef.current = null;
+      void runScheduledWatchRefresh();
+    }, WORKSPACE_WATCH_REFRESH_DELAY_MS);
+  }
+
+  async function runScheduledWatchRefresh() {
+    if (watchRefreshInFlightRef.current) {
+      return;
+    }
+
+    watchRefreshPendingRef.current = false;
+    watchRefreshInFlightRef.current = true;
+    try {
+      await refreshWorkspace(false);
+    } catch (reason) {
+      setError(errorText(reason));
+    } finally {
+      watchRefreshInFlightRef.current = false;
+      if (watchRefreshPendingRef.current) {
+        scheduleWatchRefresh();
       }
     }
   }
@@ -605,6 +681,7 @@ export default function App() {
       return;
     }
     const nextMembers = upsertById(members, member);
+    pendingMembersWriteRef.current = nextMembers;
     setMembers(nextMembers);
     await saveMembers(workspacePath, { schemaVersion: 1, members: nextMembers });
   }
@@ -614,6 +691,7 @@ export default function App() {
       return;
     }
     const nextMembers = members.filter((member) => member.id !== memberId);
+    pendingMembersWriteRef.current = nextMembers;
     setMembers(nextMembers);
     await saveMembers(workspacePath, { schemaVersion: 1, members: nextMembers });
   }
@@ -624,6 +702,7 @@ export default function App() {
     }
     const updated = { ...nextSettings, updatedAt: timestamp() };
     settingsRef.current = updated;
+    pendingSettingsWriteRef.current = updated;
     setSettings(updated);
     await saveSettings(workspacePath, updated);
     setNotice("Settings saved.");
@@ -3091,6 +3170,10 @@ function initials(name: string) {
 function upsertById<T extends { id: string }>(items: T[], item: T): T[] {
   const exists = items.some((current) => current.id === item.id);
   return exists ? items.map((current) => (current.id === item.id ? item : current)) : [...items, item];
+}
+
+function sameJson(left: unknown, right: unknown) {
+  return JSON.stringify(left) === JSON.stringify(right);
 }
 
 function selectActiveBoardId(current: string, boards: Board[]): string {
