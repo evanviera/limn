@@ -1,0 +1,160 @@
+:root {
+  --app-bg: #101214;
+  --sidebar-bg: #171714;
+  --pane-bg: #16191c;
+  --pane-bg-2: #1b1f23;
+  --pane-bg-3: #22272b;
+  --editor-bg: #121416;
+  --editor-chrome-bg: rgba(18, 20, 22, 0.94);
+  --editor-footer-bg: rgba(18, 20, 22, 0.96);
+  --surface: #1d2226;
+  --surface-raised: #242a2f;
+  --surface-hover: #2a3136;
+  --border: #3a4248;
+  --border-soft: #293036;
+  --text: #e9edf0;
+  --text-strong: #f8faf8;
+  --text-muted: #a7b0b7;
+  --text-faint: #77828a;
+  --accent: #4f9d75;
+  --accent-hover: #5cb684;
+  --accent-text: #f8faf8;
+  --accent-soft: rgba(79, 157, 117, 0.14);
+  --accent-border: rgba(105, 186, 138, 0.38);
+  --accent-link: #7bc7d9;
+  --accent-link-hover: #9fe1ee;
+  --accent-link-border: rgba(123, 199, 217, 0.6);
+  --selection: rgba(105, 186, 138, 0.3);
+  --success: #76c987;
+  --success-soft: rgba(118, 201, 135, 0.12);
+  --success-border: rgba(118, 201, 135, 0.32);
+  --warning: #d5a94e;
+  --warning-soft: rgba(213, 169, 78, 0.13);
+  --warning-border: rgba(213, 169, 78, 0.34);
+  --danger: #e27672;
+  --danger-text: #f8faf8;
+  --danger-soft: rgba(226, 118, 114, 0.12);
+  --danger-border: rgba(226, 118, 114, 0.46);
+  --input-bg: #111416;
+  --overlay-bg: rgba(5, 7, 8, 0.66);
+  --button-border: rgba(255, 255, 255, 0.08);
+  --empty-overlay: rgba(24, 24, 22, 0.64);
+  --welcome-sheen: rgba(255, 255, 255, 0.035);
+  --active-line: rgba(255, 255, 255, 0.035);
+  --row-hover: rgba(255, 255, 255, 0.06);
+  --subtle-bg: rgba(255, 255, 255, 0.035);
+  --subtask-focus-bg: rgba(255, 255, 255, 0.018);
+  --column-bg: rgba(255, 255, 255, 0.018);
+  --column-hover-border: rgba(255, 255, 255, 0.12);
+  --card-hover-border: rgba(255, 255, 255, 0.14);
+  --chip-bg: rgba(255, 255, 255, 0.035);
+  --chip-remove-hover-bg: rgba(255, 255, 255, 0.1);
+  --drag-shadow: 0 18px 42px rgba(0, 0, 0, 0.34), 0 0 0 1px var(--accent-border);
+  --focus: 0 0 0 2px rgba(118, 170, 139, 0.48);
+  --shadow: 0 24px 80px rgba(0, 0, 0, 0.42);
+  --font-ui: -apple-system, BlinkMacSystemFont, "Segoe UI Variable", "Segoe UI", system-ui, sans-serif;
+  --color-scheme: dark;
+
+  /* Type scale — five steps, only the first is "decorative" (uppercase labels).
+     xs 11 · sm 12 · base 14 · lg 16 · xl 22. Everything in the UI maps to one
+     of these; there is deliberately no 13/15px in-between step. */
+  --text-xs: 0.6875rem;   /* 11px — uppercase eyebrows / avatar initials only */
+  --text-sm: 0.75rem;     /* 12px — labels, meta, chips, section headers */
+  --text-base: 0.875rem;  /* 14px — body, inputs, buttons, rows (default) */
+  --text-lg: 1rem;        /* 16px — panel & dialog titles */
+  --text-xl: 1.375rem;    /* 22px — page / board titles */
+
+  /* Weights */
+  --weight-normal: 500;
+  --weight-medium: 600;
+  --weight-bold: 700;
+
+  /* Spacing scale */
+  --space-1: 2px;
+  --space-2: 4px;
+  --space-3: 6px;
+  --space-4: 8px;
+  --space-5: 12px;
+  --space-6: 16px;
+
+  /* Radii */
+  --radius-sm: 4px;
+  --radius-md: 6px;
+  --radius-lg: 8px;
+  --radius-pill: 999px;
+
+  /* Motion */
+  --transition: 140ms ease;
+  --transition-panel: 180ms cubic-bezier(0.2, 0.7, 0.3, 1);
+
+  color-scheme: var(--color-scheme);
+  color: var(--text);
+  background: var(--app-bg);
+  font-family: var(--font-ui);
+  font-size: 16px;
+  line-height: 1.45;
+  font-synthesis: none;
+  text-rendering: optimizeLegibility;
+}
+
+:root[data-theme="light"] {
+  --app-bg: #f6f8f6;
+  --sidebar-bg: #e9efeb;
+  --pane-bg: #ffffff;
+  --pane-bg-2: #ffffff;
+  --pane-bg-3: #edf2ee;
+  --editor-bg: #fbfcfa;
+  --editor-chrome-bg: rgba(251, 252, 250, 0.94);
+  --editor-footer-bg: rgba(251, 252, 250, 0.96);
+  --surface: #f7faf8;
+  --surface-raised: #ffffff;
+  --surface-hover: #eef4f0;
+  --border: #afbbb4;
+  --border-soft: #d5ddd7;
+  --text: #25302d;
+  --text-strong: #111817;
+  --text-muted: #56635e;
+  --text-faint: #728079;
+  --accent: #2f7d57;
+  --accent-hover: #256846;
+  --accent-text: #ffffff;
+  --accent-soft: rgba(47, 125, 87, 0.12);
+  --accent-border: rgba(47, 125, 87, 0.32);
+  --accent-link: #0b6f83;
+  --accent-link-hover: #075b6b;
+  --accent-link-border: rgba(11, 111, 131, 0.42);
+  --selection: rgba(47, 125, 87, 0.22);
+  --success: #2f7d57;
+  --success-soft: rgba(47, 125, 87, 0.11);
+  --success-border: rgba(47, 125, 87, 0.28);
+  --warning: #8a5a05;
+  --warning-soft: rgba(176, 111, 0, 0.1);
+  --warning-border: rgba(176, 111, 0, 0.28);
+  --danger: #b43a37;
+  --danger-text: #ffffff;
+  --danger-soft: rgba(180, 58, 55, 0.09);
+  --danger-border: rgba(180, 58, 55, 0.28);
+  --input-bg: #ffffff;
+  --overlay-bg: rgba(24, 31, 29, 0.36);
+  --button-border: rgba(17, 24, 23, 0.11);
+  --empty-overlay: rgba(255, 255, 255, 0.74);
+  --welcome-sheen: rgba(47, 125, 87, 0.055);
+  --active-line: rgba(17, 24, 23, 0.045);
+  --row-hover: rgba(47, 125, 87, 0.08);
+  --subtle-bg: rgba(17, 24, 23, 0.045);
+  --subtask-focus-bg: rgba(47, 125, 87, 0.06);
+  --column-bg: rgba(255, 255, 255, 0.78);
+  --column-hover-border: rgba(47, 125, 87, 0.24);
+  --card-hover-border: rgba(47, 125, 87, 0.24);
+  --chip-bg: rgba(17, 24, 23, 0.045);
+  --chip-remove-hover-bg: rgba(17, 24, 23, 0.08);
+  --drag-shadow: 0 18px 42px rgba(31, 44, 39, 0.16), 0 0 0 1px var(--accent-border);
+  --focus: 0 0 0 2px rgba(47, 125, 87, 0.34);
+  --shadow: 0 24px 80px rgba(31, 44, 39, 0.18);
+  --color-scheme: light;
+}
+
+:root[data-platform="windows"] {
+  -webkit-font-smoothing: antialiased;
+  text-rendering: geometricPrecision;
+}

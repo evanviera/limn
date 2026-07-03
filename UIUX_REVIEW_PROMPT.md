@@ -4,8 +4,8 @@ You are doing an extensive UI/UX audit of Limn, a Tauri + React 19 desktop Kanba
 
 ## The codebase (read these first)
 
-- All UI lives in one file: `src/App.tsx` (~1,465 lines). Components: `App`, `BoardView`, `TaskCardBody`, `CardEditor`, `MembersView`, `SettingsView`, `TextDialog`, `ConfirmDialog`, `EmptyState`, `MemberDots`.
-- All styling is in one vanilla-CSS file: `src/styles.css` (~1,155 lines). Design tokens are CSS custom properties in `:root` at the top.
+- The UI is split across `src/App.tsx` (the root `App` component — state, workspace lifecycle, view routing) and `src/components/*.tsx` (`BoardView` incl. `TaskCardBody`/`MemberDots`, `CardEditor`, `MembersView`, `SettingsView`, `dialogs.tsx` for `TextDialog`/`ConfirmDialog`/`EmptyState`, `RichNoteText`, `icons.tsx`, `contextMenu.tsx`, `WindowsTitlebar`). Pure logic/hooks live in `src/lib/*.ts`. See [`docs/architecture.md`](docs/architecture.md).
+- Styling is vanilla CSS split across `src/styles/*.css`, imported in cascade order by the `src/styles.css` barrel. Design tokens are CSS custom properties in `:root` at the top of `src/styles/tokens.css`.
 - **Dark theme only.** Do not add a light theme. Keep the burgundy accent (`--accent: #832021`).
 - E2E test harness exists: run with `?limnE2e`; selectors use `data-testid`. There is a `product-tester` skill for driving the UI.
 
@@ -53,7 +53,7 @@ You are doing an extensive UI/UX audit of Limn, a Tauri + React 19 desktop Kanba
 - Don't rely on color alone (e.g. completed = green) — pair with icon/strikethrough.
 
 ## Constraints
-- Keep changes scoped to `src/App.tsx` and `src/styles.css` unless a fix genuinely requires more.
+- Edit the component the change belongs to (`src/App.tsx` or a `src/components/*.tsx`) and the matching `src/styles/*.css` partial — don't concentrate unrelated changes into one file, and don't add rules to the `src/styles.css` barrel. Keep each file focused (see [`docs/architecture.md`](docs/architecture.md)).
 - Don't break `data-testid` attributes or the e2e harness.
 - No new dependencies or UI libraries without asking.
 - Preserve the dark, burgundy-accented identity.

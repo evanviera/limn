@@ -1,0 +1,84 @@
+import type { Board, Card } from "../types";
+import { THEME_STORAGE_KEY, type ThemeMode } from "./constants";
+
+export function compareCardsByDueDate(left: Card, right: Card): number {
+  const dueComparison = dueSortValue(left).localeCompare(dueSortValue(right));
+  if (dueComparison !== 0) {
+    return dueComparison;
+  }
+
+  const createdComparison = left.createdAt.localeCompare(right.createdAt);
+  if (createdComparison !== 0) {
+    return createdComparison;
+  }
+
+  return left.title.localeCompare(right.title);
+}
+
+export function dueSortValue(card: Card): string {
+  return card.due || "9999-12-31";
+}
+export function readStoredThemeMode(): ThemeMode {
+  if (import.meta.env.DEV && new URLSearchParams(window.location.search).has("resetLimnE2e")) {
+    localStorage.removeItem(THEME_STORAGE_KEY);
+  }
+  return localStorage.getItem(THEME_STORAGE_KEY) === "light" ? "light" : "dark";
+}
+
+// Extract a clean message for user-facing error banners so we don't surface the
+// stringified Error object (e.g. "Error: …") prefix to the user.
+export function errorText(reason: unknown) {
+  return reason instanceof Error ? reason.message : String(reason);
+}
+
+// Slack only renders a real @mention (a ping) when the message text contains
+// the `<@MEMBER_ID>` syntax, where MEMBER_ID is the internal Slack member ID
+// (e.g. "U024BE7LH"). Plain "@handle" text is never resolved into a mention, so
+// we wrap member IDs in the mention syntax. Values that aren't member IDs fall
+// back to plain "@text" so the assignee is still shown (just not pinged).
+export function slackTag(handle?: string) {
+  const trimmed = handle?.trim() ?? "";
+  if (!trimmed) {
+    return "";
+  }
+  // Already in `<@…>` mention form — pass through untouched.
+  if (trimmed.startsWith("<@") && trimmed.endsWith(">")) {
+    return trimmed;
+  }
+  // Accept a member ID with or without a leading "@". Slack member IDs start
+  // with U (users) or W (Enterprise Grid users) followed by uppercase alnum.
+  const id = trimmed.replace(/^@/, "");
+  if (/^[UW][A-Z0-9]{6,}$/.test(id)) {
+    return `<@${id}>`;
+  }
+  return trimmed.startsWith("@") ? trimmed : `@${trimmed}`;
+}
+
+export function initials(name: string) {
+  return name
+    .split(/\s+/)
+    .map((part) => part[0])
+    .join("")
+    .slice(0, 2)
+    .toUpperCase();
+}
+
+export function upsertById<T extends { id: string }>(items: T[], item: T): T[] {
+  const exists = items.some((current) => current.id === item.id);
+  return exists ? items.map((current) => (current.id === item.id ? item : current)) : [...items, item];
+}
+
+export function sameJson(left: unknown, right: unknown) {
+  return JSON.stringify(left) === JSON.stringify(right);
+}
+
+export function selectActiveBoardId(current: string, boards: Board[]): string {
+  if (current && boards.some((board) => board.id === current)) {
+    return current;
+  }
+  return boards[0]?.id ?? "";
+}
+
+export function countLabel(count: number, label: string) {
+  return `${count} ${label}${count === 1 ? "" : "s"}`;
+}

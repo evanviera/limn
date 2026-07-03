@@ -10,7 +10,7 @@ You are a meticulous QA engineer auditing **Limn**, a Tauri + React 19 desktop K
 
 ## The one hard rule
 
-**Report findings. Do not fix anything.** Do not edit `src/`, `styles.css`, or any app code. Do not "while I'm here" refactor. The only files you may write are QA artifacts and the report itself (under `qa-artifacts/`). If you spot a one-line fix, write it up as a finding with a suggested fix — do not apply it.
+**Report findings. Do not fix anything.** Do not edit `src/`, `src-tauri/`, or any app code. Do not "while I'm here" refactor. The only files you may write are QA artifacts and the report itself (under `qa-artifacts/`). If you spot a one-line fix, write it up as a finding with a suggested fix — do not apply it.
 
 If the user explicitly asks you to fix something afterward, that is a separate, new task — finish the report first.
 
@@ -18,7 +18,8 @@ If the user explicitly asks you to fix something afterward, that is a separate, 
 
 - Browser-driven E2E harness: [`src/testHarness.ts`](../../../src/testHarness.ts). Enabled by the `?limnE2e` query param; mocks all Tauri IPC and exposes `window.__LIMN_E2E__.snapshot()`. Loads **only in Vite DEV mode**, so everything runs against `npm run dev:vite` (Playwright's `webServer` starts/reuses it automatically).
 - Playwright config: [`playwright.config.ts`](../../../playwright.config.ts). Helpers: [`tests/e2e/harness.ts`](../../../tests/e2e/harness.ts) (`openApp`, `openWorkspace`, `snapshot`).
-- Selectors are `data-testid` on real controls — grep [`src/App.tsx`](../../../src/App.tsx) for the list. **Don't change them.**
+- Selectors are `data-testid` on real controls — grep `src/` (they live in `src/App.tsx` and `src/components/*.tsx`) for the list. **Don't change them.**
+- Codebase map: [`docs/architecture.md`](../../../docs/architecture.md). The UI is split across `src/App.tsx` (root/orchestration) and `src/components/*.tsx`; CSS is split across `src/styles/*.css` (imported by the `src/styles.css` barrel).
 
 ## Workflow
 
@@ -51,7 +52,7 @@ Walk [`references/qa-checklist.md`](references/qa-checklist.md) surface by surfa
 
 ### 4. Localize each finding in source
 
-For every finding, point to the responsible code: `src/App.tsx:<line>` for behavior/markup, `src/styles.css:<line>` for styling. Grep for the relevant `data-testid`, class, or token so the report is actionable. Don't guess line numbers — verify them.
+For every finding, point to the responsible code: `src/App.tsx` or the relevant `src/components/*.tsx` (e.g. `CardEditor.tsx`, `BoardView.tsx`, `SettingsView.tsx`) `:<line>` for behavior/markup, and the matching `src/styles/*.css` partial `:<line>` for styling. Grep for the relevant `data-testid`, class, or token so the report is actionable. Don't guess line numbers — verify them.
 
 ## Deliverable: the findings report
 
@@ -71,7 +72,7 @@ Each finding uses this shape:
 - **Evidence:** qa-artifacts/07-card-editor-filled.png (+ steps to reproduce)
 - **What's wrong:** <observed behavior/appearance, concrete and specific>
 - **Expected:** <what good looks like>
-- **Where:** src/App.tsx:1230 / src/styles.css:412
+- **Where:** src/components/CardEditor.tsx:120 / src/styles/card-editor.css:88
 - **Suggested fix:** <prose only — no diff, no edit>
 ```
 

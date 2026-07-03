@@ -1,0 +1,78 @@
+.modal-backdrop {
+  position: fixed;
+  inset: 0;
+  z-index: 20;
+  display: flex;
+  justify-content: flex-end;
+  background: var(--overlay-bg);
+  backdrop-filter: blur(8px);
+  animation: fade-in var(--transition) ease;
+}
+
+.dialog-backdrop {
+  position: fixed;
+  inset: 0;
+  z-index: 30;
+  display: grid;
+  place-items: center;
+  padding: var(--space-6);
+  background: var(--overlay-bg);
+  backdrop-filter: blur(8px);
+  animation: fade-in var(--transition) ease;
+}
+
+@keyframes fade-in {
+  from {
+    opacity: 0;
+  }
+}
+
+@keyframes panel-in {
+  from {
+    opacity: 0;
+    transform: translateX(12px);
+  }
+}
+
+@keyframes dialog-in {
+  from {
+    opacity: 0;
+    transform: translateY(8px) scale(0.98);
+  }
+}
+
+.text-dialog {
+  display: grid;
+  gap: var(--space-5);
+  width: min(420px, 100%);
+  padding: var(--space-5);
+  color: var(--text);
+  background: var(--pane-bg);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-lg);
+  box-shadow: var(--shadow);
+  animation: dialog-in var(--transition-panel);
+}
+
+.text-dialog header,
+.text-dialog footer {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--space-5);
+}
+
+.text-dialog header {
+  padding-bottom: var(--space-5);
+  border-bottom: 1px solid var(--border-soft);
+}
+
+.text-dialog h2 {
+  margin: 0;
+  color: var(--text-strong);
+  font-size: var(--text-lg);
+}
+
+.text-dialog footer {
+  justify-content: flex-end;
+}

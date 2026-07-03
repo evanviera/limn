@@ -1,0 +1,283 @@
+.board-view {
+  overflow: hidden;
+  display: grid;
+  grid-template-rows: auto minmax(0, 1fr);
+}
+
+.columns {
+  overflow-x: auto;
+  overflow-y: hidden;
+  display: grid;
+  grid-auto-flow: column;
+  grid-auto-columns: minmax(288px, 1fr);
+  align-items: start;
+  gap: var(--space-6);
+  min-height: 0;
+  padding-bottom: var(--space-4);
+}
+
+.column {
+  display: grid;
+  grid-template-rows: auto minmax(0, 1fr) auto;
+  gap: var(--space-4);
+  max-height: 100%;
+  min-height: 0;
+  padding: 12px;
+  background: var(--column-bg);
+  border: 1px solid var(--border-soft);
+  border-radius: var(--radius-lg);
+  transition: border-color var(--transition), background var(--transition);
+}
+
+.column:focus-within,
+.column:hover {
+  border-color: var(--column-hover-border);
+}
+
+/* Drop-target highlight while a card is being dragged */
+body.is-card-dragging .column:hover {
+  border-color: var(--accent-border);
+  background: var(--accent-soft);
+}
+
+.column-header {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto auto auto;
+  align-items: center;
+  gap: var(--space-3);
+  min-height: 28px;
+  padding: 0 var(--space-1);
+}
+
+.column-header h2 {
+  overflow: hidden;
+  margin: 0;
+  color: var(--text-strong);
+  font-size: var(--text-base);
+  font-weight: var(--weight-bold);
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.column-header span {
+  color: var(--text-muted);
+  font-size: var(--text-sm);
+  font-weight: var(--weight-normal);
+  font-variant-numeric: tabular-nums;
+  opacity: 0.7;
+}
+
+.column-header button {
+  width: 28px;
+  min-width: 28px;
+  min-height: 28px;
+  padding: 0;
+  color: var(--text-faint);
+  font-size: var(--text-sm);
+  background: transparent;
+  border-color: transparent;
+}
+
+.column-header button:hover:not(:disabled) {
+  color: var(--text-strong);
+}
+
+.card-stack {
+  overflow-y: auto;
+  display: grid;
+  align-content: start;
+  gap: 10px;
+  min-height: 0;
+  padding-right: var(--space-1);
+}
+
+.task-card {
+  display: grid;
+  gap: 9px;
+  min-width: 0;
+  padding: 14px 12px;
+  color: var(--text);
+  background: var(--pane-bg-2);
+  border: 1px solid var(--border-soft);
+  border-radius: var(--radius-lg);
+  cursor: grab;
+  user-select: none;
+  -webkit-user-select: none;
+  transition: background var(--transition), border-color var(--transition),
+    box-shadow var(--transition), opacity var(--transition);
+}
+
+.task-card:hover {
+  background: var(--surface-hover);
+  border-color: var(--card-hover-border);
+}
+
+.task-card:focus-visible {
+  outline: none;
+  box-shadow: var(--focus);
+  border-color: var(--accent-border);
+}
+
+.task-card:active {
+  cursor: grabbing;
+}
+
+.task-card.drag-source {
+  opacity: 0.38;
+}
+
+.task-card.drag-preview {
+  position: fixed;
+  top: 0;
+  left: 0;
+  z-index: 40;
+  pointer-events: none;
+  cursor: grabbing;
+  background: var(--surface-hover);
+  border-color: var(--accent-border);
+  box-shadow: var(--drag-shadow);
+}
+
+body.is-card-dragging,
+body.is-card-dragging * {
+  cursor: grabbing !important;
+  user-select: none !important;
+  -webkit-user-select: none !important;
+}
+
+.task-card.completed {
+  background: linear-gradient(90deg, var(--success-soft), var(--pane-bg-2) 38%);
+  border-color: var(--success-border);
+  box-shadow: inset 2px 0 0 var(--success);
+}
+
+.task-card h3 {
+  overflow-wrap: anywhere;
+  margin: 0;
+  color: var(--text-strong);
+  font-size: var(--text-base);
+  font-weight: var(--weight-bold);
+  line-height: 1.25;
+}
+
+.task-card.completed h3 {
+  text-decoration: line-through;
+  text-decoration-color: var(--success-border);
+  text-decoration-thickness: 1px;
+}
+
+/* The card title is a real button so keyboard users have an explicit "open
+   card" target, while the card itself is a plain (non-button) container. */
+.card-open {
+  display: inline;
+  margin: 0;
+  padding: 0;
+  color: inherit;
+  font: inherit;
+  text-align: left;
+  background: none;
+  border: none;
+  cursor: pointer;
+}
+
+.card-open:focus-visible {
+  outline: none;
+  border-radius: var(--radius-sm);
+  box-shadow: var(--focus);
+}
+
+.done-check {
+  color: var(--success);
+  font-weight: var(--weight-bold);
+}
+
+.task-card footer {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  justify-content: space-between;
+  gap: var(--space-3) var(--space-4);
+  min-width: 0;
+  color: var(--text-muted);
+  font-size: var(--text-sm);
+  line-height: 1.25;
+}
+
+.task-card footer > span:first-child {
+  overflow: hidden;
+  flex: 1 0 76px;
+  min-width: 0;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.label-row {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-3);
+}
+
+.label-row span {
+  max-width: 100%;
+  overflow: hidden;
+  padding: 2px 8px;
+  color: var(--text);
+  background: var(--chip-bg);
+  border: 1px solid var(--border-soft);
+  border-radius: var(--radius-pill);
+  font-size: var(--text-sm);
+  font-weight: var(--weight-medium);
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.add-card {
+  margin-top: auto;
+  min-height: 36px;
+  color: var(--text);
+  background: var(--surface);
+  border-color: var(--border-soft);
+  font-weight: var(--weight-bold);
+}
+
+.add-card:hover:not(:disabled) {
+  background: var(--surface-hover);
+  border-color: var(--border);
+}
+
+.empty-list {
+  margin: 0;
+  padding: 17px var(--space-4);
+  color: var(--text-muted);
+  text-align: center;
+  background: var(--empty-overlay);
+  border: 1px dashed var(--border-soft);
+  border-radius: var(--radius-lg);
+  font-size: var(--text-sm);
+}
+
+.card-notes-preview {
+  display: -webkit-box;
+  overflow: hidden;
+  margin: 0;
+  color: var(--text-muted);
+  font-size: var(--text-sm);
+  line-height: 1.38;
+  overflow-wrap: anywhere;
+  white-space: pre-wrap;
+  -webkit-box-orient: vertical;
+  -webkit-line-clamp: 3;
+}
+
+.card-notes-preview a {
+  color: var(--accent-link);
+  text-decoration-line: underline;
+  text-decoration-color: var(--accent-link-border);
+  text-underline-offset: 2px;
+}
+
+.card-notes-preview a:hover,
+.card-notes-preview a:focus-visible {
+  color: var(--accent-link-hover);
+  text-decoration-color: var(--accent-link-hover);
+}

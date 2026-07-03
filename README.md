@@ -18,6 +18,10 @@ cards/
 
 Board files are JSON. Card files are Markdown with frontmatter so the data remains readable and editable outside the app.
 
+## Project Structure
+
+See [docs/architecture.md](docs/architecture.md) for the codebase map and the conventions that keep files focused. In brief: the React frontend is split across `src/App.tsx` (root/orchestration), `src/components/*.tsx`, and `src/lib/*.ts`; CSS lives in `src/styles/*.css` (imported by the `src/styles.css` barrel); the Rust backend is `src-tauri/src/` (`lib.rs`, `menu.rs`, `tests.rs`). **Keep single files focused — split before they swell** rather than growing one file unbounded.
+
 ## Development
 
 Install dependencies:

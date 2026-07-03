@@ -18,7 +18,9 @@ npm run test:e2e:ui       # Playwright UI mode (time-travel, picker)
 npm run test:e2e:report   # open the last HTML report
 ```
 
-Target a single file/test: `npx playwright test smoke -g "welcome"`.
+Target a single file/test: `npx playwright test board -g "welcome"`. Specs are
+grouped by feature: `board`, `card-editor`, `notes`, `integrations` (Slack +
+updater), plus the `qa-sweep` evidence run.
 
 ## Writing a test
 
@@ -51,7 +53,8 @@ asking Claude to "QA the app".
 ## Conventions
 
 - **Select by `data-testid`** (e.g. `create-board`, `text-dialog-input`,
-  `nav-settings`). Grep `src/App.tsx` for the full list; don't break these.
+  `nav-settings`). Grep `src/` for the full list — they live in `src/App.tsx`
+  and `src/components/*.tsx`; don't break these.
 - **Assert on harness state** via `snapshot(page)` rather than re-reading the
   DOM when you want to confirm persistence.
 - Native `window.prompt`/`confirm` are stubbed by the harness; the app uses

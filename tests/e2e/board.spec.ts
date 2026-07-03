@@ -1,0 +1,137 @@
+import { test, expect } from "@playwright/test";
+import { openApp, openWorkspace, setUpdaterMode, snapshot } from "./harness";
+
+test.describe("smoke", () => {
+  test("welcome screen renders", async ({ page }) => {
+    await openApp(page);
+    await expect(page.getByTestId("welcome-open-workspace")).toBeVisible();
+    await expect(page.getByRole("heading", { level: 1 })).toBeVisible();
+  });
+
+  test("opening a workspace reveals the board shell", async ({ page }) => {
+    await openApp(page);
+    await openWorkspace(page);
+    await expect(page.getByTestId("create-board")).toBeVisible();
+    await expect(page.getByTestId("nav-members")).toBeVisible();
+    await expect(page.getByTestId("nav-settings")).toBeVisible();
+  });
+
+  test("theme toggle switches to light mode and persists", async ({ page }) => {
+    await openApp(page);
+    await openWorkspace(page);
+
+    await expect(page.locator("html")).toHaveAttribute("data-theme", "dark");
+    await page.getByTestId("theme-toggle").click();
+    await expect(page.locator("html")).toHaveAttribute("data-theme", "light");
+    await expect(page.getByTestId("theme-toggle")).toContainText("Dark mode");
+
+    await openApp(page, { reset: false });
+    await expect(page.locator("html")).toHaveAttribute("data-theme", "light");
+    await openWorkspace(page);
+    await expect(page.getByTestId("theme-toggle")).toBeVisible();
+    await expect(page.getByTestId("theme-toggle")).toContainText("Dark mode");
+  });
+
+  test("creating a board persists to the harness snapshot", async ({ page }) => {
+    await openApp(page);
+    await openWorkspace(page);
+
+    // Create board opens a TextDialog for the name, then persists on submit.
+    await page.getByTestId("create-board").click();
+    await page.getByTestId("text-dialog-input").fill("QA Board");
+    await page.getByTestId("text-dialog-submit").click();
+
+    await expect.poll(async () => (await snapshot(page)).boards.length).toBeGreaterThan(0);
+  });
+
+  test("boards can be organized into categories", async ({ page }) => {
+    await openApp(page);
+    await openWorkspace(page);
+
+    await page.getByTestId("create-board").click();
+    await page.getByTestId("text-dialog-input").fill("Roadmap");
+    await page.getByTestId("text-dialog-submit").click();
+
+    await page.getByTestId("create-board-category").click();
+    await page.getByTestId("text-dialog-input").fill("Client Work");
+    await page.getByTestId("text-dialog-submit").click();
+
+    const stateWithGroup = await snapshot(page);
+    const boardFile = stateWithGroup.boards[0];
+    const board = JSON.parse(boardFile.content) as { id: string; groupId?: string };
+    const group = (stateWithGroup.settings.boardGroups as Array<{ id: string; name: string }>)[0];
+    expect(group.name).toBe("Client Work");
+
+    await expect(page.getByTestId(`board-group-${group.id}`)).toContainText("Client Work");
+    await expect(page.getByTestId(`board-group-${group.id}`)).toContainText("0 boards");
+    await page.getByTestId(`board-nav-${board.id}`).click({ button: "right" });
+    await page.getByTestId("context-menu").getByRole("menuitem", { name: "Move to Client Work" }).click();
+
+    await expect(page.getByTestId(`board-group-${group.id}`)).toContainText("1 board");
+    await expect.poll(async () => {
+      const latest = await snapshot(page);
+      return JSON.parse(latest.boards[0].content).groupId;
+    }).toBe(group.id);
+  });
+
+  test("external workspace change bursts reload once and show the latest board", async ({ page }) => {
+    await openApp(page);
+    await openWorkspace(page);
+
+    await page.getByTestId("create-board").click();
+    await page.getByTestId("text-dialog-input").fill("Sync Board");
+    await page.getByTestId("text-dialog-submit").click();
+    await expect.poll(async () => (await snapshot(page)).boards.length).toBe(1);
+    await page.waitForTimeout(200);
+
+    const beforeBurst = await snapshot(page);
+    const boardFile = beforeBurst.boards[0];
+    const board = JSON.parse(boardFile.content) as Record<string, unknown>;
+    const boardId = String(board.id);
+    const loadCountBeforeBurst = beforeBurst.loadWorkspaceCount;
+
+    await page.evaluate(({ fileName, baseBoard }) => {
+      const api = (window as {
+        __LIMN_E2E__?: {
+          externalEditBoard(fileName: string, board: Record<string, unknown>): void;
+        };
+      }).__LIMN_E2E__;
+      if (!api) {
+        throw new Error("Limn E2E harness not loaded");
+      }
+
+      api.externalEditBoard(fileName, { ...baseBoard, name: "Remote Sync 1", updatedAt: "2026-06-27T13:00:00.001Z" });
+      api.externalEditBoard(fileName, { ...baseBoard, name: "Remote Sync 2", updatedAt: "2026-06-27T13:00:00.002Z" });
+      api.externalEditBoard(fileName, { ...baseBoard, name: "Remote Sync 3", updatedAt: "2026-06-27T13:00:00.003Z" });
+    }, { fileName: boardFile.file_name, baseBoard: board });
+
+    await expect(page.getByTestId(`board-nav-${boardId}`)).toHaveText("Remote Sync 3");
+    await page.waitForTimeout(200);
+    expect((await snapshot(page)).loadWorkspaceCount).toBe(loadCountBeforeBurst + 1);
+  });
+
+  test("cards in a list sort by due date", async ({ page }) => {
+    await openApp(page);
+    await openWorkspace(page);
+
+    await page.getByTestId("create-board").click();
+    await page.getByTestId("text-dialog-input").fill("Due Board");
+    await page.getByTestId("text-dialog-submit").click();
+
+    async function createDatedCard(title: string, due: string) {
+      await page.getByTestId("add-card-todo").click();
+      await page.getByTestId("text-dialog-input").fill(title);
+      await page.getByTestId("text-dialog-submit").click();
+      await expect(page.getByTestId("card-title-input")).toBeVisible();
+      await page.getByTestId("card-due-input").fill(due);
+      await page.getByTestId("save-card").click();
+      await expect(page.getByTestId("card-title-input")).toBeHidden();
+    }
+
+    await createDatedCard("Later", "2026-06-16");
+    await createDatedCard("Earlier", "2026-06-14");
+
+    const titles = await page.getByTestId("list-todo").locator(".task-card h3").allTextContents();
+    expect(titles).toEqual(["Earlier", "Later"]);
+  });
+});
