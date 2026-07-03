@@ -3,6 +3,8 @@ import { mkdtemp, mkdir, readFile, readdir, rm, unlink, writeFile } from "node:f
 import { join } from "node:path";
 import { tmpdir } from "node:os";
 import { addActivity, attachmentDisplayName, attachmentStoredName, createBoard, createCard, createComment, parseCard, parseWorkspace, serializeCard } from "../.tmp/storage-test/src/storage.js";
+import { ORDER_STEP, compareCardsByOrder, nextOrderForList, placeInList } from "../.tmp/storage-test/src/lib/ordering.js";
+import { buildCalendar, describeDue, dueReminderCount, groupCardsByDue } from "../.tmp/storage-test/src/lib/dueDate.js";
 
 const baseCard = {
   id: "card_one",
@@ -12,6 +14,7 @@ const baseCard = {
   assignees: ["ada", "grace"],
   labels: ["bug, parser", "external edit"],
   due: "2026-07-01",
+  order: 3000,
   completed: false,
   archived: false,
   createdAt: "2026-06-27T00:00:00.000Z",
@@ -62,6 +65,110 @@ assert.match(freshComment.id, /^comment_/);
 
 // New cards start with an empty discussion.
 assert.deepEqual(createCard("board_one", "todo", "Fresh").comments, []);
+
+// --- Precise card ordering ---
+
+// New cards default to order 0 (unordered / due-date mode) and round-trip.
+assert.equal(createCard("board_one", "todo", "Fresh").order, 0);
+assert.equal(parseCard(serializeCard(baseCard), baseCard.fileName).order, 3000);
+
+// nextOrderForList: an all-unordered list stays in due-date mode (0); a curated
+// list appends below its current maximum.
+assert.equal(nextOrderForList([]), 0);
+assert.equal(nextOrderForList([{ order: 0 }, { order: 0 }]), 0);
+assert.equal(nextOrderForList([{ order: 1000 }, { order: 3000 }]), 3000 + ORDER_STEP);
+
+// compareCardsByOrder: order wins; equal orders fall back to due date.
+const sortByOrder = (list) => list.slice().sort(compareCardsByOrder).map((card) => card.id);
+assert.deepEqual(
+  sortByOrder([
+    { id: "b", order: 2000, due: "2026-01-01", createdAt: "", title: "" },
+    { id: "a", order: 1000, due: "2026-12-01", createdAt: "", title: "" }
+  ]),
+  ["a", "b"]
+);
+assert.deepEqual(
+  sortByOrder([
+    { id: "later", order: 0, due: "2026-06-16", createdAt: "", title: "" },
+    { id: "earlier", order: 0, due: "2026-06-14", createdAt: "", title: "" }
+  ]),
+  ["earlier", "later"]
+);
+
+// placeInList: a midpoint between spaced neighbours touches only the moved card.
+const spacedSiblings = [{ id: "a", order: 1000 }, { id: "b", order: 2000 }, { id: "c", order: 3000 }];
+const midPlacement = placeInList(spacedSiblings, 1);
+assert.equal(midPlacement.order, 1500);
+assert.deepEqual(midPlacement.rebalance, []);
+assert.equal(placeInList(spacedSiblings, 0).order, 0);
+assert.equal(placeInList(spacedSiblings, 3).order, 4000);
+assert.equal(placeInList([], 0).order, ORDER_STEP);
+
+// Inserting between equal (legacy zero) neighbours renormalizes the whole list
+// to distinct, spaced orders and reports the siblings that changed.
+const renormPlacement = placeInList([{ id: "a", order: 0 }, { id: "b", order: 0 }], 1);
+assert.equal(renormPlacement.order, 2000);
+assert.deepEqual(renormPlacement.rebalance, [{ id: "a", order: 1000 }, { id: "b", order: 3000 }]);
+
+// --- Due-date workflow ---
+
+const dueNow = new Date(2026, 6, 3, 12, 0, 0); // 2026-07-03 local, noon
+assert.equal(describeDue("", dueNow).status, "none");
+assert.equal(describeDue("bogus", dueNow).status, "none");
+assert.equal(describeDue("2026-07-03", dueNow).status, "today");
+assert.equal(describeDue("2026-07-03", dueNow).label, "Due today");
+assert.equal(describeDue("2026-07-01", dueNow).status, "overdue");
+assert.equal(describeDue("2026-07-01", dueNow).days, -2);
+assert.equal(describeDue("2026-07-01", dueNow).label, "Overdue by 2 days");
+assert.equal(describeDue("2026-07-04", dueNow).status, "soon");
+assert.equal(describeDue("2026-07-04", dueNow).label, "Due tomorrow");
+assert.equal(describeDue("2026-07-06", dueNow).status, "soon");
+assert.equal(describeDue("2026-07-20", dueNow).status, "later");
+
+// Reminder count = overdue + due-today among active (not completed/archived).
+assert.equal(
+  dueReminderCount(
+    [
+      { due: "2026-07-01", completed: false, archived: false },
+      { due: "2026-07-03", completed: false, archived: false },
+      { due: "2026-07-03", completed: true, archived: false },
+      { due: "2026-07-01", completed: false, archived: true },
+      { due: "2026-08-01", completed: false, archived: false }
+    ],
+    dueNow
+  ),
+  2
+);
+
+// Grouping keeps non-empty buckets in order, sorted by due date within each.
+const dueGroups = groupCardsByDue(
+  [
+    { id: "late2", due: "2026-06-30", completed: false, archived: false, createdAt: "", title: "" },
+    { id: "late1", due: "2026-07-01", completed: false, archived: false, createdAt: "", title: "" },
+    { id: "today", due: "2026-07-03", completed: false, archived: false, createdAt: "", title: "" },
+    { id: "none", due: "", completed: false, archived: false, createdAt: "", title: "" }
+  ],
+  dueNow
+);
+assert.deepEqual(dueGroups.map((group) => group.key), ["overdue", "today", "none"]);
+assert.deepEqual(dueGroups[0].cards.map((card) => card.id), ["late2", "late1"]);
+
+// buildCalendar emits one all-day VEVENT per dated entry, escaping TEXT values
+// and skipping entries without a valid due date.
+const ics = buildCalendar(
+  [
+    { uid: "card_x", title: "Ship, now; done", due: "2026-07-15", completed: true, description: "Board · Doing" },
+    { uid: "card_y", title: "No date", due: "" }
+  ],
+  "My cal",
+  new Date(Date.UTC(2026, 6, 3, 9, 30, 0))
+);
+assert.match(ics, /BEGIN:VCALENDAR/);
+assert.equal((ics.match(/BEGIN:VEVENT/g) ?? []).length, 1);
+assert.match(ics, /DTSTART;VALUE=DATE:20260715/);
+assert.match(ics, /DTEND;VALUE=DATE:20260716/);
+assert.match(ics, /SUMMARY:✓ Ship\\, now\\; done/);
+assert.match(ics, /DTSTAMP:20260703T093000Z/);
 
 // Attachment path helpers sanitize names and strip directory prefixes.
 assert.equal(attachmentDisplayName("/Users/ada/Pictures/diagram final.png"), "diagram final.png");

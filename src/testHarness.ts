@@ -15,6 +15,7 @@ interface HarnessSnapshot {
   boards: HarnessFile[];
   cards: HarnessFile[];
   attachments: Array<{ path: string; size: number }>;
+  exports: Array<{ path: string; content: string }>;
   lastWorkspace: string | null;
   externalLinks: string[];
   loadWorkspaceCount: number;
@@ -51,6 +52,8 @@ const cards = new Map<string, string>();
 // Attachment files keyed by `${cardId}/${storedName}` → byte size. There is no
 // real filesystem in the harness, so this stands in for attachments/<cardId>/.
 const attachments = new Map<string, number>();
+// Files written by exports (e.g. the .ics calendar), keyed by relative path.
+const exports = new Map<string, string>();
 const attachmentPickQueue: string[][] = [];
 const listeners = new Map<string, Set<Handler<any>>>();
 const externalLinks: string[] = [];
@@ -85,6 +88,10 @@ if (new URLSearchParams(window.location.search).has("resetLimnE2e")) {
     for (const item of restored.attachments ?? []) {
       attachments.set(item.path, item.size);
     }
+    exports.clear();
+    for (const item of restored.exports ?? []) {
+      exports.set(item.path, item.content);
+    }
     externalLinks.splice(0, externalLinks.length, ...(restored.externalLinks ?? []));
     slack.splice(0, slack.length, ...restored.slack);
     Object.assign(updater, restored.updater ?? { mode: "none", installed: false, restarted: false });
@@ -107,6 +114,7 @@ function snapshot(): HarnessSnapshot {
     boards: [...boards.entries()].sort().map(([file_name, content]) => ({ file_name, content })),
     cards: [...cards.entries()].sort().map(([file_name, content]) => ({ file_name, content })),
     attachments: [...attachments.entries()].sort().map(([path, size]) => ({ path, size })),
+    exports: [...exports.entries()].sort().map(([path, content]) => ({ path, content })),
     lastWorkspace,
     externalLinks: [...externalLinks],
     loadWorkspaceCount,
@@ -281,6 +289,11 @@ window.__LIMN_TEST_IPC__ = {
         externalLinks.push(`file://${workspacePath}`);
         updateDebugState();
         return undefined as T;
+      case "export_calendar": {
+        exports.set("exports/limn-due-dates.ics", contentArg(args));
+        updateDebugState();
+        return "exports/limn-due-dates.ics" as T;
+      }
       case "restart_app":
         updater.restarted = true;
         updateDebugState();

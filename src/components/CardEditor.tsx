@@ -10,6 +10,7 @@ import type {
 import type { Attachment, Board, Card, Member, Subtask, SubtaskListItem } from "../types";
 import { makeId, normalizeUrl, openExternal } from "../storage";
 import { MAX_NAME_LENGTH } from "../lib/constants";
+import { describeDue, dueInputFromToday } from "../lib/dueDate";
 import { initials } from "../lib/format";
 import { CardAttachments } from "./CardAttachments";
 import { CardComments } from "./CardComments";
@@ -1125,6 +1126,20 @@ export function CardEditor({
                 <span>Due date</span>
                 <input data-testid="card-due-input" type="date" value={draft.due} onChange={(event) => setDraft({ ...draft, due: event.target.value })} />
               </label>
+              <div className="due-shortcuts">
+                <button type="button" data-testid="due-set-today" onClick={() => setDraft({ ...draft, due: dueInputFromToday(0) })}>Today</button>
+                <button type="button" data-testid="due-set-tomorrow" onClick={() => setDraft({ ...draft, due: dueInputFromToday(1) })}>Tomorrow</button>
+                <button type="button" data-testid="due-set-next-week" onClick={() => setDraft({ ...draft, due: dueInputFromToday(7) })}>Next week</button>
+                <button type="button" data-testid="due-clear" disabled={!draft.due} onClick={() => setDraft({ ...draft, due: "" })}>Clear</button>
+              </div>
+              {draft.due && (() => {
+                const due = describeDue(draft.due);
+                return (
+                  <p className={`due-hint due-${draft.completed ? "complete" : due.status}`} data-testid="card-due-hint">
+                    {due.label}
+                  </p>
+                );
+              })()}
             </div>
 
             <div className="side-section">

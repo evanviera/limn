@@ -8,5 +8,5 @@
     "rootDir": ".",
     "jsx": "react-jsx"
   },
-  "include": ["src/storage.ts", "src/types.ts"]
+  "include": ["src/storage.ts", "src/types.ts", "src/lib/ordering.ts", "src/lib/dueDate.ts"]
 }

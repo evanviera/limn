@@ -144,6 +144,13 @@ export async function openWorkspaceFolder(path: string): Promise<void> {
   await invoke("open_workspace_folder", { path });
 }
 
+// Write an iCalendar export into the workspace's `exports/` folder and return the
+// workspace-relative path of the file. Keeping the .ics inside the synced folder
+// fits Limn's local-first, readable-file model (calendars can subscribe to it).
+export async function exportCalendar(path: string, content: string): Promise<string> {
+  return invoke<string>("export_calendar", { path, content });
+}
+
 export async function postSlack(webhookUrl: string, message: string): Promise<void> {
   if (!webhookUrl.trim()) {
     return;
@@ -192,6 +199,7 @@ export function createCard(boardId: string, listId: string, title: string): Card
     assignees: [],
     labels: [],
     due: "",
+    order: 0,
     completed: false,
     archived: false,
     createdAt: now,
@@ -454,6 +462,7 @@ export function parseCard(content: string, fileName: string): Card | null {
     assignees: stringArray(values.assignees),
     labels: stringArray(values.labels),
     due: stringValue(values.due),
+    order: numberValue(values.order),
     completed: booleanValue(values.completed),
     archived: booleanValue(values.archived),
     createdAt: stringValue(values.createdAt) || timestamp(),
@@ -476,6 +485,7 @@ export function serializeCard(card: Card): string {
     assignees: card.assignees,
     labels: card.labels,
     due: card.due,
+    order: card.order,
     completed: card.completed,
     archived: card.archived,
     createdAt: card.createdAt,
@@ -543,6 +553,17 @@ function stringValue(value: unknown): string {
 
 function booleanValue(value: unknown): boolean {
   return value === true || value === "true";
+}
+
+function numberValue(value: unknown): number {
+  if (typeof value === "number" && Number.isFinite(value)) {
+    return value;
+  }
+  if (typeof value === "string" && value.trim() !== "") {
+    const parsed = Number(value);
+    return Number.isFinite(parsed) ? parsed : 0;
+  }
+  return 0;
 }
 
 function activityArray(value: unknown): Card["activity"] {

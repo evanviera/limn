@@ -21,6 +21,7 @@ import {
   deleteAttachmentFile,
   deleteBoard,
   deleteCard,
+  exportCalendar,
   getLastWorkspace,
   loadWorkspace,
   makeId,
@@ -51,6 +52,7 @@ import {
 
 import { BoardView } from "./components/BoardView";
 import { CardEditor } from "./components/CardEditor";
+import { DueView } from "./components/DueView";
 import { ConfirmDialog, EmptyState, TextDialog } from "./components/dialogs";
 import type { ConfirmDialogState, TextDialogState } from "./components/dialogs";
 import { ContextMenu, isEditableTextControl, textControlContextItems } from "./components/contextMenu";
@@ -61,6 +63,8 @@ import { SettingsView } from "./components/SettingsView";
 import { WindowsTitlebar } from "./components/WindowsTitlebar";
 import { THEME_STORAGE_KEY } from "./lib/constants";
 import type { SlackNotificationKey, ThemeMode } from "./lib/constants";
+import { buildCalendar, dueReminderCount, type CalendarEntry } from "./lib/dueDate";
+import { compareCardsByOrder, nextOrderForList, placeInList } from "./lib/ordering";
 import { countLabel, errorText, initials, readStoredThemeMode, sameJson, selectActiveBoardId, slackTag, upsertById } from "./lib/format";
 import { readActiveMemberId, resolveActiveMember, writeActiveMemberId } from "./lib/identity";
 import { updateBannerMessage } from "./lib/updateMessages";
@@ -112,6 +116,9 @@ export default function App() {
   const selectedCard = cards.find((card) => card.id === selectedCardId) ?? null;
   const activeMember = resolveActiveMember(members, activeMemberId);
   const updaterAvailable = canUseUpdater();
+  // Overdue + due-today count across every board — the "reminder" nudge shown on
+  // the Due nav item.
+  const dueReminders = dueReminderCount(cards);
 
   useLayoutEffect(() => {
     document.documentElement.dataset.platform = platformName();
@@ -255,8 +262,17 @@ export default function App() {
       setCards(data.cards);
       setActiveBoardId((current) => selectActiveBoardId(current, data.boards));
       setSelectedCardId((current) => (current && data.cards.some((card) => card.id === current) ? current : null));
-      setNotice(data.diagnostics.length > 0 ? data.diagnostics.join(" ") : "");
-      setNoticeKind(data.diagnostics.length > 0 ? "warning" : "info");
+      const reminders = dueReminderCount(data.cards);
+      if (data.diagnostics.length > 0) {
+        setNotice(data.diagnostics.join(" "));
+        setNoticeKind("warning");
+      } else if (reminders > 0) {
+        setNotice(`${countLabel(reminders, "card")} overdue or due today. Open Due dates to review.`);
+        setNoticeKind("warning");
+      } else {
+        setNotice("");
+        setNoticeKind("info");
+      }
       await saveLastWorkspace(selectedPath);
     } finally {
       setOpening(false);
@@ -682,7 +698,8 @@ export default function App() {
       value: "",
       confirmLabel: "Add card",
       onSubmit: async (title) => {
-        const card = createCard(activeBoard.id, listId, title);
+        const listCards = cards.filter((item) => item.boardId === activeBoard.id && item.listId === listId && !item.archived);
+        const card = { ...createCard(activeBoard.id, listId, title), order: nextOrderForList(listCards) };
         await persistCard(card);
         setSelectedCardId(card.id);
       }
@@ -720,22 +737,83 @@ export default function App() {
     });
   }
 
-  async function moveCard(cardId: string, listId: string) {
+  // Move a card to `listId`, landing at `index` among that list's other cards
+  // (append when omitted). Handles both cross-list moves and precise in-list
+  // reordering: the moved card gets a new `order`, and any siblings that must
+  // shift to keep the sequence distinct are rewritten silently first.
+  async function moveCard(cardId: string, listId: string, index?: number) {
     const card = cards.find((item) => item.id === cardId);
-    if (!card || !activeBoard || card.listId === listId) {
+    if (!card || !activeBoard) {
       return;
     }
+
+    const sameList = card.listId === listId;
+    const siblings = cards
+      .filter((item) => item.boardId === activeBoard.id && item.listId === listId && !item.archived && item.id !== cardId)
+      .sort(compareCardsByOrder);
+    const placement = placeInList(siblings, index ?? siblings.length);
+
+    if (sameList && placement.rebalance.length === 0 && card.order === placement.order) {
+      return;
+    }
+
     const list = activeBoard.lists.find((item) => item.id === listId);
     const previousList = activeBoard.lists.find((item) => item.id === card.listId);
     try {
-      const moved = addActivity({ ...card, listId }, "moved", `Moved from ${previousList?.name ?? "Unknown"} to ${list?.name ?? "Unknown"}`);
+      for (const change of placement.rebalance) {
+        const sibling = cards.find((item) => item.id === change.id);
+        if (sibling) {
+          await persistCard({ ...sibling, order: change.order, updatedAt: timestamp() }, sibling);
+        }
+      }
+
+      const moved = sameList
+        ? { ...card, order: placement.order, updatedAt: timestamp() }
+        : addActivity({ ...card, listId, order: placement.order }, "moved", `Moved from ${previousList?.name ?? "Unknown"} to ${list?.name ?? "Unknown"}`);
       const result = await persistCard(moved, card);
 
-      if (result && !result.conflict && list?.name.trim().toLowerCase() === "done") {
+      if (result && !result.conflict && !sameList && list?.name.trim().toLowerCase() === "done") {
         await sendSlack("cardMovedToDone", `➡️ Card moved to Done: ${moved.title}\nAssigned to: ${assigneeSlackTags(moved)}\nBoard: ${activeBoard.name}`);
       }
     } catch (reason) {
       setError(`Move failed: ${errorText(reason)}`);
+    }
+  }
+
+  // Open a card from the cross-board Due view: focus its board so the editor has
+  // the right board/list context, then open the editor over the current view.
+  function openCardFromDue(card: Card) {
+    setActiveBoardId(card.boardId);
+    setSelectedCardId(card.id);
+  }
+
+  // Export every non-archived card that has a due date to an .ics file inside the
+  // workspace. Written into `exports/` so it stays part of the synced folder.
+  async function exportDueCalendar() {
+    if (!workspacePath) {
+      return;
+    }
+    const entries: CalendarEntry[] = cards
+      .filter((card) => !card.archived && card.due)
+      .map((card) => ({
+        uid: card.id,
+        title: card.title,
+        due: card.due,
+        completed: card.completed,
+        description: `${boardName(card.boardId)} · ${listName(card.boardId, card.listId)}`
+      }));
+    if (entries.length === 0) {
+      setNotice("No cards have a due date to export yet.");
+      setNoticeKind("warning");
+      return;
+    }
+    try {
+      const content = buildCalendar(entries, `${settings?.workspaceName ?? "Limn"} — Due dates`);
+      const relativePath = await exportCalendar(workspacePath, content);
+      setNotice(`Exported ${countLabel(entries.length, "due date")} to ${relativePath}.`);
+      setNoticeKind("info");
+    } catch (reason) {
+      setError(`Calendar export failed: ${errorText(reason)}`);
     }
   }
 
@@ -991,6 +1069,10 @@ export default function App() {
 
   function boardName(boardId: string) {
     return boards.find((board) => board.id === boardId)?.name ?? "Unknown board";
+  }
+
+  function listName(boardId: string, listId: string) {
+    return boards.find((board) => board.id === boardId)?.lists.find((list) => list.id === listId)?.name ?? "Unknown list";
   }
 
   function openTextDialog(nextDialog: TextDialogState) {
@@ -1446,6 +1528,14 @@ export default function App() {
           >
             <Icon name={themeMode === "dark" ? "sun" : "moon"} /> {themeMode === "dark" ? "Light mode" : "Dark mode"}
           </button>
+          <button className={view === "due" ? "active" : ""} data-testid="nav-due" onClick={() => setView("due")}>
+            <Icon name="calendar" /> Due dates
+            {dueReminders > 0 && (
+              <span className="nav-badge" data-testid="due-reminder-count" title={`${countLabel(dueReminders, "card")} overdue or due today`}>
+                {dueReminders}
+              </span>
+            )}
+          </button>
           <button className={view === "members" ? "active" : ""} data-testid="nav-members" onClick={() => setView("members")}>
             <Icon name="users" /> Members
           </button>
@@ -1536,6 +1626,17 @@ export default function App() {
         )}
         {view === "board" && !activeBoard && (
           <EmptyState title="No board selected" body="Create a board to start adding lists and cards." action="Create board" onAction={addBoard} />
+        )}
+        {view === "due" && (
+          <DueView
+            cards={cards}
+            boards={boards}
+            members={members}
+            onOpenCard={openCardFromDue}
+            onExportCalendar={exportDueCalendar}
+            onOpenContextMenu={openContextMenu}
+            onCopyText={copyText}
+          />
         )}
         {view === "members" && (
           <MembersView members={members} onSave={saveMember} onRemove={removeMember} onOpenContextMenu={openContextMenu} onCopyText={copyText} />

@@ -261,6 +261,23 @@ fn attachment_commands_reject_path_traversal() {
     let _ = fs::remove_dir_all(root);
 }
 
+#[test]
+fn export_calendar_writes_ics_into_exports_folder() {
+    let root = test_workspace("export_calendar");
+    let path = root.to_string_lossy().to_string();
+    init_workspace(path.clone()).expect("workspace initializes");
+
+    let ics = "BEGIN:VCALENDAR\r\nEND:VCALENDAR\r\n".to_string();
+    let relative = export_calendar(path, ics.clone()).expect("calendar exports");
+    assert_eq!(relative, "exports/limn-due-dates.ics");
+
+    let written = root.join("exports/limn-due-dates.ics");
+    assert!(written.exists());
+    assert_eq!(fs::read_to_string(&written).expect("ics reads"), ics);
+
+    let _ = fs::remove_dir_all(root);
+}
+
 #[tokio::test]
 async fn post_slack_sends_expected_payload() {
     let server = TestHttpServer::start(200, "ok");

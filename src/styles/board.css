@@ -291,3 +291,34 @@ body.is-card-dragging * {
   color: var(--accent-link-hover);
   text-decoration-color: var(--accent-link-hover);
 }
+
+/* Due-date chip in the card footer. Kept as coloured text (not a heavy pill) so
+   it slots into the tight footer, but urgency reads at a glance. */
+.task-card footer .due-badge {
+  color: var(--text-muted);
+  font-variant-numeric: tabular-nums;
+}
+
+.task-card footer .due-badge.due-overdue {
+  color: var(--danger);
+  font-weight: var(--weight-bold);
+}
+
+.task-card footer .due-badge.due-today {
+  color: var(--warning);
+  font-weight: var(--weight-bold);
+}
+
+.task-card footer .due-badge.due-soon {
+  color: var(--warning);
+}
+
+/* Insertion line shown between cards while dragging, marking where the card will
+   land — the visual anchor for precise in-list ordering. */
+.drop-indicator {
+  height: 2px;
+  margin: -1px 2px;
+  background: var(--accent);
+  border-radius: var(--radius-pill);
+  box-shadow: 0 0 0 1px var(--accent-border);
+}

@@ -1,4 +1,4 @@
-export type View = "board" | "members" | "settings";
+export type View = "board" | "due" | "members" | "settings";
 
 export interface WorkspaceSettings {
   schemaVersion: number;
@@ -111,6 +111,10 @@ export interface Card {
   assignees: string[];
   labels: string[];
   due: string;
+  // Manual sort position within a list. Cards sort by this value ascending, with
+  // due date as the tiebreaker. A shared value of 0 means "unordered": such a
+  // list falls back to pure due-date sorting until a card is dragged to reorder.
+  order: number;
   completed: boolean;
   archived: boolean;
   createdAt: string;

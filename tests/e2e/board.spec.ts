@@ -134,4 +134,58 @@ test.describe("smoke", () => {
     const titles = await page.getByTestId("list-todo").locator(".task-card h3").allTextContents();
     expect(titles).toEqual(["Earlier", "Later"]);
   });
+
+  test("cards can be reordered within a list by dragging", async ({ page }) => {
+    await openApp(page);
+    await openWorkspace(page);
+
+    await page.getByTestId("create-board").click();
+    await page.getByTestId("text-dialog-input").fill("Priority Board");
+    await page.getByTestId("text-dialog-submit").click();
+
+    async function createCard(title: string) {
+      await page.getByTestId("add-card-todo").click();
+      await page.getByTestId("text-dialog-input").fill(title);
+      await page.getByTestId("text-dialog-submit").click();
+      await expect(page.getByTestId("card-title-input")).toBeVisible();
+      await page.keyboard.press("Escape");
+      await expect(page.getByTestId("card-title-input")).toBeHidden();
+    }
+
+    // No due dates → order defaults to 0, so cards read in creation order.
+    await createCard("Alpha");
+    await createCard("Beta");
+    await createCard("Gamma");
+
+    const listTitles = () => page.getByTestId("list-todo").locator(".task-card h3").allTextContents();
+    expect(await listTitles()).toEqual(["Alpha", "Beta", "Gamma"]);
+
+    // Drag Alpha to the bottom of the list.
+    const alpha = page.getByTestId("list-todo").locator(".task-card").first();
+    const gamma = page.getByTestId("list-todo").locator(".task-card").last();
+    const alphaBox = await alpha.boundingBox();
+    const gammaBox = await gamma.boundingBox();
+    if (!alphaBox || !gammaBox) {
+      throw new Error("card bounding boxes unavailable");
+    }
+
+    await page.mouse.move(alphaBox.x + alphaBox.width / 2, alphaBox.y + alphaBox.height / 2);
+    await page.mouse.down();
+    await page.mouse.move(alphaBox.x + alphaBox.width / 2, alphaBox.y + alphaBox.height / 2 + 20);
+    await page.mouse.move(gammaBox.x + gammaBox.width / 2, gammaBox.y + gammaBox.height - 4);
+    await page.mouse.move(gammaBox.x + gammaBox.width / 2, gammaBox.y + gammaBox.height - 2);
+    await page.mouse.up();
+
+    await expect.poll(async () => listTitles()).toEqual(["Beta", "Gamma", "Alpha"]);
+
+    // The moved card now carries an explicit order that survives a reload.
+    await expect.poll(async () => {
+      const state = await snapshot(page);
+      const alphaCard = state.cards
+        .map((file) => file.content)
+        .find((content) => /title:\s*"?Alpha"?/.test(content));
+      const match = alphaCard?.match(/^order:\s*(\d+)/m);
+      return match ? Number(match[1]) : 0;
+    }).toBeGreaterThan(0);
+  });
 });

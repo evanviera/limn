@@ -303,6 +303,17 @@ fn restart_app(app: AppHandle) {
     app.restart();
 }
 
+// Write an iCalendar export into the workspace's `exports/` folder. Keeping the
+// .ics inside the synced folder fits Limn's local-first, readable-file model.
+// Returns the workspace-relative path so the UI can report where it landed.
+#[tauri::command]
+fn export_calendar(path: String, content: String) -> Result<String, String> {
+    let root = workspace_root(&path)?;
+    let relative = "exports/limn-due-dates.ics";
+    atomic_write(&root.join("exports").join("limn-due-dates.ics"), content)?;
+    Ok(relative.to_string())
+}
+
 pub fn run() {
     tauri::Builder::default()
         .plugin(tauri_plugin_updater::Builder::new().build())
@@ -343,6 +354,7 @@ pub fn run() {
             post_slack,
             open_external,
             open_workspace_folder,
+            export_calendar,
             restart_app
         ])
         .run(tauri::generate_context!())

@@ -1,23 +1,6 @@
-import type { Board, Card } from "../types";
+import type { Board } from "../types";
 import { THEME_STORAGE_KEY, type ThemeMode } from "./constants";
 
-export function compareCardsByDueDate(left: Card, right: Card): number {
-  const dueComparison = dueSortValue(left).localeCompare(dueSortValue(right));
-  if (dueComparison !== 0) {
-    return dueComparison;
-  }
-
-  const createdComparison = left.createdAt.localeCompare(right.createdAt);
-  if (createdComparison !== 0) {
-    return createdComparison;
-  }
-
-  return left.title.localeCompare(right.title);
-}
-
-export function dueSortValue(card: Card): string {
-  return card.due || "9999-12-31";
-}
 export function readStoredThemeMode(): ThemeMode {
   if (import.meta.env.DEV && new URLSearchParams(window.location.search).has("resetLimnE2e")) {
     localStorage.removeItem(THEME_STORAGE_KEY);

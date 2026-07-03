@@ -1,9 +1,11 @@
-import { useEffect, useRef, useState } from "react";
+import { Fragment, useEffect, useRef, useState } from "react";
 import type { MouseEvent as ReactMouseEvent, PointerEvent as ReactPointerEvent } from "react";
 import type { Board, BoardList, Card, Member } from "../types";
 import { openExternal } from "../storage";
 import { latestImageAttachment } from "../lib/attachments";
-import { compareCardsByDueDate, countLabel, initials } from "../lib/format";
+import { countLabel, initials } from "../lib/format";
+import { describeDue } from "../lib/dueDate";
+import { compareCardsByOrder } from "../lib/ordering";
 import { AttachmentImagePreview } from "./AttachmentImagePreview";
 import { Icon } from "./icons";
 import { EmptyState } from "./dialogs";
@@ -21,7 +23,9 @@ export interface BoardViewProps {
   onRenameList: (list: BoardList) => Promise<void>;
   onDeleteList: (list: BoardList) => Promise<void>;
   onAddCard: (listId: string) => Promise<void>;
-  onMoveCard: (cardId: string, listId: string) => Promise<void>;
+  // `index` is where the card should land among the *other* cards already in the
+  // target list (0 = top, omitted = append to the bottom).
+  onMoveCard: (cardId: string, listId: string, index?: number) => Promise<void>;
   onOpenCard: (cardId: string) => void;
   onToggleSubtask: (cardId: string, subtaskId: string, completed: boolean) => Promise<void>;
   onToggleCardCompleted: (card: Card) => Promise<void>;
@@ -54,6 +58,9 @@ export function BoardView(props: BoardViewProps) {
     width: number;
     height: number;
   } | null>(null);
+  // Where the dragged card would land: which list, and the insertion index among
+  // that list's other cards. Drives the insertion line shown during a drag.
+  const [dropTarget, setDropTarget] = useState<{ listId: string; index: number } | null>(null);
   const mouseDragCleanupRef = useRef<(() => void) | null>(null);
   const suppressCardClickRef = useRef<string | null>(null);
   const dragThreshold = 6;
@@ -89,11 +96,37 @@ export function BoardView(props: BoardViewProps) {
       width: drag.width,
       height: drag.height
     });
+    setDropTarget(computeDropTarget(clientX, clientY, drag.cardId));
   }
 
   function clearDragPreview() {
     document.body.classList.remove("is-card-dragging");
     setDragPreview(null);
+    setDropTarget(null);
+  }
+
+  // Resolve the pointer location to a target list and an insertion index among
+  // that list's cards (excluding the one being dragged). The index is decided by
+  // the vertical midpoints of the rendered cards. The floating drag preview has
+  // `pointer-events: none`, so it never occludes the hit test.
+  function computeDropTarget(clientX: number, clientY: number, draggedCardId: string): { listId: string; index: number } | null {
+    const listElement = document.elementFromPoint(clientX, clientY)?.closest<HTMLElement>("[data-list-id]");
+    const listId = listElement?.dataset.listId;
+    if (!listElement || !listId) {
+      return null;
+    }
+
+    const cardElements = Array.from(listElement.querySelectorAll<HTMLElement>(".card-stack [data-card-id]"))
+      .filter((element) => element.dataset.cardId !== draggedCardId);
+    let index = cardElements.length;
+    for (let position = 0; position < cardElements.length; position += 1) {
+      const rect = cardElements[position].getBoundingClientRect();
+      if (clientY < rect.top + rect.height / 2) {
+        index = position;
+        break;
+      }
+    }
+    return { listId, index };
   }
 
   function dropCardAtPoint(cardId: string, clientX: number, clientY: number) {
@@ -103,12 +136,11 @@ export function BoardView(props: BoardViewProps) {
         suppressCardClickRef.current = null;
       }
     }, 0);
-    clearDragPreview();
 
-    const dropTarget = document.elementFromPoint(clientX, clientY)?.closest<HTMLElement>("[data-list-id]");
-    const listId = dropTarget?.dataset.listId;
-    if (listId) {
-      void props.onMoveCard(cardId, listId);
+    const target = computeDropTarget(clientX, clientY, cardId);
+    clearDragPreview();
+    if (target) {
+      void props.onMoveCard(cardId, target.listId, target.index);
     }
   }
 
@@ -308,7 +340,16 @@ export function BoardView(props: BoardViewProps) {
           <EmptyState title="No lists yet" body="Add a list to organize cards on this board." action="Add list" onAction={props.onAddList} />
         )}
         {props.board.lists.map((list) => {
-          const listCards = props.cards.filter((card) => card.listId === list.id).sort(compareCardsByDueDate);
+          const listCards = props.cards.filter((card) => card.listId === list.id).sort(compareCardsByOrder);
+          // Map the drop index (measured over the *other* cards) onto a position
+          // in the rendered list, which still includes the dimmed dragged card.
+          const draggedIndex = dragPreview ? listCards.findIndex((card) => card.id === dragPreview.cardId) : -1;
+          const indicatorAt =
+            dropTarget?.listId === list.id
+              ? draggedIndex !== -1 && dropTarget.index >= draggedIndex
+                ? dropTarget.index + 1
+                : dropTarget.index
+              : -1;
           return (
             <section
               className="column"
@@ -328,32 +369,35 @@ export function BoardView(props: BoardViewProps) {
                 </button>
               </header>
               <div className="card-stack">
-                {listCards.length === 0 && <p className="empty-list">Drop cards here.</p>}
-                {listCards.map((card) => (
-                  <article
-                    aria-label={`${card.title}${card.completed ? " (completed)" : ""}`}
-                    className={`task-card ${card.completed ? "completed" : ""} ${dragPreview?.cardId === card.id ? "drag-source" : ""}`}
-                    data-card-id={card.id}
-                    data-testid={`card-${card.id}`}
-                    key={card.id}
-                    onClick={() => openCard(card.id)}
-                    onContextMenu={(event) => props.onOpenContextMenu(event, cardContextItems(card), card.title)}
-                    onPointerCancel={cancelPointerDrag}
-                    onPointerDown={(event) => beginPointerDrag(event, card.id)}
-                    onPointerMove={updatePointerDrag}
-                    onPointerUp={finishPointerDrag}
-                    onMouseDown={(event) => beginMouseDrag(event, card.id)}
-                  >
-                    <TaskCardBody
-                      card={card}
-                      members={props.members}
-                      workspacePath={props.workspacePath}
-                      onOpen={openCard}
-                      onToggleSubtask={props.onToggleSubtask}
-                      onOpenContextMenu={props.onOpenContextMenu}
-                      onCopyText={props.onCopyText}
-                    />
-                  </article>
+                {listCards.length === 0 && indicatorAt !== 0 && <p className="empty-list">Drop cards here.</p>}
+                {indicatorAt === 0 && <div className="drop-indicator" data-testid={`drop-indicator-${list.id}`} />}
+                {listCards.map((card, position) => (
+                  <Fragment key={card.id}>
+                    <article
+                      aria-label={`${card.title}${card.completed ? " (completed)" : ""}`}
+                      className={`task-card ${card.completed ? "completed" : ""} ${dragPreview?.cardId === card.id ? "drag-source" : ""}`}
+                      data-card-id={card.id}
+                      data-testid={`card-${card.id}`}
+                      onClick={() => openCard(card.id)}
+                      onContextMenu={(event) => props.onOpenContextMenu(event, cardContextItems(card), card.title)}
+                      onPointerCancel={cancelPointerDrag}
+                      onPointerDown={(event) => beginPointerDrag(event, card.id)}
+                      onPointerMove={updatePointerDrag}
+                      onPointerUp={finishPointerDrag}
+                      onMouseDown={(event) => beginMouseDrag(event, card.id)}
+                    >
+                      <TaskCardBody
+                        card={card}
+                        members={props.members}
+                        workspacePath={props.workspacePath}
+                        onOpen={openCard}
+                        onToggleSubtask={props.onToggleSubtask}
+                        onOpenContextMenu={props.onOpenContextMenu}
+                        onCopyText={props.onCopyText}
+                      />
+                    </article>
+                    {indicatorAt === position + 1 && <div className="drop-indicator" data-testid={`drop-indicator-${list.id}`} />}
+                  </Fragment>
                 ))}
               </div>
               <button className="add-card" data-testid={`add-card-${list.id}`} onClick={() => void props.onAddCard(list.id)}>
@@ -399,6 +443,9 @@ export function TaskCardBody({
   const doneCount = card.subtasks.filter((subtask) => subtask.completed).length;
   const noteText = card.body.trim();
   const coverAttachment = workspacePath ? latestImageAttachment(card.attachments) : null;
+  const due = describeDue(card.due);
+  // Completed cards never nag: their due date reads as a neutral chip.
+  const dueClass = card.completed ? "due-badge due-complete" : `due-badge due-${due.status}`;
   return (
     <>
       {coverAttachment && (
@@ -561,7 +608,9 @@ export function TaskCardBody({
         </p>
       )}
       <footer>
-        <span>{card.due || "No due date"}</span>
+        <span className={dueClass} data-testid={`card-due-${card.id}`} title={due.status === "none" ? "No due date" : due.label}>
+          {due.label}
+        </span>
         {card.subtasks.length > 0 && (
           <span className="subtask-badge" title="Sub-tasks completed">
             <Icon name="check" /> {doneCount}/{card.subtasks.length}

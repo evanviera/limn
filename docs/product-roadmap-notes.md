@@ -24,6 +24,8 @@ Users need to find cards by text, assignee, label, due date, completion state, a
 
 Kanban boards rely on ordering inside a list as an implicit priority system. Limn supports dragging cards between lists, but precise in-list reordering should become a core board behavior.
 
+**Shipped.** Cards now carry a manual `order` and can be dragged to any position within a list (an insertion line marks where the card will land). Sorting is order-first with due date as the tiebreaker, so an un-curated list still reads in due-date priority until someone reorders it: cards default to order `0` ("unordered"), and the first in-list drag renormalizes the affected list to spaced, distinct orders. Placement uses fractional midpoints so a typical reorder rewrites only the moved card. The `order` lives in each card's Markdown frontmatter. Still open: cross-list drop position is honored, but reordering via the card editor's List dropdown appends rather than prompting for a position.
+
 ### Archive and Recovery UI
 
 Archived cards need a visible recovery path: archive browser, unarchive, and possibly recently deleted/trash. Without that, archive acts like a one-way hiding mechanism.
@@ -31,6 +33,8 @@ Archived cards need a visible recovery path: archive browser, unarchive, and pos
 ### Due-Date Workflow
 
 Due dates need overdue/upcoming grouping, reminders, and possibly calendar export. Without a workflow around them, due dates are mostly passive metadata.
+
+**Shipped.** Due dates are now active. Board cards show a colour-coded due chip (overdue/today/soon), and a new cross-board **Due dates** view groups every card by how soon it is due (Overdue → Today → Due soon → Upcoming → No due date), with a "show completed" filter and click-through to the card. Reminders surface as a red count badge on the Due nav item (overdue + due-today) and a notice when a workspace with overdue work is opened. The card editor gained Today/Tomorrow/Next week/Clear shortcuts plus a live status hint. Calendar export writes an all-day `.ics` (one VEVENT per dated card) into `exports/limn-due-dates.ics` inside the workspace, keeping it in the local-first, folder-synced model. Still open: reminders are in-app only (no OS/Slack push, which would need a background scheduler).
 
 ### Conflict Review and Version History
 

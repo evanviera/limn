@@ -19,6 +19,7 @@ export interface HarnessSnapshot {
   boards: HarnessFile[];
   cards: HarnessFile[];
   attachments: Array<{ path: string; size: number }>;
+  exports: Array<{ path: string; content: string }>;
   lastWorkspace: string | null;
   externalLinks: string[];
   loadWorkspaceCount: number;
