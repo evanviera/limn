@@ -1,5 +1,5 @@
 import { invoke } from "./ipc.js";
-import type { Attachment, AttachmentPreviewData, Board, BoardGroup, Card, Member, MembersFile, SlackNotificationSettings, Subtask, SubtaskListItem, WorkspaceFiles, WorkspaceSettings, WriteResult } from "./types";
+import type { Attachment, AttachmentPreviewData, Board, BoardGroup, Card, Comment, Member, MembersFile, SlackNotificationSettings, Subtask, SubtaskListItem, WorkspaceFiles, WorkspaceSettings, WriteResult } from "./types";
 
 const SCHEMA_VERSION = 1;
 
@@ -206,8 +206,21 @@ export function createCard(boardId: string, listId: string, title: string): Card
     ],
     subtasks: [],
     attachments: [],
+    comments: [],
     body: "",
     fileName: `${id}.md`
+  };
+}
+
+// Build a discussion comment. The author's display name is snapshotted here so a
+// later member rename/removal doesn't orphan the comment's attribution.
+export function createComment(authorId: string, authorName: string, body: string): Comment {
+  return {
+    id: makeId("comment"),
+    authorId,
+    authorName,
+    body,
+    createdAt: timestamp()
   };
 }
 
@@ -448,6 +461,7 @@ export function parseCard(content: string, fileName: string): Card | null {
     activity: activityArray(values.activity),
     subtasks: subtaskArray(values.subtasks),
     attachments: attachmentArray(values.attachments),
+    comments: commentArray(values.comments),
     body,
     fileName
   };
@@ -468,7 +482,8 @@ export function serializeCard(card: Card): string {
     updatedAt: card.updatedAt,
     activity: card.activity,
     subtasks: card.subtasks,
-    attachments: card.attachments
+    attachments: card.attachments,
+    comments: card.comments
   };
 
   const lines = Object.entries(frontmatter).map(([key, value]) => `${key}: ${formatFrontmatterValue(value)}`);
@@ -596,4 +611,25 @@ function attachmentArray(value: unknown): Attachment[] {
       size: typeof item.size === "number" && Number.isFinite(item.size) ? item.size : 0,
       addedAt: stringValue(item.addedAt) || timestamp()
     }));
+}
+
+function commentArray(value: unknown): Comment[] {
+  if (!Array.isArray(value)) {
+    return [];
+  }
+
+  return value
+    .filter((item): item is Record<string, unknown> => Boolean(item) && typeof item === "object")
+    .filter((item) => typeof item.id === "string" && typeof item.body === "string")
+    .map((item) => {
+      const editedAt = stringValue(item.editedAt);
+      return {
+        id: item.id as string,
+        authorId: stringValue(item.authorId),
+        authorName: stringValue(item.authorName) || "Unknown",
+        body: item.body as string,
+        createdAt: stringValue(item.createdAt) || timestamp(),
+        ...(editedAt ? { editedAt } : {})
+      };
+    });
 }

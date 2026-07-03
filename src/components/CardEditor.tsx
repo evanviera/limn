@@ -12,6 +12,7 @@ import { makeId, normalizeUrl, openExternal } from "../storage";
 import { MAX_NAME_LENGTH } from "../lib/constants";
 import { initials } from "../lib/format";
 import { CardAttachments } from "./CardAttachments";
+import { CardComments } from "./CardComments";
 import {
   NOTE_INLINE_PATTERN,
   clampNumber,
@@ -41,6 +42,7 @@ export function CardEditor({
   workspacePath,
   boards,
   members,
+  activeMember,
   onSave,
   onClose,
   onArchive,
@@ -48,6 +50,10 @@ export function CardEditor({
   onAddAttachments,
   onRemoveAttachment,
   onOpenAttachment,
+  onSelectActiveMember,
+  onAddComment,
+  onEditComment,
+  onDeleteComment,
   onOpenContextMenu,
   onCopyText
 }: {
@@ -55,6 +61,7 @@ export function CardEditor({
   workspacePath: string | null;
   boards: Board[];
   members: Member[];
+  activeMember: Member | null;
   onSave: (card: Card) => Promise<void>;
   onClose: () => void;
   onArchive: (card: Card) => Promise<void>;
@@ -62,6 +69,10 @@ export function CardEditor({
   onAddAttachments: (cardId: string) => Promise<void>;
   onRemoveAttachment: (cardId: string, attachment: Attachment) => Promise<void>;
   onOpenAttachment: (cardId: string, attachment: Attachment) => Promise<void>;
+  onSelectActiveMember: (memberId: string) => void;
+  onAddComment: (cardId: string, body: string) => Promise<void>;
+  onEditComment: (cardId: string, commentId: string, body: string) => Promise<void>;
+  onDeleteComment: (cardId: string, commentId: string) => Promise<void>;
   onOpenContextMenu: OpenContextMenu;
   onCopyText: (text: string) => Promise<void>;
 }) {
@@ -1020,6 +1031,19 @@ export function CardEditor({
                 onContextMenu={handleNotesContextMenu}
               />
             </section>
+
+            <CardComments
+              key={card.id}
+              comments={card.comments}
+              members={members}
+              activeMember={activeMember}
+              onSelectActiveMember={onSelectActiveMember}
+              onAddComment={(body) => onAddComment(card.id, body)}
+              onEditComment={(commentId, body) => onEditComment(card.id, commentId, body)}
+              onDeleteComment={(commentId) => onDeleteComment(card.id, commentId)}
+              onOpenContextMenu={onOpenContextMenu}
+              onCopyText={onCopyText}
+            />
           </div>
 
           <div

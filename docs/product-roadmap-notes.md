@@ -44,6 +44,8 @@ Real tasks collect screenshots, PDFs, logs, design files, and other artifacts. A
 
 Activity records system events, but teams also need human discussion: comments, mentions, decisions, and Slack-friendly references back to the card.
 
+**Shipped.** Each card now has a Discussion section (threaded comments with author attribution, edit/delete of your own, and @mention highlighting of known members). Because comments must be attributable, each person first picks who they are from the project's members via the sidebar identity control; that choice is device-local (stored per workspace in `localStorage`, never synced), so everyone sharing a folder keeps their own identity. Comments live in each card's Markdown frontmatter alongside activity/subtasks/attachments. Still open as follow-ups: @mention autocomplete in the composer and optional Slack notifications when someone is mentioned.
+
 ### Recurring Tasks and Templates
 
 Small teams often repeat the same checklists for releases, onboarding, QA passes, publishing, and operations. Card or board templates would reduce repeated setup.

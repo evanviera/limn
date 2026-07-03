@@ -3,6 +3,7 @@ import type { ReactNode } from "react";
 export type IconName =
   | "archive"
   | "calendar"
+  | "chat"
   | "check"
   | "chevron-down"
   | "chevron-up-right"
@@ -50,6 +51,13 @@ export function Icon({ name }: { name: IconName }) {
         <path d="M16 3v4" />
         <path d="M4 8h16" />
         <path d="M5 5h14v16H5z" />
+      </>
+    ),
+    chat: (
+      <>
+        <path d="M4 6a2 2 0 0 1 2-2h12a2 2 0 0 1 2 2v7a2 2 0 0 1-2 2H9l-5 4z" />
+        <path d="M8 8.5h8" />
+        <path d="M8 11.5h5" />
       </>
     ),
     check: <path d="m5 12 4 4L19 6" />,

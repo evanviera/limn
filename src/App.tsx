@@ -17,6 +17,7 @@ import {
   attachmentStoredName,
   createBoard,
   createCard,
+  createComment,
   deleteAttachmentFile,
   deleteBoard,
   deleteCard,
@@ -60,7 +61,8 @@ import { SettingsView } from "./components/SettingsView";
 import { WindowsTitlebar } from "./components/WindowsTitlebar";
 import { THEME_STORAGE_KEY } from "./lib/constants";
 import type { SlackNotificationKey, ThemeMode } from "./lib/constants";
-import { countLabel, errorText, readStoredThemeMode, sameJson, selectActiveBoardId, slackTag, upsertById } from "./lib/format";
+import { countLabel, errorText, initials, readStoredThemeMode, sameJson, selectActiveBoardId, slackTag, upsertById } from "./lib/format";
+import { readActiveMemberId, resolveActiveMember, writeActiveMemberId } from "./lib/identity";
 import { updateBannerMessage } from "./lib/updateMessages";
 import type { UpdateStatus } from "./lib/updateMessages";
 
@@ -85,6 +87,7 @@ export default function App() {
   const [settings, setSettings] = useState<WorkspaceSettings | null>(null);
   const settingsRef = useRef<WorkspaceSettings | null>(null);
   const [members, setMembers] = useState<Member[]>([]);
+  const [activeMemberId, setActiveMemberId] = useState("");
   const [boards, setBoards] = useState<Board[]>([]);
   const [cards, setCards] = useState<Card[]>([]);
   const [activeBoardId, setActiveBoardId] = useState("");
@@ -107,6 +110,7 @@ export default function App() {
 
   const activeBoard = boards.find((board) => board.id === activeBoardId) ?? boards[0] ?? null;
   const selectedCard = cards.find((card) => card.id === selectedCardId) ?? null;
+  const activeMember = resolveActiveMember(members, activeMemberId);
   const updaterAvailable = canUseUpdater();
 
   useLayoutEffect(() => {
@@ -246,6 +250,7 @@ export default function App() {
       settingsRef.current = data.settings;
       setSettings(data.settings);
       setMembers(data.membersFile.members);
+      setActiveMemberId(readActiveMemberId(selectedPath));
       setBoards(data.boards);
       setCards(data.cards);
       setActiveBoardId((current) => selectActiveBoardId(current, data.boards));
@@ -813,11 +818,77 @@ export default function App() {
     }
   }
 
+  // Comments, like attachments, persist immediately as they are posted and are
+  // not part of the editor draft. Adding one bumps updatedAt so the card file
+  // reflects the new discussion state and watch-refresh reconciliation matches
+  // our own write.
+  async function addComment(cardId: string, body: string) {
+    const card = cards.find((item) => item.id === cardId);
+    const author = resolveActiveMember(membersRef.current, activeMemberId);
+    const trimmed = body.trim();
+    if (!card || !workspacePath || !author || !trimmed) {
+      return;
+    }
+    try {
+      const comment = createComment(author.id, author.name, trimmed);
+      const next = { ...card, comments: [...card.comments, comment], updatedAt: timestamp() };
+      await persistCard(next, card);
+    } catch (reason) {
+      setError(`Comment failed: ${errorText(reason)}`);
+    }
+  }
+
+  async function editComment(cardId: string, commentId: string, body: string) {
+    const card = cards.find((item) => item.id === cardId);
+    const trimmed = body.trim();
+    if (!card || !workspacePath || !trimmed) {
+      return;
+    }
+    try {
+      const now = timestamp();
+      const next = {
+        ...card,
+        comments: card.comments.map((comment) => (comment.id === commentId ? { ...comment, body: trimmed, editedAt: now } : comment)),
+        updatedAt: now
+      };
+      await persistCard(next, card);
+    } catch (reason) {
+      setError(`Comment edit failed: ${errorText(reason)}`);
+    }
+  }
+
+  async function deleteComment(cardId: string, commentId: string) {
+    const card = cards.find((item) => item.id === cardId);
+    if (!card || !workspacePath) {
+      return;
+    }
+    try {
+      const next = { ...card, comments: card.comments.filter((comment) => comment.id !== commentId), updatedAt: timestamp() };
+      await persistCard(next, card);
+    } catch (reason) {
+      setError(`Comment delete failed: ${errorText(reason)}`);
+    }
+  }
+
+  // The active member is who *you* are on this device; the choice is stored
+  // locally (never in the synced workspace) so each person on a shared folder
+  // keeps their own identity. See lib/identity.ts.
+  function selectActiveMember(memberId: string) {
+    writeActiveMemberId(workspacePath, memberId);
+    setActiveMemberId(memberId);
+  }
+
   async function saveCardFromEditor(nextCard: Card) {
     const previous = cards.find((card) => card.id === nextCard.id);
-    // Attachments are persisted immediately and aren't tracked in the editor
-    // draft, so keep the live copy's list instead of the draft's stale one.
-    const normalized = { ...nextCard, attachments: previous?.attachments ?? nextCard.attachments, updatedAt: timestamp() };
+    // Attachments and comments are persisted immediately and aren't tracked in
+    // the editor draft, so keep the live copy's lists instead of the draft's
+    // stale ones.
+    const normalized = {
+      ...nextCard,
+      attachments: previous?.attachments ?? nextCard.attachments,
+      comments: previous?.comments ?? nextCard.comments,
+      updatedAt: timestamp()
+    };
     let withActivity = previous ? normalized : addActivity(normalized, "created", "Created card");
     const slackMessages: Array<{ key: SlackNotificationKey; message: string }> = [];
 
@@ -874,6 +945,10 @@ export default function App() {
     const nextMembers = members.filter((member) => member.id !== memberId);
     pendingMembersWriteRef.current = nextMembers;
     setMembers(nextMembers);
+    // Drop this device's identity if the removed member was who "you" are.
+    if (activeMemberId === memberId) {
+      selectActiveMember("");
+    }
     await saveMembers(workspacePath, { schemaVersion: 1, members: nextMembers });
   }
 
@@ -1020,6 +1095,22 @@ export default function App() {
       { label: "Copy category name", icon: "copy", onSelect: () => void copyText(group.name) },
       { type: "separator" },
       { label: "Delete category", icon: "trash", danger: true, onSelect: () => void deleteBoardGroup(group) }
+    ];
+  }
+
+  function identityContextItems(): ContextMenuItem[] {
+    if (members.length === 0) {
+      return [{ label: "Add members…", icon: "users", onSelect: () => setView("members") }];
+    }
+    const memberItems = members.map<ContextMenuItem>((member) => ({
+      label: activeMemberId === member.id ? `${member.name} (you)` : member.name,
+      icon: activeMemberId === member.id ? "check" : "users",
+      onSelect: () => selectActiveMember(member.id)
+    }));
+    return [
+      ...memberItems,
+      { type: "separator" },
+      { label: "Not set", icon: "x", disabled: !activeMemberId, onSelect: () => selectActiveMember("") }
     ];
   }
 
@@ -1327,6 +1418,28 @@ export default function App() {
         </nav>
         <div className="sidebar-bottom">
           <button
+            className="identity-select"
+            data-testid="identity-select"
+            title={activeMember ? `You are ${activeMember.name}. Change who you are.` : "Choose who you are to comment"}
+            onClick={(event) => openContextMenu(event, identityContextItems(), "You are")}
+            onContextMenu={(event) => openContextMenu(event, identityContextItems(), "You are")}
+          >
+            {activeMember ? (
+              <>
+                <span className="avatar small" style={{ background: activeMember.color }}>{initials(activeMember.name)}</span>
+                <span className="identity-select-text">
+                  <span className="identity-select-label">You</span>
+                  <span className="identity-select-name">{activeMember.name}</span>
+                </span>
+              </>
+            ) : (
+              <>
+                <Icon name="chat" />
+                <span className="identity-select-text">Set who you are</span>
+              </>
+            )}
+          </button>
+          <button
             data-testid="theme-toggle"
             title={`Switch to ${themeMode === "dark" ? "light" : "dark"} mode`}
             onClick={() => setThemeMode((current) => (current === "dark" ? "light" : "dark"))}
@@ -1453,6 +1566,7 @@ export default function App() {
             workspacePath={workspacePath}
             boards={boards}
             members={members}
+            activeMember={activeMember}
             onSave={saveCardFromEditor}
             onClose={() => setSelectedCardId(null)}
             onArchive={archiveCard}
@@ -1460,6 +1574,10 @@ export default function App() {
             onAddAttachments={attachFilesToCard}
             onRemoveAttachment={removeAttachmentFromCard}
             onOpenAttachment={openCardAttachment}
+            onSelectActiveMember={selectActiveMember}
+            onAddComment={addComment}
+            onEditComment={editComment}
+            onDeleteComment={deleteComment}
             onOpenContextMenu={openContextMenu}
             onCopyText={copyText}
           />

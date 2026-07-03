@@ -72,6 +72,20 @@ export interface Subtask {
   items: SubtaskListItem[];
 }
 
+export interface Comment {
+  id: string;
+  // Member id of the author. May reference a member that was later removed; the
+  // stored authorName keeps the comment readable when that happens.
+  authorId: string;
+  // Snapshot of the author's display name at post time so the discussion stays
+  // attributable even after a member is renamed or removed.
+  authorName: string;
+  body: string;
+  createdAt: string;
+  // Set only when the comment has been edited after posting.
+  editedAt?: string;
+}
+
 export interface Attachment {
   id: string;
   // Original file name, shown to the user.
@@ -104,6 +118,7 @@ export interface Card {
   activity: ActivityEvent[];
   subtasks: Subtask[];
   attachments: Attachment[];
+  comments: Comment[];
   body: string;
   fileName: string;
 }

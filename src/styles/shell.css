@@ -294,6 +294,43 @@
   border-top: 1px solid var(--border-soft);
 }
 
+/* "Who you are" identity picker: the active member's avatar + name, or a prompt
+   to choose one. Taller than a normal sidebar button to fit the stacked text. */
+.identity-select {
+  display: flex;
+  align-items: center;
+  gap: var(--space-3);
+  min-height: 44px;
+}
+
+.identity-select .avatar.small {
+  margin-left: 0;
+  box-shadow: none;
+}
+
+.identity-select-text {
+  display: grid;
+  gap: 0;
+  min-width: 0;
+}
+
+.identity-select-label {
+  color: var(--text-faint);
+  font-size: var(--text-xs);
+  font-weight: var(--weight-medium);
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+}
+
+.identity-select-name {
+  overflow: hidden;
+  color: var(--text);
+  font-size: var(--text-base);
+  font-weight: var(--weight-medium);
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
 .workspace {
   overflow: hidden;
   display: flex;

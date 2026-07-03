@@ -2,7 +2,7 @@ import assert from "node:assert/strict";
 import { mkdtemp, mkdir, readFile, readdir, rm, unlink, writeFile } from "node:fs/promises";
 import { join } from "node:path";
 import { tmpdir } from "node:os";
-import { addActivity, attachmentDisplayName, attachmentStoredName, createBoard, createCard, parseCard, parseWorkspace, serializeCard } from "../.tmp/storage-test/src/storage.js";
+import { addActivity, attachmentDisplayName, attachmentStoredName, createBoard, createCard, createComment, parseCard, parseWorkspace, serializeCard } from "../.tmp/storage-test/src/storage.js";
 
 const baseCard = {
   id: "card_one",
@@ -41,12 +41,27 @@ const baseCard = {
     { id: "att_one", name: "screenshot.png", storedName: "att_one-screenshot.png", size: 20480, addedAt: "2026-06-27T00:30:00.000Z" },
     { id: "att_two", name: "spec, final.pdf", storedName: "att_two-spec__final.pdf", size: 1048576, addedAt: "2026-06-27T00:31:00.000Z" }
   ],
+  comments: [
+    { id: "comment_one", authorId: "ada", authorName: "Ada Lovelace", body: "Kicking this off — @grace can you review?", createdAt: "2026-06-27T00:40:00.000Z" },
+    { id: "comment_two", authorId: "grace", authorName: "Grace Hopper", body: "On it.\nWill report back.", createdAt: "2026-06-27T00:45:00.000Z", editedAt: "2026-06-27T00:46:00.000Z" }
+  ],
   body: "Notes with --- inside the body stay intact.\nSecond line.\n",
   fileName: "card_one.md"
 };
 
 const roundTripped = parseCard(serializeCard(baseCard), baseCard.fileName);
 assert.deepEqual(roundTripped, baseCard);
+
+// createComment snapshots author + name and stamps id/createdAt; no editedAt yet.
+const freshComment = createComment("ada", "Ada Lovelace", "  Trimmed on the way in  ");
+assert.equal(freshComment.authorId, "ada");
+assert.equal(freshComment.authorName, "Ada Lovelace");
+assert.equal(freshComment.body, "  Trimmed on the way in  ");
+assert.equal(freshComment.editedAt, undefined);
+assert.match(freshComment.id, /^comment_/);
+
+// New cards start with an empty discussion.
+assert.deepEqual(createCard("board_one", "todo", "Fresh").comments, []);
 
 // Attachment path helpers sanitize names and strip directory prefixes.
 assert.equal(attachmentDisplayName("/Users/ada/Pictures/diagram final.png"), "diagram final.png");
@@ -78,6 +93,8 @@ const legacyCard = parseCard(
 assert.deepEqual(legacyCard.subtasks, []);
 // Cards written before attachments existed have no `attachments` line and default to [].
 assert.deepEqual(legacyCard.attachments, []);
+// Cards written before comments existed have no `comments` line and default to [].
+assert.deepEqual(legacyCard.comments, []);
 
 const quotedFalse = parseCard(
   [
@@ -203,6 +220,9 @@ try {
     attachments: [
       { id: "att_release", name: "notes.pdf", storedName: "att_release-notes.pdf", size: 4096, addedAt: "2026-06-27T00:00:00.000Z" }
     ],
+    comments: [
+      { id: "comment_acceptance", authorId: "ada", authorName: "Ada Lovelace", body: "Blocked on assets @grace", createdAt: "2026-06-27T00:00:00.000Z" }
+    ],
     body: "Initial notes",
     createdAt: "2026-06-27T00:00:00.000Z",
     updatedAt: "2026-06-27T00:00:00.000Z"
@@ -237,6 +257,9 @@ try {
   assert.deepEqual(reloaded.cards[0].labels, ["docs", "release"]);
   assert.deepEqual(reloaded.cards[0].attachments, [
     { id: "att_release", name: "notes.pdf", storedName: "att_release-notes.pdf", size: 4096, addedAt: "2026-06-27T00:00:00.000Z" }
+  ]);
+  assert.deepEqual(reloaded.cards[0].comments, [
+    { id: "comment_acceptance", authorId: "ada", authorName: "Ada Lovelace", body: "Blocked on assets @grace", createdAt: "2026-06-27T00:00:00.000Z" }
   ]);
   assert.equal(reloaded.cards[0].body, "External edits survive reload.");
 
