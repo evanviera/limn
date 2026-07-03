@@ -101,6 +101,7 @@ If an assigned member has a Slack handle configured in Members, Limn uses that h
 
 ## Future Work
 
+- See [Product Roadmap Notes](docs/product-roadmap-notes.md) for broader product direction and missing feature analysis.
 - Board import/export helpers.
 - Better conflict review UI for conflict copy files.
 - Due-date reminder scheduling.
