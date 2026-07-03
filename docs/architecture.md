@@ -23,6 +23,7 @@ focused" section before adding code to an existing large file.**
 - `dialogs.tsx` — `EmptyState`, `TextDialog`, `ConfirmDialog` and their state types.
 - `RichNoteText.tsx` — renders card note text (inline links / bold / italic).
 - `BoardView.tsx` — board columns, drag-and-drop, `TaskCardBody`, `MemberDots`.
+- `CardAttachments.tsx` — the card editor's attachments section (list / add / open / remove), fully prop-driven.
 - `MembersView.tsx`, `SettingsView.tsx`, `CardEditor.tsx`, `WindowsTitlebar.tsx` — the remaining views.
 
 ### `src/lib/`
@@ -49,7 +50,9 @@ order and add new partials to the barrel at the right position.
 ## Backend (`src-tauri/src/`)
 
 - `lib.rs` — Tauri bootstrap `run()`, the `#[tauri::command]` IPC handlers, and
-  the workspace/filesystem helpers + data structs.
+  the workspace/filesystem helpers + data structs. Attachments are copied into
+  `attachments/<cardId>/` in the workspace and referenced from each card's
+  frontmatter; the folder is removed when its card is deleted.
 - `menu.rs` — the native application menu (`build_app_menu` + `item`).
 - `tests.rs` — `#[cfg(test)]` integration tests (workspace round-trips, Slack posts).
 

@@ -12,16 +12,22 @@ import { getCurrentWindow } from "@tauri-apps/api/window";
 import { listen } from "./ipc";
 import {
   addActivity,
+  addAttachmentFile,
+  attachmentDisplayName,
+  attachmentStoredName,
   createBoard,
   createCard,
+  deleteAttachmentFile,
   deleteBoard,
   deleteCard,
   getLastWorkspace,
   loadWorkspace,
   makeId,
   normalizeUrl,
+  openAttachmentFile,
   openExternal,
   openWorkspaceFolder,
+  pickAttachmentFiles,
   pickWorkspaceFolder,
   postSlack,
   saveBoard,
@@ -32,7 +38,7 @@ import {
   timestamp,
   watchWorkspace
 } from "./storage";
-import { Board, BoardGroup, BoardList, Card, Member, Subtask, SubtaskListItem, View, WorkspaceSettings, WriteResult } from "./types";
+import { Attachment, Board, BoardGroup, BoardList, Card, Member, Subtask, SubtaskListItem, View, WorkspaceSettings, WriteResult } from "./types";
 import {
   canUseUpdater,
   checkForUpdate,
@@ -749,9 +755,69 @@ export default function App() {
     }
   }
 
+  // Attachments are file-backed, so add/remove persist immediately rather than
+  // riding along with the editor's Save. Each copies/deletes the file first, then
+  // records the change (and an activity entry) on the card.
+  async function attachFilesToCard(cardId: string) {
+    const card = cards.find((item) => item.id === cardId);
+    if (!card || !workspacePath) {
+      return;
+    }
+    try {
+      const sources = await pickAttachmentFiles();
+      if (sources.length === 0) {
+        return;
+      }
+      const added: Attachment[] = [];
+      for (const source of sources) {
+        const id = makeId("att");
+        const name = attachmentDisplayName(source);
+        const storedName = attachmentStoredName(id, name);
+        const size = await addAttachmentFile(workspacePath, cardId, storedName, source);
+        added.push({ id, name, storedName, size, addedAt: timestamp() });
+      }
+      const message = added.length === 1 ? `Attached ${added[0].name}` : `Attached ${added.length} files`;
+      const next = addActivity({ ...card, attachments: [...card.attachments, ...added] }, "updated", message);
+      await persistCard(next, card);
+    } catch (reason) {
+      setError(`Attachment failed: ${errorText(reason)}`);
+    }
+  }
+
+  async function removeAttachmentFromCard(cardId: string, attachment: Attachment) {
+    const card = cards.find((item) => item.id === cardId);
+    if (!card || !workspacePath) {
+      return;
+    }
+    try {
+      await deleteAttachmentFile(workspacePath, cardId, attachment.storedName);
+      const next = addActivity(
+        { ...card, attachments: card.attachments.filter((item) => item.id !== attachment.id) },
+        "updated",
+        `Removed attachment ${attachment.name}`
+      );
+      await persistCard(next, card);
+    } catch (reason) {
+      setError(`Remove attachment failed: ${errorText(reason)}`);
+    }
+  }
+
+  async function openCardAttachment(cardId: string, attachment: Attachment) {
+    if (!workspacePath) {
+      return;
+    }
+    try {
+      await openAttachmentFile(workspacePath, cardId, attachment.storedName);
+    } catch (reason) {
+      setError(`Open attachment failed: ${errorText(reason)}`);
+    }
+  }
+
   async function saveCardFromEditor(nextCard: Card) {
     const previous = cards.find((card) => card.id === nextCard.id);
-    const normalized = { ...nextCard, updatedAt: timestamp() };
+    // Attachments are persisted immediately and aren't tracked in the editor
+    // draft, so keep the live copy's list instead of the draft's stale one.
+    const normalized = { ...nextCard, attachments: previous?.attachments ?? nextCard.attachments, updatedAt: timestamp() };
     let withActivity = previous ? normalized : addActivity(normalized, "created", "Created card");
     const slackMessages: Array<{ key: SlackNotificationKey; message: string }> = [];
 
@@ -1389,6 +1455,9 @@ export default function App() {
             onClose={() => setSelectedCardId(null)}
             onArchive={archiveCard}
             onDelete={removeCard}
+            onAddAttachments={attachFilesToCard}
+            onRemoveAttachment={removeAttachmentFromCard}
+            onOpenAttachment={openCardAttachment}
             onOpenContextMenu={openContextMenu}
             onCopyText={copyText}
           />

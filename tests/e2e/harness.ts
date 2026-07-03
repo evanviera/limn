@@ -18,6 +18,7 @@ export interface HarnessSnapshot {
   members: { schemaVersion: number; members: unknown[] };
   boards: HarnessFile[];
   cards: HarnessFile[];
+  attachments: Array<{ path: string; size: number }>;
   lastWorkspace: string | null;
   externalLinks: string[];
   loadWorkspaceCount: number;
@@ -72,4 +73,13 @@ export async function queuePrompt(page: Page, value: string | null): Promise<voi
       detail: { type: "queuePrompt", value: nextValue }
     }));
   }, value);
+}
+
+/** Queue the paths the next `pick_attachment_files` (native file dialog) returns. */
+export async function queueAttachmentPick(page: Page, paths: string[]): Promise<void> {
+  await page.evaluate((nextPaths) => {
+    document.dispatchEvent(new CustomEvent("limn-e2e-command", {
+      detail: { type: "queueAttachmentPick", paths: nextPaths }
+    }));
+  }, paths);
 }

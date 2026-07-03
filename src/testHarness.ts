@@ -14,6 +14,7 @@ interface HarnessSnapshot {
   members: MembersFile;
   boards: HarnessFile[];
   cards: HarnessFile[];
+  attachments: Array<{ path: string; size: number }>;
   lastWorkspace: string | null;
   externalLinks: string[];
   loadWorkspaceCount: number;
@@ -47,6 +48,10 @@ const settings: WorkspaceSettings = {
 const members: MembersFile = { schemaVersion: 1, members: [] };
 const boards = new Map<string, string>();
 const cards = new Map<string, string>();
+// Attachment files keyed by `${cardId}/${storedName}` → byte size. There is no
+// real filesystem in the harness, so this stands in for attachments/<cardId>/.
+const attachments = new Map<string, number>();
+const attachmentPickQueue: string[][] = [];
 const listeners = new Map<string, Set<Handler<any>>>();
 const externalLinks: string[] = [];
 const slack: Array<{ webhookUrl: string; message: string }> = [];
@@ -76,6 +81,10 @@ if (new URLSearchParams(window.location.search).has("resetLimnE2e")) {
     for (const file of restored.cards) {
       cards.set(file.file_name, file.content);
     }
+    attachments.clear();
+    for (const item of restored.attachments ?? []) {
+      attachments.set(item.path, item.size);
+    }
     externalLinks.splice(0, externalLinks.length, ...(restored.externalLinks ?? []));
     slack.splice(0, slack.length, ...restored.slack);
     Object.assign(updater, restored.updater ?? { mode: "none", installed: false, restarted: false });
@@ -97,6 +106,7 @@ function snapshot(): HarnessSnapshot {
     members: JSON.parse(JSON.stringify(members)) as MembersFile,
     boards: [...boards.entries()].sort().map(([file_name, content]) => ({ file_name, content })),
     cards: [...cards.entries()].sort().map(([file_name, content]) => ({ file_name, content })),
+    attachments: [...attachments.entries()].sort().map(([path, size]) => ({ path, size })),
     lastWorkspace,
     externalLinks: [...externalLinks],
     loadWorkspaceCount,
@@ -195,10 +205,44 @@ window.__LIMN_TEST_IPC__ = {
         emit("workspace-changed");
         return { relative_path: `cards/${fileName}`, conflict: false } satisfies WriteResult as T;
       }
-      case "delete_card_file":
-        cards.delete(fileNameArg(args));
+      case "delete_card_file": {
+        const fileName = fileNameArg(args);
+        cards.delete(fileName);
+        const cardId = fileName.replace(/\.md$/, "");
+        for (const key of [...attachments.keys()]) {
+          if (key.startsWith(`${cardId}/`)) {
+            attachments.delete(key);
+          }
+        }
         emit("workspace-changed");
         return undefined as T;
+      }
+      case "pick_attachment_files":
+        return (attachmentPickQueue.shift() ?? []) as T;
+      case "add_attachment": {
+        const cardId = String(args?.cardId ?? "");
+        const storedName = String(args?.storedName ?? "");
+        const source = String(args?.sourcePath ?? "");
+        // Deterministic stand-in size so tests can assert against it.
+        const size = source.length + 1024;
+        attachments.set(`${cardId}/${storedName}`, size);
+        updateDebugState();
+        return size as T;
+      }
+      case "delete_attachment": {
+        const cardId = String(args?.cardId ?? "");
+        const storedName = String(args?.storedName ?? "");
+        attachments.delete(`${cardId}/${storedName}`);
+        updateDebugState();
+        return undefined as T;
+      }
+      case "open_attachment": {
+        const cardId = String(args?.cardId ?? "");
+        const storedName = String(args?.storedName ?? "");
+        externalLinks.push(`attachment://${cardId}/${storedName}`);
+        updateDebugState();
+        return undefined as T;
+      }
       case "post_slack":
         if (typeof args?.webhookUrl !== "string" || typeof args?.message !== "string") {
           throw new Error("Missing Slack arguments");
@@ -296,6 +340,7 @@ function applyCommand(
     | { type: "corruptCard"; fileName: string }
     | { type: "queuePrompt"; value: string | null }
     | { type: "queueConfirm"; value: boolean }
+    | { type: "queueAttachmentPick"; paths: string[] }
     | { type: "setUpdaterMode"; mode: UpdaterMode }
     | { type: "resetSlack" }
 ) {
@@ -319,6 +364,9 @@ function applyCommand(
       break;
     case "queueConfirm":
       confirmQueue.push(detail.value);
+      break;
+    case "queueAttachmentPick":
+      attachmentPickQueue.push(detail.paths);
       break;
     case "setUpdaterMode":
       window.__LIMN_E2E__?.setUpdaterMode(detail.mode);

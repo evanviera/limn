@@ -156,11 +156,84 @@ fn write_card_file(
 fn delete_card_file(path: String, file_name: String) -> Result<(), String> {
     let root = workspace_root(&path)?;
     validate_file_name(&file_name, "md")?;
-    let target = root.join("cards").join(file_name);
+    let target = root.join("cards").join(&file_name);
     if target.exists() {
-        fs::remove_file(target).map_err(display_err)?;
+        fs::remove_file(&target).map_err(display_err)?;
+    }
+    // Cards are keyed by id and their attachments live in attachments/<id>/, so
+    // delete that folder alongside the card file to avoid orphaned files.
+    let card_id = file_name.trim_end_matches(".md");
+    if !card_id.is_empty() {
+        let attachments_dir = root.join("attachments").join(card_id);
+        if attachments_dir.exists() {
+            let _ = fs::remove_dir_all(attachments_dir);
+        }
     }
     Ok(())
+}
+
+#[tauri::command]
+fn pick_attachment_files() -> Result<Vec<String>, String> {
+    Ok(rfd::FileDialog::new()
+        .set_title("Add attachments")
+        .pick_files()
+        .map(|paths| {
+            paths
+                .into_iter()
+                .map(|path| path.to_string_lossy().to_string())
+                .collect()
+        })
+        .unwrap_or_default())
+}
+
+#[tauri::command]
+fn add_attachment(
+    path: String,
+    card_id: String,
+    stored_name: String,
+    source_path: String,
+) -> Result<u64, String> {
+    let root = workspace_root(&path)?;
+    validate_path_segment(&card_id)?;
+    validate_path_segment(&stored_name)?;
+
+    let source = PathBuf::from(&source_path);
+    if !source.is_file() {
+        return Err("Attachment source file was not found".to_string());
+    }
+
+    let dir = root.join("attachments").join(&card_id);
+    fs::create_dir_all(&dir).map_err(display_err)?;
+    let bytes = fs::copy(&source, dir.join(&stored_name)).map_err(display_err)?;
+    Ok(bytes)
+}
+
+#[tauri::command]
+fn delete_attachment(path: String, card_id: String, stored_name: String) -> Result<(), String> {
+    let root = workspace_root(&path)?;
+    validate_path_segment(&card_id)?;
+    validate_path_segment(&stored_name)?;
+
+    let dir = root.join("attachments").join(&card_id);
+    let target = dir.join(&stored_name);
+    if target.exists() {
+        fs::remove_file(&target).map_err(display_err)?;
+    }
+    remove_dir_if_empty(&dir);
+    Ok(())
+}
+
+#[tauri::command]
+fn open_attachment(path: String, card_id: String, stored_name: String) -> Result<(), String> {
+    let root = workspace_root(&path)?;
+    validate_path_segment(&card_id)?;
+    validate_path_segment(&stored_name)?;
+
+    let target = root.join("attachments").join(&card_id).join(&stored_name);
+    if !target.exists() {
+        return Err("Attachment file does not exist".to_string());
+    }
+    open::that(target).map_err(display_err)
 }
 
 #[tauri::command]
@@ -317,6 +390,10 @@ pub fn run() {
             write_card_file,
             delete_card_file,
             delete_board_file,
+            pick_attachment_files,
+            add_attachment,
+            delete_attachment,
+            open_attachment,
             save_last_workspace,
             get_last_workspace,
             watch_workspace,
@@ -416,6 +493,27 @@ fn validate_file_name(file_name: &str, extension: &str) -> Result<(), String> {
         return Err(format!("Expected .{extension} file"));
     }
     Ok(())
+}
+
+// Guard a single path segment (a card id or stored attachment name) so it can be
+// safely joined onto the workspace path without escaping it.
+fn validate_path_segment(segment: &str) -> Result<(), String> {
+    if segment.is_empty()
+        || segment.contains('/')
+        || segment.contains('\\')
+        || segment.starts_with('.')
+    {
+        return Err("Invalid attachment path".to_string());
+    }
+    Ok(())
+}
+
+fn remove_dir_if_empty(dir: &Path) {
+    if let Ok(mut entries) = fs::read_dir(dir) {
+        if entries.next().is_none() {
+            let _ = fs::remove_dir(dir);
+        }
+    }
 }
 
 fn extract_frontmatter_value(content: &str, key: &str) -> Option<String> {

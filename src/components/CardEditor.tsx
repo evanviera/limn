@@ -7,10 +7,11 @@ import type {
   MouseEvent as ReactMouseEvent,
   PointerEvent as ReactPointerEvent
 } from "react";
-import type { Board, Card, Member, Subtask, SubtaskListItem } from "../types";
+import type { Attachment, Board, Card, Member, Subtask, SubtaskListItem } from "../types";
 import { makeId, normalizeUrl, openExternal } from "../storage";
 import { MAX_NAME_LENGTH } from "../lib/constants";
 import { initials } from "../lib/format";
+import { CardAttachments } from "./CardAttachments";
 import {
   NOTE_INLINE_PATTERN,
   clampNumber,
@@ -43,6 +44,9 @@ export function CardEditor({
   onClose,
   onArchive,
   onDelete,
+  onAddAttachments,
+  onRemoveAttachment,
+  onOpenAttachment,
   onOpenContextMenu,
   onCopyText
 }: {
@@ -53,11 +57,15 @@ export function CardEditor({
   onClose: () => void;
   onArchive: (card: Card) => Promise<void>;
   onDelete: (card: Card) => Promise<void>;
+  onAddAttachments: (cardId: string) => Promise<void>;
+  onRemoveAttachment: (cardId: string, attachment: Attachment) => Promise<void>;
+  onOpenAttachment: (cardId: string, attachment: Attachment) => Promise<void>;
   onOpenContextMenu: OpenContextMenu;
   onCopyText: (text: string) => Promise<void>;
 }) {
   const [draft, setDraft] = useState(card);
   const [saving, setSaving] = useState(false);
+  const [attachmentBusy, setAttachmentBusy] = useState(false);
   const [labelInput, setLabelInput] = useState("");
   const [sideWidth, setSideWidth] = useState(CARD_EDITOR_SIDE_WIDTH_DEFAULT);
   const [resizingColumns, setResizingColumns] = useState(false);
@@ -72,10 +80,15 @@ export function CardEditor({
   const notesLinkLabelInputRef = useRef<HTMLInputElement>(null);
   const pendingNotesLinkRangeRef = useRef<Range | null>(null);
   const activeNotesLinkRef = useRef<HTMLAnchorElement | null>(null);
+  const resizeCleanupRef = useRef<(() => void) | null>(null);
   const cardEditorBodyStyle = { "--card-editor-side-width": `${sideWidth}px` } as CSSProperties;
   const board = boards.find((item) => item.id === draft.boardId) ?? boards[0];
   const completedSubtasks = draft.subtasks.filter((subtask) => subtask.completed).length;
 
+  // Reset the draft only when a *different* card opens. Attachment actions
+  // persist the open card immediately (adding/removing files can't be deferred),
+  // which replaces the `card` prop object; keying this on the id keeps the user's
+  // unsaved title/notes/subtask edits when only that card's attachments change.
   useEffect(() => {
     setDraft(card);
     setLabelInput("");
@@ -83,7 +96,8 @@ export function CardEditor({
     setLinkDraft(null);
     activeNotesLinkRef.current = null;
     pendingNotesLinkRangeRef.current = null;
-  }, [card]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [card.id]);
   useLayoutEffect(() => {
     const input = notesInputRef.current;
     if (!input) {
@@ -112,6 +126,9 @@ export function CardEditor({
     window.addEventListener("limn-save-card-editor", saveFromMenu);
     return () => window.removeEventListener("limn-save-card-editor", saveFromMenu);
   }, [draft, onSave, saving]);
+
+  // Detach any live splitter-drag window listeners when the editor unmounts.
+  useEffect(() => () => resizeCleanupRef.current?.(), []);
 
   function updateAssignee(memberId: string, checked: boolean) {
     setDraft((current) => ({
@@ -221,6 +238,20 @@ export function CardEditor({
     setDraft((current) => ({ ...current, labels: current.labels.filter((item) => item !== label) }));
   }
 
+  // Attachment add/remove persist to disk immediately (see the draft-reset note
+  // above). Serialize them behind a busy flag so a slow copy can't be double-run.
+  async function runAttachmentAction(action: () => Promise<void>) {
+    if (attachmentBusy) {
+      return;
+    }
+    setAttachmentBusy(true);
+    try {
+      await action();
+    } finally {
+      setAttachmentBusy(false);
+    }
+  }
+
   function cardEditorSideWidthFromPointer(clientX: number): number {
     const body = cardEditorBodyRef.current;
     if (!body) {
@@ -259,25 +290,28 @@ export function CardEditor({
   function handleCardEditorSplitterPointerDown(event: ReactPointerEvent<HTMLDivElement>) {
     event.preventDefault();
     event.stopPropagation();
-    event.currentTarget.setPointerCapture(event.pointerId);
     setResizingColumns(true);
     resizeCardEditorSideWidth(event.clientX);
-  }
 
-  function handleCardEditorSplitterPointerMove(event: ReactPointerEvent<HTMLDivElement>) {
-    if (!resizingColumns) {
-      return;
-    }
-
-    event.preventDefault();
-    resizeCardEditorSideWidth(event.clientX);
-  }
-
-  function handleCardEditorSplitterPointerUp(event: ReactPointerEvent<HTMLDivElement>) {
-    if (event.currentTarget.hasPointerCapture(event.pointerId)) {
-      event.currentTarget.releasePointerCapture(event.pointerId);
-    }
-    setResizingColumns(false);
+    // Track the drag on the window so it keeps resizing when the pointer leaves
+    // the 13px splitter or the body scrolls. Listeners are attached synchronously
+    // here (not via effect) so the first pointer-move after this event can't slip
+    // through before they're live.
+    resizeCleanupRef.current?.();
+    const handleMove = (moveEvent: PointerEvent) => resizeCardEditorSideWidth(moveEvent.clientX);
+    const stop = () => {
+      setResizingColumns(false);
+      resizeCleanupRef.current?.();
+    };
+    resizeCleanupRef.current = () => {
+      window.removeEventListener("pointermove", handleMove);
+      window.removeEventListener("pointerup", stop);
+      window.removeEventListener("pointercancel", stop);
+      resizeCleanupRef.current = null;
+    };
+    window.addEventListener("pointermove", handleMove);
+    window.addEventListener("pointerup", stop);
+    window.addEventListener("pointercancel", stop);
   }
 
   function handleCardEditorSplitterKeyDown(event: ReactKeyboardEvent<HTMLDivElement>) {
@@ -871,6 +905,16 @@ export function CardEditor({
               )}
             </section>
 
+            <CardAttachments
+              attachments={card.attachments}
+              busy={attachmentBusy}
+              onAdd={() => void runAttachmentAction(() => onAddAttachments(card.id))}
+              onOpen={(attachment) => void onOpenAttachment(card.id, attachment)}
+              onRemove={(attachment) => void runAttachmentAction(() => onRemoveAttachment(card.id, attachment))}
+              onOpenContextMenu={onOpenContextMenu}
+              onCopyText={onCopyText}
+            />
+
             <section className="main-section notes-editor" aria-labelledby="notes-heading">
               <div className="main-section-head notes-editor-header">
                 <h3 id="notes-heading">Notes</h3>
@@ -986,10 +1030,7 @@ export function CardEditor({
             tabIndex={0}
             title="Resize columns"
             onKeyDown={handleCardEditorSplitterKeyDown}
-            onPointerCancel={handleCardEditorSplitterPointerUp}
             onPointerDown={handleCardEditorSplitterPointerDown}
-            onPointerMove={handleCardEditorSplitterPointerMove}
-            onPointerUp={handleCardEditorSplitterPointerUp}
           />
 
           <aside className="card-editor-side" aria-label="Card properties" data-testid="card-editor-side">

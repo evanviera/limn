@@ -72,6 +72,18 @@ export interface Subtask {
   items: SubtaskListItem[];
 }
 
+export interface Attachment {
+  id: string;
+  // Original file name, shown to the user.
+  name: string;
+  // File name on disk under attachments/<cardId>/. Sanitized + id-prefixed so it
+  // is collision-free and safe to join onto a path.
+  storedName: string;
+  // Size in bytes, as reported by the copy that placed the file in the workspace.
+  size: number;
+  addedAt: string;
+}
+
 export interface Card {
   id: string;
   title: string;
@@ -86,6 +98,7 @@ export interface Card {
   updatedAt: string;
   activity: ActivityEvent[];
   subtasks: Subtask[];
+  attachments: Attachment[];
   body: string;
   fileName: string;
 }

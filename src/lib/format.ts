@@ -82,3 +82,23 @@ export function selectActiveBoardId(current: string, boards: Board[]): string {
 export function countLabel(count: number, label: string) {
   return `${count} ${label}${count === 1 ? "" : "s"}`;
 }
+
+// Human-readable file size for attachment rows. Keeps one decimal only when it
+// adds information (e.g. "1.4 MB" but "12 MB" and "512 B").
+export function formatFileSize(bytes: number): string {
+  if (!Number.isFinite(bytes) || bytes <= 0) {
+    return "0 B";
+  }
+  if (bytes < 1024) {
+    return `${Math.round(bytes)} B`;
+  }
+  const units = ["KB", "MB", "GB", "TB"];
+  let value = bytes / 1024;
+  let unitIndex = 0;
+  while (value >= 1024 && unitIndex < units.length - 1) {
+    value /= 1024;
+    unitIndex += 1;
+  }
+  const rounded = value >= 10 || Number.isInteger(value) ? Math.round(value) : Number(value.toFixed(1));
+  return `${rounded} ${units[unitIndex]}`;
+}

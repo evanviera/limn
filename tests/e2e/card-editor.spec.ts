@@ -1,5 +1,5 @@
 import { test, expect } from "@playwright/test";
-import { openApp, openWorkspace, setUpdaterMode, snapshot } from "./harness";
+import { openApp, openWorkspace, queueAttachmentPick, setUpdaterMode, snapshot } from "./harness";
 
 test.describe("smoke", () => {
   test("card editor divider resizes the detail rail", async ({ page }) => {
@@ -17,6 +17,9 @@ test.describe("smoke", () => {
     const splitter = page.getByTestId("card-editor-splitter");
     const side = page.getByTestId("card-editor-side");
     await expect(splitter).toBeVisible();
+    // Let the workspace watch-refresh that follows creating the card settle before
+    // the precise splitter drag, so the drag can't land mid-reconcile.
+    await page.waitForTimeout(250);
 
     const beforeBox = await side.boundingBox();
     const splitterBox = await splitter.boundingBox();
@@ -66,6 +69,47 @@ test.describe("smoke", () => {
     expect(saved.cards[0].content).toContain('"items"');
     expect(saved.cards[0].content).toContain('"text":"Logo files"');
     expect(saved.cards[0].content).toContain('"url":"https://example.com/brand"');
+  });
+
+  test("attachments can be added to and removed from a card", async ({ page }) => {
+    await openApp(page);
+    await openWorkspace(page);
+
+    await page.getByTestId("create-board").click();
+    await page.getByTestId("text-dialog-input").fill("Attachment Board");
+    await page.getByTestId("text-dialog-submit").click();
+
+    await page.getByTestId("add-card-todo").click();
+    await page.getByTestId("text-dialog-input").fill("Collect artifacts");
+    await page.getByTestId("text-dialog-submit").click();
+
+    await expect(page.getByTestId("add-attachment")).toBeVisible();
+    await expect(page.getByText("No files yet")).toBeVisible();
+
+    await queueAttachmentPick(page, ["/mock/uploads/screenshot.png"]);
+    await page.getByTestId("add-attachment").click();
+
+    const attachmentOpen = page.locator('[data-testid^="attachment-"][data-testid$="-open"]');
+    await expect(attachmentOpen).toContainText("screenshot.png");
+
+    await expect.poll(async () => (await snapshot(page)).attachments.length).toBe(1);
+    const afterAdd = await snapshot(page);
+    expect(afterAdd.attachments[0].path).toContain("/att_");
+    expect(afterAdd.attachments[0].path).toContain("-screenshot.png");
+    expect(afterAdd.attachments[0].size).toBeGreaterThan(0);
+    expect(afterAdd.cards[0].content).toContain('"name":"screenshot.png"');
+    expect(afterAdd.cards[0].content).toContain('"storedName"');
+    expect(afterAdd.cards[0].content).toContain("Attached screenshot.png");
+
+    // Opening an attachment routes through the native open command (recorded as an
+    // external link by the harness).
+    await attachmentOpen.click();
+    await expect.poll(async () => (await snapshot(page)).externalLinks.some((link) => link.startsWith("attachment://"))).toBe(true);
+
+    await page.locator('[data-testid^="attachment-"][data-testid$="-remove"]').click();
+    await expect(page.getByText("No files yet")).toBeVisible();
+    await expect.poll(async () => (await snapshot(page)).attachments.length).toBe(0);
+    expect((await snapshot(page)).cards[0].content).toContain("attachments: []");
   });
 
   test("right-click context menus expose board, editor, and card actions", async ({ page }) => {

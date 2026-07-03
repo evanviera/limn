@@ -121,6 +121,100 @@ fn unreadable_text_files_are_reported_without_failing_workspace_load() {
     let _ = fs::remove_dir_all(root);
 }
 
+#[test]
+fn attachments_are_copied_and_deleted_with_their_card() {
+    let root = test_workspace("attachments");
+    let path = root.to_string_lossy().to_string();
+    init_workspace(path.clone()).expect("workspace initializes");
+
+    let source = root.join("source.txt");
+    fs::write(&source, b"hello attachment").expect("source writes");
+
+    let size = add_attachment(
+        path.clone(),
+        "card_att".to_string(),
+        "att_1-source.txt".to_string(),
+        source.to_string_lossy().to_string(),
+    )
+    .expect("attachment copies");
+    assert_eq!(size, 16);
+
+    let stored = root.join("attachments/card_att/att_1-source.txt");
+    assert!(stored.exists());
+    assert_eq!(fs::read(&stored).expect("stored reads"), b"hello attachment");
+
+    write_card_file(
+        path.clone(),
+        "card_att.md".to_string(),
+        card_markdown("card_att", "2026-06-27T00:00:00.000Z", "Body"),
+        None,
+    )
+    .expect("card writes");
+    delete_card_file(path.clone(), "card_att.md".to_string()).expect("card deletes");
+    assert!(!root.join("attachments/card_att").exists());
+
+    let _ = fs::remove_dir_all(root);
+}
+
+#[test]
+fn delete_attachment_removes_file_and_empty_folder() {
+    let root = test_workspace("attachment_delete");
+    let path = root.to_string_lossy().to_string();
+    init_workspace(path.clone()).expect("workspace initializes");
+
+    let source = root.join("logo.png");
+    fs::write(&source, b"png-bytes").expect("source writes");
+    add_attachment(
+        path.clone(),
+        "card_x".to_string(),
+        "att_2-logo.png".to_string(),
+        source.to_string_lossy().to_string(),
+    )
+    .expect("attachment copies");
+
+    delete_attachment(
+        path.clone(),
+        "card_x".to_string(),
+        "att_2-logo.png".to_string(),
+    )
+    .expect("attachment deletes");
+    assert!(!root.join("attachments/card_x/att_2-logo.png").exists());
+    assert!(!root.join("attachments/card_x").exists());
+
+    let _ = fs::remove_dir_all(root);
+}
+
+#[test]
+fn attachment_commands_reject_path_traversal() {
+    let root = test_workspace("attachment_traversal");
+    let path = root.to_string_lossy().to_string();
+    init_workspace(path.clone()).expect("workspace initializes");
+
+    let source = root.join("data.bin");
+    fs::write(&source, b"x").expect("source writes");
+    let source_path = source.to_string_lossy().to_string();
+
+    let bad_card = add_attachment(
+        path.clone(),
+        "..".to_string(),
+        "att.bin".to_string(),
+        source_path.clone(),
+    )
+    .expect_err("traversal card id rejected");
+    assert!(bad_card.contains("Invalid attachment path"));
+
+    let bad_name = add_attachment(
+        path,
+        "card_ok".to_string(),
+        "../escape.bin".to_string(),
+        source_path,
+    )
+    .expect_err("traversal stored name rejected");
+    assert!(bad_name.contains("Invalid attachment path"));
+
+    let _ = fs::remove_dir_all(root);
+}
+
 #[tokio::test]
 async fn post_slack_sends_expected_payload() {
     let server = TestHttpServer::start(200, "ok");

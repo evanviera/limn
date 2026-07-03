@@ -764,6 +764,60 @@
   border-color: var(--danger-border);
 }
 
+/* --- Attachments (card editor) --- */
+.attachment-list {
+  display: grid;
+  gap: var(--space-1);
+  min-width: 0;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.attachment-row {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  align-items: center;
+  gap: var(--space-2);
+  min-width: 0;
+}
+
+.attachment-open {
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr) auto;
+  align-items: center;
+  justify-content: start;
+  gap: var(--space-2);
+  min-width: 0;
+  text-align: left;
+  color: var(--text-strong);
+  background: transparent;
+  border-color: transparent;
+}
+
+.attachment-open:hover:not(:disabled) {
+  background: var(--surface-hover);
+  border-color: var(--border-soft);
+}
+
+.attachment-open .icon {
+  color: var(--text-muted);
+}
+
+.attachment-name {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.attachment-size {
+  flex: none;
+  color: var(--text-muted);
+  font-size: var(--text-sm);
+  font-variant-numeric: tabular-nums;
+}
+
 /* Inline link editor shared by sub-tasks and their list items: a link glyph, a
    quiet URL field, and an "open" affordance that appears once a URL exists. */
 .link-line {

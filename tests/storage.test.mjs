@@ -2,7 +2,7 @@ import assert from "node:assert/strict";
 import { mkdtemp, mkdir, readFile, readdir, rm, unlink, writeFile } from "node:fs/promises";
 import { join } from "node:path";
 import { tmpdir } from "node:os";
-import { addActivity, createBoard, createCard, parseCard, parseWorkspace, serializeCard } from "../.tmp/storage-test/src/storage.js";
+import { addActivity, attachmentDisplayName, attachmentStoredName, createBoard, createCard, parseCard, parseWorkspace, serializeCard } from "../.tmp/storage-test/src/storage.js";
 
 const baseCard = {
   id: "card_one",
@@ -37,12 +37,22 @@ const baseCard = {
     },
     { id: "subtask_two", title: "Review with team", completed: false, url: "", items: [] }
   ],
+  attachments: [
+    { id: "att_one", name: "screenshot.png", storedName: "att_one-screenshot.png", size: 20480, addedAt: "2026-06-27T00:30:00.000Z" },
+    { id: "att_two", name: "spec, final.pdf", storedName: "att_two-spec__final.pdf", size: 1048576, addedAt: "2026-06-27T00:31:00.000Z" }
+  ],
   body: "Notes with --- inside the body stay intact.\nSecond line.\n",
   fileName: "card_one.md"
 };
 
 const roundTripped = parseCard(serializeCard(baseCard), baseCard.fileName);
 assert.deepEqual(roundTripped, baseCard);
+
+// Attachment path helpers sanitize names and strip directory prefixes.
+assert.equal(attachmentDisplayName("/Users/ada/Pictures/diagram final.png"), "diagram final.png");
+assert.equal(attachmentDisplayName("C:\\Users\\ada\\report.pdf"), "report.pdf");
+assert.equal(attachmentStoredName("att_abc", "My Report (v2).pdf"), "att_abc-My_Report_v2_.pdf");
+assert.equal(attachmentStoredName("att_abc", "/tmp/.hidden config"), "att_abc-hidden_config");
 
 // Cards written before sub-tasks existed have no `subtasks` line and default to [].
 const legacyCard = parseCard(
@@ -66,6 +76,8 @@ const legacyCard = parseCard(
   "card_legacy.md"
 );
 assert.deepEqual(legacyCard.subtasks, []);
+// Cards written before attachments existed have no `attachments` line and default to [].
+assert.deepEqual(legacyCard.attachments, []);
 
 const quotedFalse = parseCard(
   [
@@ -188,6 +200,9 @@ try {
     assignees: ["ada"],
     labels: ["docs", "release"],
     due: "2026-07-01",
+    attachments: [
+      { id: "att_release", name: "notes.pdf", storedName: "att_release-notes.pdf", size: 4096, addedAt: "2026-06-27T00:00:00.000Z" }
+    ],
     body: "Initial notes",
     createdAt: "2026-06-27T00:00:00.000Z",
     updatedAt: "2026-06-27T00:00:00.000Z"
@@ -220,6 +235,9 @@ try {
   assert.equal(reloaded.cards[0].completed, true);
   assert.deepEqual(reloaded.cards[0].assignees, ["ada"]);
   assert.deepEqual(reloaded.cards[0].labels, ["docs", "release"]);
+  assert.deepEqual(reloaded.cards[0].attachments, [
+    { id: "att_release", name: "notes.pdf", storedName: "att_release-notes.pdf", size: 4096, addedAt: "2026-06-27T00:00:00.000Z" }
+  ]);
   assert.equal(reloaded.cards[0].body, "External edits survive reload.");
 
   const externallyEdited = serializeCard({ ...reloaded.cards[0], title: "Externally renamed card", labels: ["external, comma"], updatedAt: "2026-06-27T02:00:00.000Z" });

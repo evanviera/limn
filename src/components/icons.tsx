@@ -13,6 +13,7 @@ export type IconName =
   | "maximize"
   | "minus"
   | "moon"
+  | "paperclip"
   | "plus"
   | "refresh"
   | "save"
@@ -89,6 +90,9 @@ export function Icon({ name }: { name: IconName }) {
       <>
         <path d="M20 15.3A8 8 0 0 1 8.7 4a7 7 0 1 0 11.3 11.3z" />
       </>
+    ),
+    paperclip: (
+      <path d="M20 11.5 11.7 19.8a5 5 0 0 1-7.07-7.07l8.49-8.49a3.5 3.5 0 0 1 4.95 4.95l-8.49 8.49a2 2 0 0 1-2.83-2.83l7.78-7.78" />
     ),
     plus: (
       <>

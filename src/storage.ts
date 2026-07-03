@@ -1,5 +1,5 @@
 import { invoke } from "./ipc.js";
-import type { Board, BoardGroup, Card, Member, MembersFile, SlackNotificationSettings, Subtask, SubtaskListItem, WorkspaceFiles, WorkspaceSettings, WriteResult } from "./types";
+import type { Attachment, Board, BoardGroup, Card, Member, MembersFile, SlackNotificationSettings, Subtask, SubtaskListItem, WorkspaceFiles, WorkspaceSettings, WriteResult } from "./types";
 
 const SCHEMA_VERSION = 1;
 
@@ -84,6 +84,42 @@ export async function deleteCard(path: string, card: Card): Promise<void> {
   });
 }
 
+// Open a native file picker for attachments and return the chosen absolute
+// source paths (empty when the dialog is cancelled).
+export async function pickAttachmentFiles(): Promise<string[]> {
+  return invoke<string[]>("pick_attachment_files");
+}
+
+// Copy a source file into attachments/<cardId>/<storedName> and return its size
+// in bytes. The frontend owns id/name generation so the stored file name is
+// deterministic and collision-free.
+export async function addAttachmentFile(path: string, cardId: string, storedName: string, sourcePath: string): Promise<number> {
+  return invoke<number>("add_attachment", { path, cardId, storedName, sourcePath });
+}
+
+export async function deleteAttachmentFile(path: string, cardId: string, storedName: string): Promise<void> {
+  await invoke("delete_attachment", { path, cardId, storedName });
+}
+
+export async function openAttachmentFile(path: string, cardId: string, storedName: string): Promise<void> {
+  await invoke("open_attachment", { path, cardId, storedName });
+}
+
+// The last path segment of an OS path, used to show the original file name.
+export function attachmentDisplayName(sourcePath: string): string {
+  const base = sourcePath.split(/[\\/]/).pop() ?? sourcePath;
+  return base.trim() || "file";
+}
+
+// A disk-safe, collision-free file name: the attachment id prefixes a sanitized
+// copy of the original name so two files named "screenshot.png" never clash and
+// the result is always a single, separator-free path segment.
+export function attachmentStoredName(id: string, fileName: string): string {
+  const base = fileName.split(/[\\/]/).pop() ?? fileName;
+  const cleaned = base.replace(/[^A-Za-z0-9._-]+/g, "_").replace(/^\.+/, "");
+  return `${id}-${cleaned || "file"}`;
+}
+
 export function normalizeUrl(url: string): string {
   const trimmed = url.trim();
   if (!trimmed) {
@@ -165,6 +201,7 @@ export function createCard(boardId: string, listId: string, title: string): Card
       }
     ],
     subtasks: [],
+    attachments: [],
     body: "",
     fileName: `${id}.md`
   };
@@ -406,6 +443,7 @@ export function parseCard(content: string, fileName: string): Card | null {
     updatedAt: stringValue(values.updatedAt) || timestamp(),
     activity: activityArray(values.activity),
     subtasks: subtaskArray(values.subtasks),
+    attachments: attachmentArray(values.attachments),
     body,
     fileName
   };
@@ -425,7 +463,8 @@ export function serializeCard(card: Card): string {
     createdAt: card.createdAt,
     updatedAt: card.updatedAt,
     activity: card.activity,
-    subtasks: card.subtasks
+    subtasks: card.subtasks,
+    attachments: card.attachments
   };
 
   const lines = Object.entries(frontmatter).map(([key, value]) => `${key}: ${formatFrontmatterValue(value)}`);
@@ -535,5 +574,22 @@ function subtaskListItemArray(value: unknown): SubtaskListItem[] {
       id: item.id as string,
       text: item.text as string,
       url: stringValue(item.url)
+    }));
+}
+
+function attachmentArray(value: unknown): Attachment[] {
+  if (!Array.isArray(value)) {
+    return [];
+  }
+
+  return value
+    .filter((item): item is Record<string, unknown> => Boolean(item) && typeof item === "object")
+    .filter((item) => typeof item.id === "string" && typeof item.name === "string" && typeof item.storedName === "string")
+    .map((item) => ({
+      id: item.id as string,
+      name: item.name as string,
+      storedName: item.storedName as string,
+      size: typeof item.size === "number" && Number.isFinite(item.size) ? item.size : 0,
+      addedAt: stringValue(item.addedAt) || timestamp()
     }));
 }
