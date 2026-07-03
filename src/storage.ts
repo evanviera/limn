@@ -1,5 +1,5 @@
 import { invoke } from "./ipc.js";
-import type { Board, Card, Member, MembersFile, SlackNotificationSettings, Subtask, SubtaskListItem, WorkspaceFiles, WorkspaceSettings, WriteResult } from "./types";
+import type { Board, BoardGroup, Card, Member, MembersFile, SlackNotificationSettings, Subtask, SubtaskListItem, WorkspaceFiles, WorkspaceSettings, WriteResult } from "./types";
 
 const SCHEMA_VERSION = 1;
 
@@ -118,6 +118,7 @@ export function createDefaultSettings(workspaceName: string): WorkspaceSettings 
     workspaceName,
     slackWebhookUrl: "",
     slackNotifications: { ...DEFAULT_SLACK_NOTIFICATIONS },
+    boardGroups: [],
     createdAt: now,
     updatedAt: now
   };
@@ -223,7 +224,7 @@ export function parseWorkspace(files: WorkspaceFiles): WorkspaceData {
   for (const file of files.boards) {
     const result = safeJson<Board | null>(file.content, null);
     if (result.ok && result.value?.id) {
-      boards.push(result.value);
+      boards.push(normalizeBoard(result.value));
     } else {
       diagnostics.push(`boards/${file.file_name} could not be loaded.`);
     }
@@ -257,6 +258,7 @@ function normalizeWorkspaceSettings(settings: Partial<WorkspaceSettings> & { sla
     workspaceName: typeof settings.workspaceName === "string" ? settings.workspaceName : fallback.workspaceName,
     slackWebhookUrl: typeof settings.slackWebhookUrl === "string" ? settings.slackWebhookUrl : fallback.slackWebhookUrl,
     slackNotifications: normalizeSlackNotifications(settings.slackNotifications),
+    boardGroups: normalizeBoardGroups(settings.boardGroups),
     createdAt: typeof settings.createdAt === "string" ? settings.createdAt : fallback.createdAt,
     updatedAt: typeof settings.updatedAt === "string" ? settings.updatedAt : fallback.updatedAt
   };
@@ -291,6 +293,61 @@ function normalizeMembers(value: unknown): Member[] {
       name: member.name,
       color: member.color,
       slackHandle: typeof member.slackHandle === "string" ? member.slackHandle : undefined
+    }];
+  });
+}
+
+function normalizeBoard(board: Partial<Board> & { lists?: unknown }): Board {
+  return {
+    schemaVersion: typeof board.schemaVersion === "number" ? board.schemaVersion : SCHEMA_VERSION,
+    id: typeof board.id === "string" ? board.id : makeId("board"),
+    name: typeof board.name === "string" ? board.name : "Untitled board",
+    groupId: typeof board.groupId === "string" && board.groupId.trim() ? board.groupId : undefined,
+    lists: normalizeBoardLists(board.lists),
+    createdAt: typeof board.createdAt === "string" ? board.createdAt : timestamp(),
+    updatedAt: typeof board.updatedAt === "string" ? board.updatedAt : timestamp()
+  };
+}
+
+function normalizeBoardLists(value: unknown): Board["lists"] {
+  if (!Array.isArray(value)) {
+    return [];
+  }
+
+  return value.flatMap((item) => {
+    if (!item || typeof item !== "object") {
+      return [];
+    }
+    const list = item as Partial<Record<keyof Board["lists"][number], unknown>>;
+    if (typeof list.id !== "string" || typeof list.name !== "string") {
+      return [];
+    }
+
+    return [{ id: list.id, name: list.name }];
+  });
+}
+
+function normalizeBoardGroups(value: unknown): BoardGroup[] {
+  if (!Array.isArray(value)) {
+    return [];
+  }
+
+  const seen = new Set<string>();
+  return value.flatMap((item) => {
+    if (!item || typeof item !== "object") {
+      return [];
+    }
+    const group = item as Partial<Record<keyof BoardGroup, unknown>>;
+    if (typeof group.id !== "string" || typeof group.name !== "string" || seen.has(group.id)) {
+      return [];
+    }
+    seen.add(group.id);
+
+    return [{
+      id: group.id,
+      name: group.name,
+      createdAt: typeof group.createdAt === "string" ? group.createdAt : timestamp(),
+      updatedAt: typeof group.updatedAt === "string" ? group.updatedAt : timestamp()
     }];
   });
 }

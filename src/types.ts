@@ -5,6 +5,7 @@ export interface WorkspaceSettings {
   workspaceName: string;
   slackWebhookUrl: string;
   slackNotifications: SlackNotificationSettings;
+  boardGroups: BoardGroup[];
   createdAt: string;
   updatedAt: string;
 }
@@ -14,6 +15,13 @@ export interface SlackNotificationSettings {
   cardCompleted: boolean;
   cardAssigned: boolean;
   subtaskCompleted: boolean;
+}
+
+export interface BoardGroup {
+  id: string;
+  name: string;
+  createdAt: string;
+  updatedAt: string;
 }
 
 export interface Member {
@@ -37,6 +45,7 @@ export interface Board {
   schemaVersion: number;
   id: string;
   name: string;
+  groupId?: string;
   lists: BoardList[];
   createdAt: string;
   updatedAt: string;

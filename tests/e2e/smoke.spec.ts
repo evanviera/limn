@@ -44,6 +44,36 @@ test.describe("smoke", () => {
     await expect.poll(async () => (await snapshot(page)).boards.length).toBeGreaterThan(0);
   });
 
+  test("boards can be organized into categories", async ({ page }) => {
+    await openApp(page);
+    await openWorkspace(page);
+
+    await page.getByTestId("create-board").click();
+    await page.getByTestId("text-dialog-input").fill("Roadmap");
+    await page.getByTestId("text-dialog-submit").click();
+
+    await page.getByTestId("create-board-category").click();
+    await page.getByTestId("text-dialog-input").fill("Client Work");
+    await page.getByTestId("text-dialog-submit").click();
+
+    const stateWithGroup = await snapshot(page);
+    const boardFile = stateWithGroup.boards[0];
+    const board = JSON.parse(boardFile.content) as { id: string; groupId?: string };
+    const group = (stateWithGroup.settings.boardGroups as Array<{ id: string; name: string }>)[0];
+    expect(group.name).toBe("Client Work");
+
+    await expect(page.getByTestId(`board-group-${group.id}`)).toContainText("Client Work");
+    await expect(page.getByTestId(`board-group-${group.id}`)).toContainText("0 boards");
+    await page.getByTestId(`board-nav-${board.id}`).click({ button: "right" });
+    await page.getByTestId("context-menu").getByRole("menuitem", { name: "Move to Client Work" }).click();
+
+    await expect(page.getByTestId(`board-group-${group.id}`)).toContainText("1 board");
+    await expect.poll(async () => {
+      const latest = await snapshot(page);
+      return JSON.parse(latest.boards[0].content).groupId;
+    }).toBe(group.id);
+  });
+
   test("external workspace change bursts reload once and show the latest board", async ({ page }) => {
     await openApp(page);
     await openWorkspace(page);

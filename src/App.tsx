@@ -25,7 +25,7 @@ import {
   timestamp,
   watchWorkspace
 } from "./storage";
-import { Board, BoardList, Card, Member, Subtask, SubtaskListItem, View, WorkspaceSettings, WriteResult } from "./types";
+import { Board, BoardGroup, BoardList, Card, Member, Subtask, SubtaskListItem, View, WorkspaceSettings, WriteResult } from "./types";
 import {
   canUseUpdater,
   checkForUpdate,
@@ -169,6 +169,16 @@ export default function App() {
     () => cards.filter((card) => !card.archived && card.boardId === activeBoard?.id),
     [activeBoard?.id, cards]
   );
+  const boardGroups = settings?.boardGroups ?? [];
+  const boardNavSections = useMemo(() => {
+    const validGroupIds = new Set(boardGroups.map((group) => group.id));
+    const grouped = boardGroups.map((group) => ({
+      group,
+      boards: boards.filter((board) => board.groupId === group.id)
+    }));
+    const ungrouped = boards.filter((board) => !board.groupId || !validGroupIds.has(board.groupId));
+    return { grouped, ungrouped };
+  }, [boardGroups, boards]);
 
   useEffect(() => {
     void getLastWorkspace()
@@ -454,6 +464,21 @@ export default function App() {
     await saveBoard(workspacePath, nextBoard);
   }
 
+  async function persistWorkspaceSettings(nextSettings: WorkspaceSettings, savedNotice: string) {
+    if (!workspacePath) {
+      return;
+    }
+    const updated = { ...nextSettings, updatedAt: timestamp() };
+    settingsRef.current = updated;
+    pendingSettingsWriteRef.current = updated;
+    setSettings(updated);
+    await saveSettings(workspacePath, updated);
+    if (savedNotice) {
+      setNotice(savedNotice);
+      setNoticeKind("info");
+    }
+  }
+
   async function persistCard(nextCard: Card, previous?: Card): Promise<WriteResult | null> {
     if (!workspacePath) {
       return null;
@@ -470,7 +495,7 @@ export default function App() {
     return result;
   }
 
-  async function addBoard() {
+  async function addBoard(groupId?: string) {
     openTextDialog({
       title: "Create board",
       label: "Board name",
@@ -481,7 +506,7 @@ export default function App() {
           ? "A board with this name already exists."
           : null,
       onSubmit: async (name) => {
-        const board = createBoard(name);
+        const board = { ...createBoard(name), groupId };
         await persistBoard(board);
         setActiveBoardId(board.id);
         setView("board");
@@ -523,6 +548,90 @@ export default function App() {
         setActiveBoardId((current) => (current === board.id ? "" : current));
       }
     });
+  }
+
+  async function createBoardGroup() {
+    if (!settings) {
+      return;
+    }
+
+    openTextDialog({
+      title: "Create category",
+      label: "Category name",
+      value: "",
+      confirmLabel: "Create category",
+      validate: (name) =>
+        boardGroups.some((group) => group.name.trim().toLowerCase() === name.toLowerCase())
+          ? "A category with this name already exists."
+          : null,
+      onSubmit: async (name) => {
+        const now = timestamp();
+        const group: BoardGroup = {
+          id: makeId("group"),
+          name,
+          createdAt: now,
+          updatedAt: now
+        };
+        await persistWorkspaceSettings({ ...settings, boardGroups: [...boardGroups, group] }, "Category created.");
+      }
+    });
+  }
+
+  async function renameBoardGroup(group: BoardGroup) {
+    if (!settings) {
+      return;
+    }
+
+    openTextDialog({
+      title: "Rename category",
+      label: "Category name",
+      value: group.name,
+      confirmLabel: "Save category",
+      validate: (name) =>
+        boardGroups.some((item) => item.id !== group.id && item.name.trim().toLowerCase() === name.toLowerCase())
+          ? "A category with this name already exists."
+          : null,
+      onSubmit: async (name) => {
+        await persistWorkspaceSettings({
+          ...settings,
+          boardGroups: boardGroups.map((item) => item.id === group.id ? { ...item, name, updatedAt: timestamp() } : item)
+        }, "Category renamed.");
+      }
+    });
+  }
+
+  async function deleteBoardGroup(group: BoardGroup) {
+    if (!workspacePath || !settings) {
+      return;
+    }
+
+    const groupedBoards = boards.filter((board) => board.groupId === group.id);
+    openConfirmDialog({
+      title: "Delete category",
+      message: `Delete category "${group.name}"? Its boards will move to Ungrouped.`,
+      confirmLabel: "Delete category",
+      destructive: true,
+      onConfirm: async () => {
+        const nextSettings = {
+          ...settings,
+          boardGroups: boardGroups.filter((item) => item.id !== group.id)
+        };
+        const now = timestamp();
+        const nextBoards = groupedBoards.map((board) => ({ ...board, groupId: undefined, updatedAt: now }));
+        setBoards((current) => current.map((board) => nextBoards.find((item) => item.id === board.id) ?? board));
+        await Promise.all([
+          persistWorkspaceSettings(nextSettings, "Category deleted."),
+          ...nextBoards.map((board) => saveBoard(workspacePath, board))
+        ]);
+      }
+    });
+  }
+
+  async function moveBoardToGroup(board: Board, groupId?: string) {
+    if (board.groupId === groupId) {
+      return;
+    }
+    await persistBoard({ ...board, groupId, updatedAt: timestamp() });
   }
 
   async function addList() {
@@ -747,16 +856,7 @@ export default function App() {
   }
 
   async function saveWorkspaceSettings(nextSettings: WorkspaceSettings) {
-    if (!workspacePath) {
-      return;
-    }
-    const updated = { ...nextSettings, updatedAt: timestamp() };
-    settingsRef.current = updated;
-    pendingSettingsWriteRef.current = updated;
-    setSettings(updated);
-    await saveSettings(workspacePath, updated);
-    setNotice("Settings saved.");
-    setNoticeKind("info");
+    await persistWorkspaceSettings(nextSettings, "Settings saved.");
   }
 
   async function sendSlack(notification: SlackNotificationKey, message: string) {
@@ -849,6 +949,7 @@ export default function App() {
       items.push(
         { type: "separator" },
         { label: "Create board", icon: "plus", onSelect: () => void addBoard() },
+        { label: "Create category", icon: "tag", onSelect: () => void createBoardGroup() },
         { label: "Members", icon: "users", onSelect: () => setView("members") },
         { label: "Settings", icon: "settings", onSelect: () => setView("settings") },
         {
@@ -863,6 +964,13 @@ export default function App() {
   }
 
   function boardNavContextItems(board: Board): ContextMenuItem[] {
+    const groupItems = boardGroups.map<ContextMenuItem>((group) => ({
+      label: `Move to ${group.name}`,
+      icon: "tag",
+      disabled: board.groupId === group.id,
+      onSelect: () => void moveBoardToGroup(board, group.id)
+    }));
+
     return [
       {
         label: "Open board",
@@ -875,7 +983,21 @@ export default function App() {
       { label: "Rename board", icon: "edit", onSelect: () => void renameBoard(board) },
       { label: "Copy board name", icon: "copy", onSelect: () => void copyText(board.name) },
       { type: "separator" },
+      ...(board.groupId ? [{ label: "Move to Ungrouped", icon: "tag", onSelect: () => void moveBoardToGroup(board) } satisfies ContextMenuItem] : []),
+      ...groupItems,
+      ...(boardGroups.length === 0 ? [{ label: "Create category", icon: "tag", onSelect: () => void createBoardGroup() } satisfies ContextMenuItem] : []),
+      { type: "separator" },
       { label: "Delete board", icon: "trash", danger: true, onSelect: () => void removeBoard(board) }
+    ];
+  }
+
+  function boardGroupContextItems(group: BoardGroup): ContextMenuItem[] {
+    return [
+      { label: "Create board in category", icon: "plus", onSelect: () => void addBoard(group.id) },
+      { label: "Rename category", icon: "edit", onSelect: () => void renameBoardGroup(group) },
+      { label: "Copy category name", icon: "copy", onSelect: () => void copyText(group.name) },
+      { type: "separator" },
+      { label: "Delete category", icon: "trash", danger: true, onSelect: () => void deleteBoardGroup(group) }
     ];
   }
 
@@ -1102,6 +1224,23 @@ export default function App() {
     );
   }
 
+  function renderBoardNavButton(board: Board) {
+    return (
+      <button
+        className={board.id === activeBoard?.id && view === "board" ? "active" : ""}
+        data-testid={`board-nav-${board.id}`}
+        key={board.id}
+        onContextMenu={(event) => openContextMenu(event, boardNavContextItems(board), board.name)}
+        onClick={() => {
+          setActiveBoardId(board.id);
+          setView("board");
+        }}
+      >
+        {board.name}
+      </button>
+    );
+  }
+
   return (
     <div className="app-frame" onContextMenu={handleDefaultContextMenu}>
       <WindowsTitlebar />
@@ -1125,25 +1264,44 @@ export default function App() {
         <nav className="board-nav">
           <div className="nav-heading">
             <span>Boards</span>
-            <button aria-label="Create board" title="Create board" data-testid="create-board" onClick={() => void addBoard()}>
-              <Icon name="plus" />
-            </button>
+            <div className="nav-heading-actions">
+              <button aria-label="Create category" title="Create category" data-testid="create-board-category" onClick={() => void createBoardGroup()}>
+                <Icon name="tag" />
+              </button>
+              <button aria-label="Create board" title="Create board" data-testid="create-board" onClick={() => void addBoard()}>
+                <Icon name="plus" />
+              </button>
+            </div>
           </div>
           {boards.length === 0 && <p className="empty-small">No boards yet.</p>}
-          {boards.map((board) => (
-            <button
-              className={board.id === activeBoard?.id && view === "board" ? "active" : ""}
-              data-testid={`board-nav-${board.id}`}
-              key={board.id}
-              onContextMenu={(event) => openContextMenu(event, boardNavContextItems(board), board.name)}
-              onClick={() => {
-                setActiveBoardId(board.id);
-                setView("board");
-              }}
-            >
-              {board.name}
-            </button>
+          {boardGroups.length === 0 && boards.map((board) => renderBoardNavButton(board))}
+          {boardGroups.length > 0 && boardNavSections.grouped.map(({ group, boards: groupBoards }) => (
+            <div className="board-group" key={group.id}>
+              <div
+                className="board-group-heading"
+                data-testid={`board-group-${group.id}`}
+                title="Category options"
+                onContextMenu={(event) => openContextMenu(event, boardGroupContextItems(group), group.name)}
+              >
+                <span>{group.name}</span>
+                <span>{countLabel(groupBoards.length, "board")}</span>
+              </div>
+              {groupBoards.length === 0 ? (
+                <p className="empty-small board-group-empty">No boards in this category.</p>
+              ) : (
+                groupBoards.map((board) => renderBoardNavButton(board))
+              )}
+            </div>
           ))}
+          {boardGroups.length > 0 && boardNavSections.ungrouped.length > 0 && (
+            <div className="board-group">
+              <div className="board-group-heading">
+                <span>Ungrouped</span>
+                <span>{countLabel(boardNavSections.ungrouped.length, "board")}</span>
+              </div>
+              {boardNavSections.ungrouped.map((board) => renderBoardNavButton(board))}
+            </div>
+          )}
         </nav>
         <div className="sidebar-bottom">
           <button

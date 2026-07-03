@@ -122,8 +122,10 @@ assert.deepEqual(workspace.settings.slackNotifications, {
   cardAssigned: true,
   subtaskCompleted: true
 });
+assert.deepEqual(workspace.settings.boardGroups, []);
 assert.deepEqual(workspace.membersFile.members, []);
 assert.equal(workspace.boards.length, 1);
+assert.equal(workspace.boards[0].groupId, undefined);
 assert.equal(workspace.cards.length, 1);
 assert.equal(workspace.diagnostics.length, 4);
 assert(workspace.diagnostics.some((diagnostic) => diagnostic.includes("settings.json is invalid JSON")));
@@ -147,6 +149,14 @@ try {
       cardAssigned: true,
       subtaskCompleted: false
     },
+    boardGroups: [
+      {
+        id: "group_launch",
+        name: "Launch",
+        createdAt: "2026-06-27T00:00:00.000Z",
+        updatedAt: "2026-06-27T00:00:00.000Z"
+      }
+    ],
     createdAt: "2026-06-27T00:00:00.000Z",
     updatedAt: "2026-06-27T00:00:00.000Z"
   };
@@ -160,6 +170,7 @@ try {
   const board = {
     ...createBoard("Launch Board"),
     id: "board_acceptance",
+    groupId: "group_launch",
     lists: [
       { id: "todo", name: "To Do" },
       { id: "doing", name: "Doing" },
@@ -198,8 +209,10 @@ try {
   const reloaded = await readWorkspaceFiles(workspaceRoot);
   assert.equal(reloaded.settings.workspaceName, "Acceptance Workspace");
   assert.deepEqual(reloaded.settings.slackNotifications, settings.slackNotifications);
+  assert.deepEqual(reloaded.settings.boardGroups, settings.boardGroups);
   assert.equal(reloaded.membersFile.members.length, 2);
   assert.equal(reloaded.membersFile.members[0].slackHandle, "@ada");
+  assert.equal(reloaded.boards[0].groupId, "group_launch");
   assert.equal(reloaded.boards[0].lists.length, 3);
   assert.equal(reloaded.cards.length, 1);
   assert.equal(reloaded.cards[0].title, "Draft release notes");

@@ -39,6 +39,7 @@ const settings: WorkspaceSettings = {
     cardAssigned: true,
     subtaskCompleted: true
   },
+  boardGroups: [],
   createdAt: now,
   updatedAt: now
 };
