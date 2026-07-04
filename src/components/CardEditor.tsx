@@ -21,11 +21,14 @@ import {
   NOTE_INLINE_PATTERN,
   clampNumber,
   endOfNoteEditorRange,
+  exitNoteFormatRun,
   noteEditorHtmlMatches,
   noteEditorRange,
+  noteFormatAncestor,
   renderNoteEditorHtml,
   selectNoteNodeContents,
-  serializeNoteEditor
+  serializeNoteEditor,
+  unwrapNoteFormat
 } from "../lib/noteFormat";
 import { useModalKeys } from "../lib/useModalKeys";
 import { Icon, LinkIcon, Spinner } from "./icons";
@@ -492,8 +495,40 @@ export function CardEditor({
     input.focus();
     const range = noteEditorRange(input) ?? endOfNoteEditorRange(input);
     const selectedText = range.toString();
+    const startFormat = noteFormatAncestor(range.startContainer, tagName, input);
+
+    if (!selectedText) {
+      if (startFormat) {
+        // Caret sits inside an emphasis run: turn the format off so the next
+        // keystrokes are unformatted. This is the "toggle off, keep typing"
+        // gesture and it writes no stray markers.
+        exitNoteFormatRun(startFormat);
+        return;
+      }
+
+      // Turn the format on: seed a single clean emphasis run with placeholder
+      // text the user immediately overwrites.
+      const wrapper = document.createElement(tagName);
+      wrapper.textContent = fallbackText;
+      range.insertNode(wrapper);
+      selectNoteNodeContents(wrapper);
+      syncNotesFromEditor();
+      return;
+    }
+
+    const endFormat = noteFormatAncestor(range.endContainer, tagName, input);
+    if (startFormat && startFormat === endFormat) {
+      // The selection already lives inside one emphasis run of this type — including
+      // the just-inserted placeholder — so toggle it off by unwrapping instead of
+      // nesting another run (which is what produced the stray `****`).
+      unwrapNoteFormat(startFormat);
+      syncNotesFromEditor();
+      return;
+    }
+
+    // Wrap the selection as plain text so the run never nests another marker.
     const wrapper = document.createElement(tagName);
-    wrapper.textContent = selectedText || fallbackText;
+    wrapper.textContent = selectedText;
     range.deleteContents();
     range.insertNode(wrapper);
     selectNoteNodeContents(wrapper);

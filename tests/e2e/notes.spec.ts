@@ -103,6 +103,40 @@ test.describe("smoke", () => {
     expect((await snapshot(page)).externalLinks).toContain("https://www.example.org/status");
   });
 
+  test("notes bold toolbar toggles cleanly while typing (no stray markers)", async ({ page }) => {
+    await openApp(page);
+    await openWorkspace(page);
+
+    await page.getByTestId("create-board").click();
+    await page.getByTestId("text-dialog-input").fill("Toggle Board");
+    await page.getByTestId("text-dialog-submit").click();
+
+    await page.getByTestId("add-card-todo").click();
+    await page.getByTestId("text-dialog-input").fill("Format notes");
+    await page.getByTestId("text-dialog-submit").click();
+
+    const notesInput = page.getByTestId("card-notes-input");
+    await notesInput.click();
+
+    // Word/Google-Docs muscle memory: bold on, type a word, bold off, keep typing.
+    await page.getByTestId("notes-bold").click();
+    await page.keyboard.type("brand");
+    await page.getByTestId("notes-bold").click();
+    await page.keyboard.type(" guidelines. Reference:");
+
+    await expect(notesInput.locator("strong")).toHaveText("brand");
+
+    await page.getByTestId("save-card").click();
+
+    const saved = await snapshot(page);
+    expect(saved.cards[0].content).toContain("**brand** guidelines. Reference:");
+    expect(saved.cards[0].content).not.toContain("****");
+
+    const notes = page.getByTestId(/card-notes-.*/);
+    await expect(notes.locator("strong")).toHaveText("brand");
+    await expect(notes).not.toContainText("**");
+  });
+
   test("manually written Markdown note links render on list cards", async ({ page }) => {
     await openApp(page);
     await openWorkspace(page);

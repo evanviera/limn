@@ -93,7 +93,7 @@ export function noteEditorHtmlMatches(root: HTMLElement, html: string): boolean 
 
 export function serializeNoteNode(node: ChildNode): string {
   if (node.nodeType === Node.TEXT_NODE) {
-    return node.textContent?.replace(/\u00a0/g, " ") ?? "";
+    return node.textContent?.replace(/\u00a0/g, " ").replace(/\u200b/g, "") ?? "";
   }
 
   if (!(node instanceof HTMLElement)) {
@@ -172,4 +172,68 @@ export function selectNoteNodeContents(node: Node) {
   range.selectNodeContents(node);
   selection.removeAllRanges();
   selection.addRange(range);
+}
+
+// Nearest ancestor emphasis element (`strong`/`em`) of `node` within `editor`,
+// or null if the node isn't inside one. Used to detect whether the caret /
+// selection already sits in a formatted run so the toolbar can toggle it off.
+export function noteFormatAncestor(node: Node | null, tagName: string, editor: HTMLElement): HTMLElement | null {
+  let element = node instanceof HTMLElement ? node : node?.parentElement ?? null;
+  while (element && element !== editor) {
+    if (element.tagName.toLowerCase() === tagName) {
+      return element;
+    }
+    element = element.parentElement;
+  }
+  return null;
+}
+
+// Zero-width space used only as a transient caret boundary; stripped on serialize.
+export const NOTE_FORMAT_BOUNDARY = "\u200b";
+
+// Turns an emphasis run off mid-typing: drops a zero-width boundary character
+// right after `element` and parks the caret past it, so the next keystrokes land
+// outside the run instead of extending the emphasized text (a contenteditable
+// caret at the run's edge would otherwise stay inside it). The boundary never
+// reaches the saved markdown — `serializeNoteNode` strips it.
+export function exitNoteFormatRun(element: HTMLElement) {
+  const selection = window.getSelection();
+  const parent = element.parentNode;
+  if (!selection || !parent) {
+    return;
+  }
+
+  const boundary = document.createTextNode(NOTE_FORMAT_BOUNDARY);
+  parent.insertBefore(boundary, element.nextSibling);
+  const range = document.createRange();
+  range.setStart(boundary, boundary.length);
+  range.collapse(true);
+  selection.removeAllRanges();
+  selection.addRange(range);
+}
+
+// Replaces an emphasis element with its own children (toggling the format off)
+// and re-selects those children, so an already-formatted selection round-trips
+// back to plain text with no leftover markers.
+export function unwrapNoteFormat(element: HTMLElement) {
+  const parent = element.parentNode;
+  if (!parent) {
+    return;
+  }
+
+  const startIndex = Array.prototype.indexOf.call(parent.childNodes, element);
+  const moved = element.childNodes.length;
+  while (element.firstChild) {
+    parent.insertBefore(element.firstChild, element);
+  }
+  parent.removeChild(element);
+
+  const selection = window.getSelection();
+  if (selection && moved > 0) {
+    const range = document.createRange();
+    range.setStart(parent, startIndex);
+    range.setEnd(parent, startIndex + moved);
+    selection.removeAllRanges();
+    selection.addRange(range);
+  }
 }

@@ -106,6 +106,37 @@ test.describe("smoke", () => {
     expect(saved.cards[0].content).toContain('"url":"https://example.com/brand"');
   });
 
+  test("blank checklist steps are discarded on save", async ({ page }) => {
+    await openApp(page);
+    await openWorkspace(page);
+
+    await page.getByTestId("create-board").click();
+    await page.getByTestId("text-dialog-input").fill("Blank Steps Board");
+    await page.getByTestId("text-dialog-submit").click();
+
+    await page.getByTestId("add-card-todo").click();
+    await page.getByTestId("text-dialog-input").fill("Triage");
+    await page.getByTestId("text-dialog-submit").click();
+
+    // One real step plus two empty ones (Add step clicked without typing).
+    await page.getByTestId("add-subtask").click();
+    await page.locator('[data-testid^="subtask-"][data-testid$="-title"]').last().fill("Real step");
+    await page.getByTestId("add-subtask").click();
+    await page.getByTestId("add-subtask").click();
+
+    await page.getByTestId("save-card").click();
+    await expect(page.getByTestId("card-title-input")).toBeHidden();
+
+    const content = (await snapshot(page)).cards[0].content;
+    expect(content).toContain('"title":"Real step"');
+    expect(content).not.toContain('"title":""');
+
+    // Reopening shows only the titled step — the empty rows were dropped.
+    await page.getByTestId(/card-open-.*/).click();
+    await page.getByTestId("edit-card").click();
+    await expect(page.locator('[data-testid^="subtask-"][data-testid$="-title"]')).toHaveCount(1);
+  });
+
   test("attachments can be added to and removed from a card", async ({ page }) => {
     await openApp(page);
     await openWorkspace(page);

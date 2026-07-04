@@ -126,7 +126,7 @@ export function MembersView({
               onChange={(event) => void onSave({ ...member, color: event.target.value })}
               aria-label={`${member.name} color`}
             />
-            <button onClick={() => void onRemove(member.id)}>Remove</button>
+            <button data-testid={`member-${member.id}-remove`} onClick={() => void onRemove(member.id)}>Remove</button>
           </div>
         ))}
       </div>

@@ -1138,6 +1138,15 @@ export default function App() {
       ...nextCard,
       attachments: previous?.attachments ?? nextCard.attachments,
       comments: previous?.comments ?? nextCard.comments,
+      // Discard blank checklist steps (e.g. from clicking "Add step" without
+      // typing) so they don't clutter the card or skew its "N of M complete"
+      // count. A step is kept if it carries a title, a link, or list content.
+      subtasks: nextCard.subtasks.filter(
+        (subtask) =>
+          subtask.title.trim().length > 0 ||
+          subtask.url.trim().length > 0 ||
+          subtask.items.some((item) => item.text.trim().length > 0 || item.url.trim().length > 0)
+      ),
       updatedAt: timestamp()
     };
     let withActivity = previous ? normalized : addActivity(normalized, "created", "Created card");
@@ -1193,14 +1202,40 @@ export default function App() {
     if (!workspacePath) {
       return;
     }
-    const nextMembers = members.filter((member) => member.id !== memberId);
-    pendingMembersWriteRef.current = nextMembers;
-    setMembers(nextMembers);
-    // Drop this device's identity if the removed member was who "you" are.
-    if (activeMemberId === memberId) {
-      selectActiveMember("");
+    const member = members.find((item) => item.id === memberId);
+    if (!member) {
+      return;
     }
-    await saveMembers(workspacePath, { schemaVersion: 1, members: nextMembers });
+    const assignedCards = cards.filter((card) => card.assignees.includes(memberId));
+    const assignedNote = assignedCards.length
+      ? ` They'll be unassigned from ${countLabel(assignedCards.length, "card")}.`
+      : "";
+    openConfirmDialog({
+      title: "Remove member",
+      message: `Remove "${member.name}" from this workspace?${assignedNote}`,
+      confirmLabel: "Remove member",
+      destructive: true,
+      onConfirm: async () => {
+        const nextMembers = members.filter((item) => item.id !== memberId);
+        pendingMembersWriteRef.current = nextMembers;
+        setMembers(nextMembers);
+        // Drop this device's identity if the removed member was who "you" are.
+        if (activeMemberId === memberId) {
+          selectActiveMember("");
+        }
+        await saveMembers(workspacePath, { schemaVersion: 1, members: nextMembers });
+        // Clear stale assignee references so the id can't silently resurrect the
+        // assignment if a same-named member is later re-added.
+        for (const card of assignedCards) {
+          const unassigned = addActivity(
+            { ...card, assignees: card.assignees.filter((id) => id !== memberId), updatedAt: timestamp() },
+            "assigned",
+            `Unassigned ${member.name} (removed from workspace)`
+          );
+          await persistCard(unassigned, card);
+        }
+      }
+    });
   }
 
   async function saveWorkspaceSettings(nextSettings: WorkspaceSettings) {
