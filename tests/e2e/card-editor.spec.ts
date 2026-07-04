@@ -52,7 +52,15 @@ test.describe("smoke", () => {
     await page.getByTestId("text-dialog-submit").click();
 
     await page.getByTestId("add-subtask").click();
-    await page.locator('[data-testid^="subtask-"][data-testid$="-title"]').last().fill("Collect assets");
+    const stepTitle = page.locator('[data-testid^="subtask-"][data-testid$="-title"]').last();
+    await stepTitle.fill("Collect assets");
+    const stepLink = page.locator('[data-testid^="subtask-"][data-testid$="-url"]').last();
+    await expect(stepLink).toBeVisible();
+    const [stepTitleBox, stepLinkBox] = await Promise.all([stepTitle.boundingBox(), stepLink.boundingBox()]);
+    expect(stepTitleBox).not.toBeNull();
+    expect(stepLinkBox).not.toBeNull();
+    expect(Math.abs(stepTitleBox!.y + stepTitleBox!.height / 2 - (stepLinkBox!.y + stepLinkBox!.height / 2))).toBeLessThan(4);
+    expect(stepLinkBox!.x).toBeGreaterThan(stepTitleBox!.x + stepTitleBox!.width);
     await page.locator('[data-testid^="subtask-"][data-testid$="-add-item"]').last().click();
     await page.locator('[data-testid^="subtask-item-"][data-testid$="-text"]').last().fill("Logo files");
     await page.locator('[data-testid^="subtask-"][data-testid$="-add-item"]').last().click();

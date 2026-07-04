@@ -98,17 +98,20 @@
     border-top: 1px solid var(--border-soft);
   }
 
+  .subtask-head,
   .subtask-item-row {
     display: flex;
     flex-wrap: wrap;
     align-items: center;
   }
 
+  .subtask-title,
   .subtask-item-row .subtask-item-text {
     flex: 1 1 55%;
     min-width: 120px;
   }
 
+  .subtask-head .link-line,
   .subtask-item-row .link-line {
     flex: 1 1 100%;
     order: 1;

@@ -828,6 +828,29 @@ export function CardEditor({
                             onChange={(event) => updateSubtask(subtask.id, { title: event.target.value })}
                             placeholder="Step"
                           />
+                          {(isExpanded || hasUrl) && (
+                            <div className={`link-line ${hasUrl ? "has-url" : ""}`}>
+                              <LinkIcon />
+                              <input
+                                className="link-input"
+                                data-testid={`subtask-${subtask.id}-url`}
+                                value={subtask.url}
+                                onChange={(event) => updateSubtask(subtask.id, { url: event.target.value })}
+                                placeholder="Add link"
+                              />
+                              {hasUrl && (
+                                <button
+                                  aria-label="Open link"
+                                  className="link-open"
+                                  data-testid={`subtask-${subtask.id}-open`}
+                                  title="Open link"
+                                  onClick={() => void openExternal(subtask.url.trim())}
+                                >
+                                  <Icon name="chevron-up-right" />
+                                </button>
+                              )}
+                            </div>
+                          )}
                           <button
                             className="subtask-expand"
                             data-expanded={isExpanded}
@@ -849,29 +872,6 @@ export function CardEditor({
                             <Icon name="x" />
                           </button>
                         </div>
-                        {(isExpanded || hasUrl) && (
-                          <div className={`link-line ${hasUrl ? "has-url" : ""}`}>
-                            <LinkIcon />
-                            <input
-                              className="link-input"
-                              data-testid={`subtask-${subtask.id}-url`}
-                              value={subtask.url}
-                              onChange={(event) => updateSubtask(subtask.id, { url: event.target.value })}
-                              placeholder="Add link"
-                            />
-                            {hasUrl && (
-                              <button
-                                aria-label="Open link"
-                                className="link-open"
-                                data-testid={`subtask-${subtask.id}-open`}
-                                title="Open link"
-                                onClick={() => void openExternal(subtask.url.trim())}
-                              >
-                                <Icon name="chevron-up-right" />
-                              </button>
-                            )}
-                          </div>
-                        )}
                         {isExpanded && (
                           <div className="subtask-items-editor">
                             {itemCount > 0 && (

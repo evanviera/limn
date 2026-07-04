@@ -716,7 +716,7 @@
 
 .subtask-head {
   display: grid;
-  grid-template-columns: auto minmax(0, 1fr) auto auto;
+  grid-template-columns: auto minmax(120px, 1.3fr) minmax(120px, 1fr) auto auto;
   align-items: center;
   gap: var(--space-2);
   min-width: 0;
@@ -914,6 +914,12 @@
   border-color: transparent;
 }
 
+.subtask-head .link-line,
+.subtask-item-row .link-line {
+  margin-left: 0;
+  padding-left: 0;
+}
+
 .subtask-items-editor {
   display: grid;
   gap: var(--space-2);
@@ -966,11 +972,6 @@
   min-width: 0;
   height: 30px;
   font-size: var(--text-sm);
-}
-
-.subtask-item-row .link-line {
-  margin-left: 0;
-  padding-left: 0;
 }
 
 /* --- Drag-and-drop attach overlay --- */
