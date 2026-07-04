@@ -39,6 +39,33 @@ test.describe("smoke", () => {
     await expect.poll(async () => (await side.boundingBox())?.width ?? 0).toBeLessThan(widenedBox!.width);
   });
 
+  test("reopening a card lands in read mode before edit mode", async ({ page }) => {
+    await openApp(page);
+    await openWorkspace(page);
+
+    await page.getByTestId("create-board").click();
+    await page.getByTestId("text-dialog-input").fill("View Board");
+    await page.getByTestId("text-dialog-submit").click();
+
+    await page.getByTestId("add-card-todo").click();
+    await page.getByTestId("text-dialog-input").fill("Review launch plan");
+    await page.getByTestId("text-dialog-submit").click();
+
+    await expect(page.getByTestId("card-title-input")).toHaveValue("Review launch plan");
+    await page.getByTestId("card-notes-input").fill("Read the plan before editing it.");
+    await page.getByTestId("save-card").click();
+
+    await page.getByTestId(/card-open-.*/).click();
+    await expect(page.getByTestId("card-view")).toBeVisible();
+    await expect(page.getByTestId("card-view-title")).toHaveText("Review launch plan");
+    await expect(page.getByTestId("card-view-notes")).toContainText("Read the plan before editing it.");
+    await expect(page.getByTestId("card-title-input")).toBeHidden();
+
+    await page.getByTestId("edit-card").click();
+    await expect(page.getByTestId("card-title-input")).toHaveValue("Review launch plan");
+    await expect(page.getByTestId("card-notes-input")).toContainText("Read the plan before editing it.");
+  });
+
   test("subtasks support unordered list items with optional links", async ({ page }) => {
     await openApp(page);
     await openWorkspace(page);

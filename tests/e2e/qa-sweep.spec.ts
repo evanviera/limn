@@ -154,7 +154,7 @@ test("qa evidence sweep", async ({ page }, testInfo) => {
     // Open the editor again and trigger the delete confirmation, then cancel.
     const card = page.locator('[data-testid^="card-open-"]').first();
     await card.click();
-    await expect(page.getByTestId("card-title-input")).toBeVisible();
+    await expect(page.getByTestId("card-view")).toBeVisible();
     await page.getByTestId("delete-card").click();
     await expect(page.getByTestId("confirm-dialog-submit")).toBeVisible();
     await shot("confirm-dialog-destructive");
@@ -165,7 +165,7 @@ test("qa evidence sweep", async ({ page }, testInfo) => {
     await expect(page.getByTestId("confirm-dialog-submit")).toBeHidden();
     // Close the still-open editor modal so it doesn't block the sidebar nav.
     await page.getByRole("button", { name: "Close" }).click();
-    await expect(page.getByTestId("card-title-input")).toBeHidden();
+    await expect(page.getByTestId("card-view")).toBeHidden();
   });
 
   await step("members view", async () => {

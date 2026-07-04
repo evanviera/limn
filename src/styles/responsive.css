@@ -98,6 +98,25 @@
     border-top: 1px solid var(--border-soft);
   }
 
+  .card-view-shell {
+    grid-template-columns: minmax(0, 1fr);
+    grid-template-rows: auto auto auto auto;
+    overflow-y: auto;
+  }
+
+  .card-view-body {
+    overflow: visible;
+  }
+
+  .card-view-rail {
+    border-top: 1px solid var(--border-soft);
+    border-left: 0;
+  }
+
+  .card-view-overview {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
   .subtask-head,
   .subtask-item-row {
     display: flex;
@@ -145,10 +164,24 @@
   }
 
   .banner,
+  .card-view-header,
   .notes-editor-header,
   .card-editor footer {
     align-items: stretch;
     flex-direction: column;
+  }
+
+  .card-view-actions {
+    width: 100%;
+  }
+
+  .card-view-actions button:not(.icon-button),
+  .card-view-actions .icon-button {
+    flex: 1 1 0;
+  }
+
+  .card-view-overview {
+    grid-template-columns: 1fr;
   }
 
   .banner-actions,

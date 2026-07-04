@@ -1,0 +1,309 @@
+.card-view-shell {
+  grid-template-columns: minmax(0, 1fr) 300px;
+  grid-template-rows: auto minmax(0, 1fr) auto;
+  column-gap: 0;
+  width: min(1120px, 100vw);
+  background: var(--editor-bg);
+}
+
+.card-view-header {
+  grid-column: 1 / -1;
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: var(--space-5);
+  padding: 22px 26px 18px;
+  background: var(--editor-chrome-bg);
+  border-bottom: 1px solid var(--border-soft);
+}
+
+.card-view-title-block {
+  min-width: 0;
+}
+
+.card-view-title-block h2 {
+  overflow-wrap: anywhere;
+  margin: var(--space-2) 0 0;
+  color: var(--text-strong);
+  font-size: var(--text-2xl);
+  line-height: 1.12;
+}
+
+.card-view-actions {
+  display: flex;
+  flex: none;
+  gap: var(--space-2);
+}
+
+.card-view-body {
+  overflow-y: auto;
+  display: grid;
+  align-content: start;
+  gap: 24px;
+  min-width: 0;
+  padding: 24px 28px 32px;
+}
+
+.card-view-overview {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: var(--space-3);
+}
+
+.card-view-status,
+.card-view-fact {
+  display: flex;
+  align-items: center;
+  gap: var(--space-3);
+  min-width: 0;
+  min-height: 42px;
+  padding: 0 var(--space-4);
+  color: var(--text);
+  background: var(--surface);
+  border: 1px solid var(--border-soft);
+  border-radius: var(--radius-md);
+  font-size: var(--text-sm);
+  font-weight: var(--weight-medium);
+}
+
+.card-view-status {
+  justify-content: flex-start;
+  cursor: pointer;
+}
+
+.card-view-status[data-checked="true"] {
+  color: var(--success);
+  background: var(--success-soft);
+  border-color: var(--success-border);
+}
+
+.card-view-status .icon,
+.card-view-fact .icon {
+  flex: none;
+  width: 16px;
+  height: 16px;
+  color: currentColor;
+}
+
+.card-view-fact span,
+.card-view-status span {
+  overflow: hidden;
+  min-width: 0;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.card-view-fact.due-overdue {
+  color: var(--danger);
+}
+
+.card-view-fact.due-today,
+.card-view-fact.due-soon {
+  color: var(--warning);
+}
+
+.card-view-section {
+  display: grid;
+  gap: var(--space-4);
+  min-width: 0;
+}
+
+.card-view-section-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--space-4);
+}
+
+.card-view-section-head h3 {
+  margin: 0;
+  color: var(--text);
+  font-size: var(--text-base);
+}
+
+.card-view-section-head span {
+  color: var(--text-faint);
+  font-size: var(--text-sm);
+  font-variant-numeric: tabular-nums;
+}
+
+.card-view-notes {
+  color: var(--text);
+  font-size: var(--text-base);
+  line-height: 1.55;
+  overflow-wrap: anywhere;
+  white-space: pre-wrap;
+}
+
+.card-view-notes a,
+.card-view-item-link {
+  color: var(--accent-link);
+  text-decoration-line: underline;
+  text-decoration-color: var(--accent-link-border);
+  text-underline-offset: 3px;
+}
+
+.card-view-empty {
+  margin: 0;
+  padding: 14px 0;
+  color: var(--text-muted);
+  border-top: 1px dashed var(--border-soft);
+  border-bottom: 1px dashed var(--border-soft);
+  font-size: var(--text-sm);
+}
+
+.card-view-checklist {
+  display: grid;
+  gap: 0;
+  margin: 0;
+  padding: 0;
+  border-top: 1px solid var(--border-soft);
+  border-bottom: 1px solid var(--border-soft);
+  list-style: none;
+}
+
+.card-view-step {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  align-items: start;
+  gap: var(--space-3);
+  padding: 12px 0;
+}
+
+.card-view-step + .card-view-step {
+  border-top: 1px solid var(--border-soft);
+}
+
+.card-view-step-main {
+  display: flex;
+  flex-direction: row;
+  align-items: flex-start;
+  gap: var(--space-3);
+  min-width: 0;
+  color: var(--text);
+  font-weight: var(--weight-medium);
+}
+
+.card-view-step-main input {
+  flex: none;
+  width: 16px;
+  margin-top: 2px;
+}
+
+.card-view-step-main span {
+  min-width: 0;
+  overflow-wrap: anywhere;
+}
+
+.card-view-step.completed .card-view-step-main span {
+  color: var(--text-muted);
+  text-decoration: line-through;
+}
+
+.card-view-link {
+  min-height: 30px;
+  padding: 0 var(--space-3);
+  color: var(--accent-link);
+  background: transparent;
+  border-color: transparent;
+}
+
+.card-view-step-items {
+  grid-column: 1 / -1;
+  display: grid;
+  gap: var(--space-1);
+  margin: -4px 0 0 29px;
+  padding: 0;
+  color: var(--text-muted);
+  font-size: var(--text-sm);
+  list-style: none;
+}
+
+.card-view-step-items li {
+  position: relative;
+  min-width: 0;
+  padding-left: var(--space-5);
+  overflow-wrap: anywhere;
+}
+
+.card-view-step-items li::before {
+  position: absolute;
+  top: 0.7em;
+  left: 0;
+  width: 4px;
+  height: 4px;
+  content: "";
+  background: currentColor;
+  border-radius: var(--radius-pill);
+  transform: translateY(-50%);
+}
+
+.card-view-item-link {
+  min-height: 0;
+  padding: 0;
+  background: transparent;
+  border: 0;
+  border-radius: 0;
+  font: inherit;
+  text-align: left;
+}
+
+.card-view-rail {
+  overflow-y: auto;
+  display: grid;
+  align-content: start;
+  gap: 0;
+  min-width: 0;
+  padding: 24px 24px 32px;
+  background: var(--editor-chrome-bg);
+  border-left: 1px solid var(--border-soft);
+}
+
+.card-view-rail-section {
+  display: grid;
+  gap: var(--space-3);
+  min-width: 0;
+  padding-bottom: 18px;
+}
+
+.card-view-rail-section + .card-view-rail-section {
+  padding-top: 18px;
+  border-top: 1px solid var(--border-soft);
+}
+
+.card-view-rail-section p {
+  overflow: hidden;
+  margin: 0;
+  color: var(--text);
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.card-view-people {
+  display: grid;
+  gap: var(--space-2);
+  min-width: 0;
+}
+
+.card-view-person {
+  display: flex;
+  align-items: center;
+  gap: var(--space-3);
+  min-width: 0;
+  color: var(--text);
+}
+
+.card-view-person > span:last-child {
+  overflow: hidden;
+  min-width: 0;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.view-label-chip {
+  padding-right: 8px;
+}
+
+.card-view-footer {
+  grid-column: 1 / -1;
+}

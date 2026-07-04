@@ -16,6 +16,7 @@ import { initials } from "../lib/format";
 import { AttachmentLightbox } from "./AttachmentLightbox";
 import { CardAttachments } from "./CardAttachments";
 import { CardComments } from "./CardComments";
+import { CardViewPanel } from "./CardViewPanel";
 import {
   NOTE_INLINE_PATTERN,
   clampNumber,
@@ -47,6 +48,7 @@ export function CardEditor({
   members,
   activeMember,
   fileDragActive,
+  initialMode = "view",
   onSave,
   onClose,
   onArchive,
@@ -67,6 +69,7 @@ export function CardEditor({
   boards: Board[];
   members: Member[];
   activeMember: Member | null;
+  initialMode?: "view" | "edit";
   // True while files are being dragged over the window, so the editor can invite
   // a drop. The actual attach happens in App (it owns the dropped paths).
   fileDragActive: boolean;
@@ -85,6 +88,7 @@ export function CardEditor({
   onOpenContextMenu: OpenContextMenu;
   onCopyText: (text: string) => Promise<void>;
 }) {
+  const [mode, setMode] = useState<"view" | "edit">(initialMode);
   const [draft, setDraft] = useState(card);
   const [saving, setSaving] = useState(false);
   const [attachmentBusy, setAttachmentBusy] = useState(false);
@@ -108,6 +112,8 @@ export function CardEditor({
   const resizeCleanupRef = useRef<(() => void) | null>(null);
   const cardEditorBodyStyle = { "--card-editor-side-width": `${sideWidth}px` } as CSSProperties;
   const board = boards.find((item) => item.id === draft.boardId) ?? boards[0];
+  const cardBoard = boards.find((item) => item.id === card.boardId);
+  const listName = cardBoard?.lists.find((list) => list.id === card.listId)?.name ?? "";
   const completedSubtasks = draft.subtasks.filter((subtask) => subtask.completed).length;
   // Attachments persist immediately, so the lightbox reads the saved `card`
   // (not `draft`) — same source the attachments list renders from.
@@ -119,6 +125,7 @@ export function CardEditor({
   // which replaces the `card` prop object; keying this on the id keeps the user's
   // unsaved title/notes/subtask edits when only that card's attachments change.
   useEffect(() => {
+    setMode(initialMode);
     setDraft(card);
     setLabelInput("");
     setExpandedSubtasks(new Set());
@@ -127,7 +134,7 @@ export function CardEditor({
     activeNotesLinkRef.current = null;
     pendingNotesLinkRangeRef.current = null;
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [card.id]);
+  }, [card.id, initialMode]);
   useLayoutEffect(() => {
     const input = notesInputRef.current;
     if (!input) {
@@ -135,7 +142,7 @@ export function CardEditor({
     }
 
     input.innerHTML = renderNoteEditorHtml(card.body);
-  }, [card.id, card.body]);
+  }, [card.id, card.body, mode]);
   useModalKeys(editorRef, onClose);
   // Move focus into the dialog on open so keyboard users land inside it.
   useEffect(() => {
@@ -294,6 +301,24 @@ export function CardEditor({
     } finally {
       setAttachmentBusy(false);
     }
+  }
+
+  async function saveCardPatch(patch: Partial<Card>) {
+    if (saving) {
+      return;
+    }
+    setSaving(true);
+    try {
+      await onSave({ ...card, ...patch });
+    } finally {
+      setSaving(false);
+    }
+  }
+
+  function toggleViewSubtask(subtask: Subtask, completed: boolean) {
+    void saveCardPatch({
+      subtasks: card.subtasks.map((item) => (item.id === subtask.id ? { ...item, completed } : item))
+    });
   }
 
   function cardEditorSideWidthFromPointer(clientX: number): number {
@@ -698,6 +723,23 @@ export function CardEditor({
     ];
   }
 
+  function cardViewContextItems(): ContextMenuItem[] {
+    return [
+      { label: "Edit card", icon: "edit", onSelect: () => setMode("edit") },
+      {
+        label: card.completed ? "Mark incomplete" : "Mark complete",
+        icon: "check",
+        disabled: saving,
+        onSelect: () => void saveCardPatch({ completed: !card.completed })
+      },
+      { label: "Copy title", icon: "copy", disabled: !card.title.trim(), onSelect: () => void onCopyText(card.title) },
+      { label: "Close card", icon: "x", onSelect: onClose },
+      { type: "separator" },
+      { label: "Archive card", icon: "archive", disabled: saving, onSelect: () => void onArchive(card) },
+      { label: "Delete card", icon: "trash", danger: true, disabled: saving, onSelect: () => void onDelete(card) }
+    ];
+  }
+
   function subtaskContextItems(subtask: Subtask, isExpanded: boolean): ContextMenuItem[] {
     const title = subtask.title || subtask.url || "Untitled step";
     return [
@@ -739,6 +781,51 @@ export function CardEditor({
       { type: "separator" },
       { label: "Remove detail", icon: "trash", danger: true, onSelect: () => removeSubtaskItem(subtask.id, item.id) }
     ];
+  }
+
+  if (mode === "view") {
+    return (
+      <CardViewPanel
+        card={card}
+        board={cardBoard}
+        listName={listName}
+        workspacePath={workspacePath}
+        members={members}
+        activeMember={activeMember}
+        fileDragActive={fileDragActive}
+        attachmentBusy={attachmentBusy}
+        imageAttachments={imageAttachments}
+        lightboxAttachment={lightboxAttachment}
+        lightboxIndex={lightboxIndex}
+        editorRef={editorRef}
+        onPanelContextMenu={(event) => {
+            if (isEditableTextControl(event.target)) {
+              onOpenContextMenu(event, textControlContextItems(event.target));
+              return;
+            }
+            onOpenContextMenu(event, cardViewContextItems(), card.title || "Card");
+        }}
+        onEdit={() => setMode("edit")}
+        onClose={onClose}
+        onToggleCompleted={() => void saveCardPatch({ completed: !card.completed })}
+        onToggleSubtask={toggleViewSubtask}
+        onAddAttachments={() => void runAttachmentAction(() => onAddAttachments(card.id))}
+        onRemoveAttachment={(attachment) => void runAttachmentAction(() => onRemoveAttachment(card.id, attachment))}
+        onOpenAttachment={openAttachment}
+        onArchive={() => void onArchive(card)}
+        onDelete={() => void onDelete(card)}
+        onSelectActiveMember={onSelectActiveMember}
+        onAddComment={(body) => onAddComment(card.id, body)}
+        onEditComment={(commentId, body) => onEditComment(card.id, commentId, body)}
+        onDeleteComment={(commentId) => onDeleteComment(card.id, commentId)}
+        onOpenContextMenu={onOpenContextMenu}
+        onCopyText={onCopyText}
+        onCloseLightbox={() => setLightboxIndex(null)}
+        onNavigateLightbox={setLightboxIndex}
+        onOpenAttachmentExternally={(attachment) => void onOpenAttachment(card.id, attachment)}
+        onRevealAttachment={(attachment) => void onRevealAttachment(card.id, attachment)}
+      />
+    );
   }
 
   return (

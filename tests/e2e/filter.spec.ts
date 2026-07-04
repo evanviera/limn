@@ -69,9 +69,9 @@ test.describe("filter, presets, and saved views", () => {
 
     // A filtered result opens the card editor with the right card.
     await rowWith(page, "Overdue task").click();
-    await expect(page.getByTestId("card-title-input")).toHaveValue("Overdue task");
+    await expect(page.getByTestId("card-view-title")).toHaveText("Overdue task");
     await page.keyboard.press("Escape");
-    await expect(page.getByTestId("card-title-input")).toBeHidden();
+    await expect(page.getByTestId("card-view")).toBeHidden();
 
     // Exporting writes an .ics with a VEVENT per dated card (Someday is skipped).
     await page.getByTestId("due-export").click();
@@ -142,9 +142,9 @@ test.describe("filter, presets, and saved views", () => {
 
     // A result opens the card editor for that card.
     await rowWith(page, "Ship release").click();
-    await expect(page.getByTestId("card-title-input")).toHaveValue("Ship release");
+    await expect(page.getByTestId("card-view-title")).toHaveText("Ship release");
     await page.keyboard.press("Escape");
-    await expect(page.getByTestId("card-title-input")).toBeHidden();
+    await expect(page.getByTestId("card-view")).toBeHidden();
   });
 
   test("saves the current filter as a view, re-applies it, and deletes it", async ({ page }) => {

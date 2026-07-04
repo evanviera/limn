@@ -36,8 +36,7 @@ test.describe("smoke", () => {
     expect(posts[0].message).toContain("Assigned to: <@U024BE7LH>");
 
     await page.getByTestId(/card-open-.*/).click();
-    await page.getByTestId("card-completed-input").check();
-    await page.getByTestId("save-card").click();
+    await page.getByTestId("card-view-complete").click();
 
     await expect.poll(async () => (await snapshot(page)).slack.length).toBe(2);
     posts = (await snapshot(page)).slack;

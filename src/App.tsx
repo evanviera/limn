@@ -75,6 +75,7 @@ import type { UpdateStatus } from "./lib/updateMessages";
 
 const WORKSPACE_WATCH_REFRESH_DELAY_MS = 75;
 
+type CardOpenMode = "view" | "edit";
 
 function platformName() {
   const platform = navigator.platform || navigator.userAgent;
@@ -101,6 +102,7 @@ export default function App() {
   const [view, setView] = useState<View>("board");
   const [filterRequest, setFilterRequest] = useState<FilterRequest | null>(null);
   const [selectedCardId, setSelectedCardId] = useState<string | null>(null);
+  const [selectedCardMode, setSelectedCardMode] = useState<CardOpenMode>("view");
   const [error, setError] = useState("");
   const [notice, setNotice] = useState("");
   const [noticeKind, setNoticeKind] = useState<"info" | "warning">("info");
@@ -775,6 +777,7 @@ export default function App() {
         const listCards = cards.filter((item) => item.boardId === activeBoard.id && item.listId === listId && !item.archived);
         const card = { ...createCard(activeBoard.id, listId, title), order: nextOrderForList(listCards) };
         await persistCard(card);
+        setSelectedCardMode("edit");
         setSelectedCardId(card.id);
       }
     });
@@ -858,7 +861,13 @@ export default function App() {
   // editor has the right board/list context, then open the editor over the view.
   function openCardFromWorkspaceView(card: Card) {
     setActiveBoardId(card.boardId);
+    setSelectedCardMode("view");
     setSelectedCardId(card.id);
+  }
+
+  function openCardFromBoard(cardId: string) {
+    setSelectedCardMode("view");
+    setSelectedCardId(cardId);
   }
 
   function openDueReminderFilter() {
@@ -1803,7 +1812,7 @@ export default function App() {
             onDeleteList={deleteList}
             onAddCard={addCard}
             onMoveCard={moveCard}
-            onOpenCard={setSelectedCardId}
+            onOpenCard={openCardFromBoard}
             onToggleSubtask={toggleSubtask}
             onToggleCardCompleted={toggleCardCompleted}
             onArchiveCard={archiveCard}
@@ -1863,6 +1872,7 @@ export default function App() {
             members={members}
             activeMember={activeMember}
             fileDragActive={fileDragActive}
+            initialMode={selectedCardMode}
             onSave={saveCardFromEditor}
             onClose={() => setSelectedCardId(null)}
             onArchive={archiveCard}
