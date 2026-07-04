@@ -1,5 +1,5 @@
 import { test, expect } from "@playwright/test";
-import { openApp, openWorkspace, queueAttachmentPick, setUpdaterMode, snapshot } from "./harness";
+import { dropFiles, openApp, openWorkspace, queueAttachmentPick, setUpdaterMode, snapshot } from "./harness";
 
 test.describe("smoke", () => {
   test("card editor divider resizes the detail rail", async ({ page }) => {
@@ -93,7 +93,6 @@ test.describe("smoke", () => {
     ]);
     await page.getByTestId("add-attachment").click();
 
-    const attachmentOpen = page.locator('[data-testid^="attachment-"][data-testid$="-open"]').first();
     await expect(page.locator('[data-testid^="attachment-"][data-testid$="-open"]')).toContainText([
       "screenshot.png",
       "design-spec.pdf",
@@ -118,9 +117,10 @@ test.describe("smoke", () => {
     expect(afterAdd.cards[0].content).toContain('"storedName"');
     expect(afterAdd.cards[0].content).toContain("Attached 3 files");
 
-    // Opening an attachment routes through the native open command (recorded as an
-    // external link by the harness).
-    await attachmentOpen.click();
+    // Opening a non-image attachment routes through the native open command
+    // (recorded as an external link by the harness). Images open the lightbox
+    // instead, exercised in its own test.
+    await page.locator(".attachment-open", { hasText: "design-spec.pdf" }).click();
     await expect.poll(async () => (await snapshot(page)).externalLinks.some((link) => link.startsWith("attachment://"))).toBe(true);
 
     await page.getByRole("button", { name: "Close" }).click();
@@ -131,6 +131,121 @@ test.describe("smoke", () => {
     await page.locator(".task-card", { hasText: "Collect artifacts" }).click();
     await page.locator('[data-testid^="attachment-"][data-testid$="-remove"]').nth(2).click();
     await expect.poll(async () => page.getByTestId(/card-.*-image-cover/).getAttribute("alt")).toBe("screenshot.png");
+  });
+
+  test("files dropped onto the open card are attached", async ({ page }) => {
+    await openApp(page);
+    await openWorkspace(page);
+
+    await page.getByTestId("create-board").click();
+    await page.getByTestId("text-dialog-input").fill("Drop Board");
+    await page.getByTestId("text-dialog-submit").click();
+
+    await page.getByTestId("add-card-todo").click();
+    await page.getByTestId("text-dialog-input").fill("Drop target");
+    await page.getByTestId("text-dialog-submit").click();
+
+    await expect(page.getByTestId("add-attachment")).toBeVisible();
+    await expect(page.getByText("No files yet")).toBeVisible();
+
+    // Simulate the OS dropping files onto the window while the card is open.
+    await dropFiles(page, ["/mock/uploads/diagram.png", "/mock/uploads/notes.txt"]);
+
+    await expect(page.locator('[data-testid^="attachment-"][data-testid$="-open"]')).toContainText([
+      "diagram.png",
+      "notes.txt"
+    ]);
+    await expect.poll(async () => (await snapshot(page)).attachments.length).toBe(2);
+    const dropped = await snapshot(page);
+    expect(dropped.cards[0].content).toContain('"name":"diagram.png"');
+    expect(dropped.cards[0].content).toContain('"name":"notes.txt"');
+    expect(dropped.cards[0].content).toContain("Attached 2 files");
+  });
+
+  test("clicking an image attachment opens the lightbox viewer", async ({ page }) => {
+    await openApp(page);
+    await openWorkspace(page);
+
+    await page.getByTestId("create-board").click();
+    await page.getByTestId("text-dialog-input").fill("Gallery Board");
+    await page.getByTestId("text-dialog-submit").click();
+
+    await page.getByTestId("add-card-todo").click();
+    await page.getByTestId("text-dialog-input").fill("Gallery");
+    await page.getByTestId("text-dialog-submit").click();
+
+    await queueAttachmentPick(page, [
+      "/mock/uploads/one.png",
+      "/mock/uploads/spec.pdf",
+      "/mock/uploads/two.jpg",
+      "/mock/uploads/three.gif"
+    ]);
+    await page.getByTestId("add-attachment").click();
+    await expect(page.locator('[data-testid^="attachment-"][data-testid$="-open"]')).toHaveCount(4);
+
+    // Clicking an image opens the lightbox; the pdf between the images is skipped.
+    await page.locator(".attachment-open", { hasText: "one.png" }).click();
+    const lightbox = page.getByTestId("attachment-lightbox");
+    await expect(lightbox).toBeVisible();
+    await expect(page.getByTestId("attachment-lightbox-image")).toHaveAttribute("alt", "one.png");
+    await expect(page.getByTestId("attachment-lightbox-caption")).toContainText("1 of 3");
+
+    // Arrow keys flip through the image attachments only, wrapping at the ends.
+    await page.keyboard.press("ArrowRight");
+    await expect(page.getByTestId("attachment-lightbox-image")).toHaveAttribute("alt", "two.jpg");
+    await expect(page.getByTestId("attachment-lightbox-caption")).toContainText("2 of 3");
+
+    await page.keyboard.press("ArrowLeft");
+    await page.keyboard.press("ArrowLeft");
+    await expect(page.getByTestId("attachment-lightbox-image")).toHaveAttribute("alt", "three.gif");
+    await expect(page.getByTestId("attachment-lightbox-caption")).toContainText("3 of 3");
+
+    // The next button wraps back to the first image.
+    await page.getByTestId("attachment-lightbox-next").click();
+    await expect(page.getByTestId("attachment-lightbox-image")).toHaveAttribute("alt", "one.png");
+
+    // The reveal button asks the OS to show the file in its file manager.
+    await page.getByTestId("attachment-lightbox-reveal").click();
+    await expect.poll(async () => (await snapshot(page)).externalLinks.some((link) => link.startsWith("reveal://"))).toBe(true);
+
+    // Escape closes the lightbox but leaves the editor open.
+    await page.keyboard.press("Escape");
+    await expect(lightbox).toBeHidden();
+    await expect(page.getByTestId("add-attachment")).toBeVisible();
+  });
+
+  test("files dropped onto a board card are attached to that card", async ({ page }) => {
+    await openApp(page);
+    await openWorkspace(page);
+
+    await page.getByTestId("create-board").click();
+    await page.getByTestId("text-dialog-input").fill("Board Drop");
+    await page.getByTestId("text-dialog-submit").click();
+
+    // Two cards, so we can confirm the drop lands on the one under the pointer.
+    await page.getByTestId("add-card-todo").click();
+    await page.getByTestId("text-dialog-input").fill("First card");
+    await page.getByTestId("text-dialog-submit").click();
+    await page.getByRole("button", { name: "Close" }).click();
+
+    await page.getByTestId("add-card-todo").click();
+    await page.getByTestId("text-dialog-input").fill("Second card");
+    await page.getByTestId("text-dialog-submit").click();
+    await page.getByRole("button", { name: "Close" }).click();
+
+    const secondCard = page.locator(".task-card", { hasText: "Second card" });
+    await expect(secondCard).toBeVisible();
+
+    // Drop onto the second card while the board (no editor) is showing.
+    await dropFiles(page, ["/mock/uploads/diagram.png"], secondCard);
+
+    // The image cover lands on the second card, and the first card stays bare.
+    await expect(secondCard.getByTestId(/card-.*-image-cover/)).toBeVisible();
+    await expect(page.locator(".task-card", { hasText: "First card" }).getByTestId(/card-.*-image-cover/)).toHaveCount(0);
+
+    await expect.poll(async () => (await snapshot(page)).attachments.length).toBe(1);
+    const snap = await snapshot(page);
+    expect(snap.cards.find((file) => file.content.includes("Second card"))?.content).toContain('"name":"diagram.png"');
   });
 
   test("right-click context menus expose board, editor, and card actions", async ({ page }) => {

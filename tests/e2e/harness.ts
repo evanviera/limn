@@ -1,4 +1,4 @@
-import { type Page, expect } from "@playwright/test";
+import { type Locator, type Page, expect } from "@playwright/test";
 
 /**
  * Helpers for driving Limn's in-browser E2E harness (src/testHarness.ts).
@@ -83,4 +83,25 @@ export async function queueAttachmentPick(page: Page, paths: string[]): Promise<
       detail: { type: "queueAttachmentPick", paths: nextPaths }
     }));
   }, paths);
+}
+
+/**
+ * Simulate an OS file drop of the given absolute paths onto the app window.
+ * Pass a `target` locator to drop onto a specific element (e.g. a board card);
+ * omit it to drop with no card under the pointer (attaches to the open editor).
+ */
+export async function dropFiles(page: Page, paths: string[], target?: Locator): Promise<void> {
+  let point: { x: number; y: number } = { x: 0, y: 0 };
+  if (target) {
+    const box = await target.boundingBox();
+    if (!box) {
+      throw new Error("Drop target is not visible");
+    }
+    point = { x: box.x + box.width / 2, y: box.y + box.height / 2 };
+  }
+  await page.evaluate(({ nextPaths, x, y }) => {
+    document.dispatchEvent(new CustomEvent("limn-e2e-command", {
+      detail: { type: "dropFiles", paths: nextPaths, x, y }
+    }));
+  }, { nextPaths: paths, x: point.x, y: point.y });
 }

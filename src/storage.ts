@@ -105,6 +105,12 @@ export async function openAttachmentFile(path: string, cardId: string, storedNam
   await invoke("open_attachment", { path, cardId, storedName });
 }
 
+// Reveal the attachment in the OS file manager (selecting it in Finder/Explorer
+// where supported, otherwise opening its containing folder).
+export async function revealAttachmentFile(path: string, cardId: string, storedName: string): Promise<void> {
+  await invoke("reveal_attachment", { path, cardId, storedName });
+}
+
 export async function loadAttachmentPreview(path: string, cardId: string, storedName: string): Promise<AttachmentPreviewData> {
   return invoke<AttachmentPreviewData>("read_attachment_preview", { path, cardId, storedName });
 }

@@ -126,6 +126,13 @@ body.is-card-dragging .column:hover {
   opacity: 0.38;
 }
 
+/* Highlighted while an OS file is dragged over it, to show where a drop lands. */
+.task-card.drop-target {
+  background: var(--accent-soft);
+  border-color: var(--accent);
+  box-shadow: 0 0 0 1px var(--accent);
+}
+
 .task-card.drag-preview {
   position: fixed;
   top: 0;

@@ -84,6 +84,23 @@ pub(crate) fn open_attachment(
 }
 
 #[tauri::command]
+pub(crate) fn reveal_attachment(
+    path: String,
+    card_id: String,
+    stored_name: String,
+) -> Result<(), String> {
+    let root = crate::workspace_root(&path)?;
+    validate_path_segment(&card_id)?;
+    validate_path_segment(&stored_name)?;
+
+    let target = root.join("attachments").join(&card_id).join(&stored_name);
+    if !target.exists() {
+        return Err("Attachment file does not exist".to_string());
+    }
+    reveal_in_file_manager(&target)
+}
+
+#[tauri::command]
 pub(crate) fn read_attachment_preview(
     path: String,
     card_id: String,
@@ -117,6 +134,35 @@ fn validate_path_segment(segment: &str) -> Result<(), String> {
         return Err("Invalid attachment path".to_string());
     }
     Ok(())
+}
+
+// Reveal a file in the OS file manager, selecting it where the platform supports
+// it (Finder on macOS, Explorer on Windows) and otherwise opening its folder.
+fn reveal_in_file_manager(target: &Path) -> Result<(), String> {
+    #[cfg(target_os = "macos")]
+    {
+        std::process::Command::new("open")
+            .arg("-R")
+            .arg(target)
+            .spawn()
+            .map(|_| ())
+            .map_err(crate::display_err)
+    }
+    #[cfg(target_os = "windows")]
+    {
+        std::process::Command::new("explorer")
+            .arg(format!("/select,{}", target.display()))
+            .spawn()
+            .map(|_| ())
+            .map_err(crate::display_err)
+    }
+    #[cfg(not(any(target_os = "macos", target_os = "windows")))]
+    {
+        let parent = target
+            .parent()
+            .ok_or_else(|| "Attachment has no parent directory".to_string())?;
+        open::that(parent).map_err(crate::display_err)
+    }
 }
 
 fn remove_dir_if_empty(dir: &Path) {

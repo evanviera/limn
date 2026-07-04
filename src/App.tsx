@@ -9,7 +9,7 @@ import type {
 } from "react";
 import type { PointerEvent as ReactPointerEvent } from "react";
 import { getCurrentWindow } from "@tauri-apps/api/window";
-import { listen } from "./ipc";
+import { listen, listenFileDrop } from "./ipc";
 import {
   addActivity,
   addAttachmentFile,
@@ -32,6 +32,7 @@ import {
   pickAttachmentFiles,
   pickWorkspaceFolder,
   postSlack,
+  revealAttachmentFile,
   saveBoard,
   saveCard,
   saveLastWorkspace,
@@ -110,6 +111,12 @@ export default function App() {
   const [updateProgress, setUpdateProgress] = useState<DownloadProgress | null>(null);
   const [themeMode, setThemeMode] = useState<ThemeMode>(() => readStoredThemeMode());
   const [contextMenu, setContextMenu] = useState<ContextMenuState | null>(null);
+  // True while OS files are being dragged over the window, used to invite a drop
+  // onto the open card editor.
+  const [fileDragActive, setFileDragActive] = useState(false);
+  // The board card currently under a file drag (highlighted as the drop target),
+  // or null when the drag isn't over a card.
+  const [dragOverCardId, setDragOverCardId] = useState<string | null>(null);
   const hasCheckedForUpdatesRef = useRef(false);
 
   const activeBoard = boards.find((board) => board.id === activeBoardId) ?? boards[0] ?? null;
@@ -132,6 +139,9 @@ export default function App() {
   cardsRef.current = cards;
   const membersRef = useRef(members);
   membersRef.current = members;
+  // Points at the latest "attach these dropped files to a card" closure so the
+  // window drag-drop listener (subscribed once) never reads stale state.
+  const attachToCardRef = useRef<(cardId: string, paths: string[]) => void>(() => undefined);
   const pendingCardWriteRef = useRef<Record<string, string>>({});
   const pendingMembersWriteRef = useRef<Member[] | null>(null);
   const pendingSettingsWriteRef = useRef<WorkspaceSettings | null>(null);
@@ -168,6 +178,67 @@ export default function App() {
     document.documentElement.dataset.theme = themeMode;
     localStorage.setItem(THEME_STORAGE_KEY, themeMode);
   }, [themeMode]);
+
+  // Attach files dropped from the OS onto a card — either the open card editor or,
+  // on the board, the card under the pointer. Subscribed once; current state is
+  // read through refs so it never goes stale.
+  useEffect(() => {
+    let unlisten: (() => void) | undefined;
+    let cancelled = false;
+
+    // The board card under the given viewport point, if any.
+    function cardIdAtPoint(x: number, y: number): string | null {
+      return document.elementFromPoint(x, y)?.closest<HTMLElement>("[data-card-id]")?.dataset.cardId ?? null;
+    }
+
+    // Only push state when the hovered card changes so a stream of "over" events
+    // doesn't re-render the board on every frame.
+    let hoveredCardId: string | null = null;
+    function setHoveredCard(id: string | null) {
+      if (hoveredCardId !== id) {
+        hoveredCardId = id;
+        setDragOverCardId(id);
+      }
+    }
+
+    void listenFileDrop((event) => {
+      if (event.type === "leave") {
+        setFileDragActive(false);
+        setHoveredCard(null);
+        return;
+      }
+
+      // While the editor is open it owns the drop (via its own overlay);
+      // otherwise the drop targets whichever board card sits under the pointer.
+      const editorOpen = selectedCardIdRef.current !== null;
+      const boardCardId = editorOpen ? null : cardIdAtPoint(event.x, event.y);
+
+      if (event.type === "over") {
+        setFileDragActive(editorOpen);
+        setHoveredCard(boardCardId);
+        return;
+      }
+
+      setFileDragActive(false);
+      setHoveredCard(null);
+      const targetCardId = editorOpen ? selectedCardIdRef.current : boardCardId;
+      if (targetCardId && event.paths.length > 0) {
+        attachToCardRef.current(targetCardId, event.paths);
+      }
+    })
+      .then((fn) => {
+        if (cancelled) {
+          fn();
+        } else {
+          unlisten = fn;
+        }
+      })
+      .catch(() => undefined);
+    return () => {
+      cancelled = true;
+      unlisten?.();
+    };
+  }, []);
 
   useEffect(() => {
     if (hasCheckedForUpdatesRef.current || !updaterAvailable) {
@@ -839,18 +910,15 @@ export default function App() {
   }
 
   // Attachments are file-backed, so add/remove persist immediately rather than
-  // riding along with the editor's Save. Each copies/deletes the file first, then
-  // records the change (and an activity entry) on the card.
-  async function attachFilesToCard(cardId: string) {
+  // riding along with the editor's Save. Copy each source into the workspace,
+  // then record the change (and an activity entry) on the card. Sources come
+  // either from the native picker or from an OS file-drop.
+  async function attachSourcesToCard(cardId: string, sources: string[]) {
     const card = cards.find((item) => item.id === cardId);
-    if (!card || !workspacePath) {
+    if (!card || !workspacePath || sources.length === 0) {
       return;
     }
     try {
-      const sources = await pickAttachmentFiles();
-      if (sources.length === 0) {
-        return;
-      }
       const added: Attachment[] = [];
       for (const source of sources) {
         const id = makeId("att");
@@ -866,6 +934,14 @@ export default function App() {
       setError(`Attachment failed: ${errorText(reason)}`);
     }
   }
+
+  async function attachFilesToCard(cardId: string) {
+    await attachSourcesToCard(cardId, await pickAttachmentFiles());
+  }
+
+  // Refreshed every render so the once-subscribed drop listener always attaches
+  // against current state, whichever card the drop resolves to.
+  attachToCardRef.current = (cardId: string, paths: string[]) => void attachSourcesToCard(cardId, paths);
 
   async function removeAttachmentFromCard(cardId: string, attachment: Attachment) {
     const card = cards.find((item) => item.id === cardId);
@@ -893,6 +969,17 @@ export default function App() {
       await openAttachmentFile(workspacePath, cardId, attachment.storedName);
     } catch (reason) {
       setError(`Open attachment failed: ${errorText(reason)}`);
+    }
+  }
+
+  async function revealCardAttachment(cardId: string, attachment: Attachment) {
+    if (!workspacePath) {
+      return;
+    }
+    try {
+      await revealAttachmentFile(workspacePath, cardId, attachment.storedName);
+    } catch (reason) {
+      setError(`Reveal attachment failed: ${errorText(reason)}`);
     }
   }
 
@@ -1608,6 +1695,7 @@ export default function App() {
             cards={visibleCards}
             members={members}
             workspacePath={workspacePath}
+            dropTargetCardId={dragOverCardId}
             onAddList={addList}
             onRenameBoard={renameBoard}
             onDeleteBoard={removeBoard}
@@ -1668,6 +1756,7 @@ export default function App() {
             boards={boards}
             members={members}
             activeMember={activeMember}
+            fileDragActive={fileDragActive}
             onSave={saveCardFromEditor}
             onClose={() => setSelectedCardId(null)}
             onArchive={archiveCard}
@@ -1675,6 +1764,7 @@ export default function App() {
             onAddAttachments={attachFilesToCard}
             onRemoveAttachment={removeAttachmentFromCard}
             onOpenAttachment={openCardAttachment}
+            onRevealAttachment={revealCardAttachment}
             onSelectActiveMember={selectActiveMember}
             onAddComment={addComment}
             onEditComment={editComment}

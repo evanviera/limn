@@ -17,6 +17,8 @@ export interface BoardViewProps {
   cards: Card[];
   members: Member[];
   workspacePath: string | null;
+  // The card highlighted as the target of an in-progress OS file drag, or null.
+  dropTargetCardId: string | null;
   onAddList: () => Promise<void>;
   onRenameBoard: (board: Board) => Promise<void>;
   onDeleteBoard: (board: Board) => Promise<void>;
@@ -375,7 +377,7 @@ export function BoardView(props: BoardViewProps) {
                   <Fragment key={card.id}>
                     <article
                       aria-label={`${card.title}${card.completed ? " (completed)" : ""}`}
-                      className={`task-card ${card.completed ? "completed" : ""} ${dragPreview?.cardId === card.id ? "drag-source" : ""}`}
+                      className={`task-card ${card.completed ? "completed" : ""} ${dragPreview?.cardId === card.id ? "drag-source" : ""} ${props.dropTargetCardId === card.id ? "drop-target" : ""}`}
                       data-card-id={card.id}
                       data-testid={`card-${card.id}`}
                       onClick={() => openCard(card.id)}

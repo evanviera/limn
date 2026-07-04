@@ -260,6 +260,13 @@ window.__LIMN_TEST_IPC__ = {
         updateDebugState();
         return undefined as T;
       }
+      case "reveal_attachment": {
+        const cardId = String(args?.cardId ?? "");
+        const storedName = String(args?.storedName ?? "");
+        externalLinks.push(`reveal://${cardId}/${storedName}`);
+        updateDebugState();
+        return undefined as T;
+      }
       case "read_attachment_preview": {
         const cardId = String(args?.cardId ?? "");
         const storedName = String(args?.storedName ?? "");
@@ -371,6 +378,7 @@ function applyCommand(
     | { type: "queuePrompt"; value: string | null }
     | { type: "queueConfirm"; value: boolean }
     | { type: "queueAttachmentPick"; paths: string[] }
+    | { type: "dropFiles"; paths: string[]; x?: number; y?: number }
     | { type: "setUpdaterMode"; mode: UpdaterMode }
     | { type: "resetSlack" }
 ) {
@@ -397,6 +405,12 @@ function applyCommand(
       break;
     case "queueAttachmentPick":
       attachmentPickQueue.push(detail.paths);
+      break;
+    case "dropFiles":
+      // Stand in for the OS dropping files onto the window (see listenFileDrop).
+      // Coordinates let tests target a specific board card; they default to the
+      // top-left, which resolves to no card (used by the editor-drop test).
+      emit("limn://file-drop", { type: "drop", paths: detail.paths, x: detail.x ?? 0, y: detail.y ?? 0 });
       break;
     case "setUpdaterMode":
       window.__LIMN_E2E__?.setUpdaterMode(detail.mode);

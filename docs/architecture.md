@@ -24,6 +24,8 @@ focused" section before adding code to an existing large file.**
 - `RichNoteText.tsx` — renders card note text (inline links / bold / italic).
 - `BoardView.tsx` — board columns, drag-and-drop, `TaskCardBody`, `MemberDots`.
 - `CardAttachments.tsx` — the card editor's attachments section (list / add / open / remove), fully prop-driven.
+- `AttachmentImagePreview.tsx` — the inline image thumbnail shown for image attachments (loads bytes via `useAttachmentObjectUrl`).
+- `AttachmentLightbox.tsx` — the full-screen image viewer opened by clicking an image attachment; arrow keys / chevrons flip through the card's image attachments.
 - `CardComments.tsx` — the card editor's discussion section: threaded comments, composer, @mention highlighting, and the "who are you?" identity prompt, fully prop-driven.
 - `MembersView.tsx`, `SettingsView.tsx`, `CardEditor.tsx`, `WindowsTitlebar.tsx` — the remaining views.
 
@@ -36,6 +38,8 @@ focused" section before adding code to an existing large file.**
 - `noteFormat.ts` — note markdown parse/serialize + contenteditable DOM helpers.
 - `updateMessages.ts` — updater banner/settings message builders and `UpdateStatus`.
 - `useModalKeys.ts` — modal focus-trap / Escape hook and the modal stack.
+- `useAttachmentObjectUrl.ts` — loads an image attachment's bytes into an object URL (with cleanup), shared by the thumbnail and the lightbox.
+- `attachments.ts` — image-extension detection helpers (`isImageAttachment`, `latestImageAttachment`, `attachmentFileExtension`).
 
 ## Styles (`src/styles.css` → `src/styles/`)
 

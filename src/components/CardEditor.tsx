@@ -10,8 +10,10 @@ import type {
 import type { Attachment, Board, Card, Member, Subtask, SubtaskListItem } from "../types";
 import { makeId, normalizeUrl, openExternal } from "../storage";
 import { MAX_NAME_LENGTH } from "../lib/constants";
+import { isImageAttachment } from "../lib/attachments";
 import { describeDue, dueInputFromToday } from "../lib/dueDate";
 import { initials } from "../lib/format";
+import { AttachmentLightbox } from "./AttachmentLightbox";
 import { CardAttachments } from "./CardAttachments";
 import { CardComments } from "./CardComments";
 import {
@@ -44,6 +46,7 @@ export function CardEditor({
   boards,
   members,
   activeMember,
+  fileDragActive,
   onSave,
   onClose,
   onArchive,
@@ -51,6 +54,7 @@ export function CardEditor({
   onAddAttachments,
   onRemoveAttachment,
   onOpenAttachment,
+  onRevealAttachment,
   onSelectActiveMember,
   onAddComment,
   onEditComment,
@@ -63,6 +67,9 @@ export function CardEditor({
   boards: Board[];
   members: Member[];
   activeMember: Member | null;
+  // True while files are being dragged over the window, so the editor can invite
+  // a drop. The actual attach happens in App (it owns the dropped paths).
+  fileDragActive: boolean;
   onSave: (card: Card) => Promise<void>;
   onClose: () => void;
   onArchive: (card: Card) => Promise<void>;
@@ -70,6 +77,7 @@ export function CardEditor({
   onAddAttachments: (cardId: string) => Promise<void>;
   onRemoveAttachment: (cardId: string, attachment: Attachment) => Promise<void>;
   onOpenAttachment: (cardId: string, attachment: Attachment) => Promise<void>;
+  onRevealAttachment: (cardId: string, attachment: Attachment) => Promise<void>;
   onSelectActiveMember: (memberId: string) => void;
   onAddComment: (cardId: string, body: string) => Promise<void>;
   onEditComment: (cardId: string, commentId: string, body: string) => Promise<void>;
@@ -80,6 +88,9 @@ export function CardEditor({
   const [draft, setDraft] = useState(card);
   const [saving, setSaving] = useState(false);
   const [attachmentBusy, setAttachmentBusy] = useState(false);
+  // Index into `imageAttachments` of the image open in the lightbox, or null when
+  // it's closed. Image attachments open in the viewer; other files open natively.
+  const [lightboxIndex, setLightboxIndex] = useState<number | null>(null);
   const [labelInput, setLabelInput] = useState("");
   const [sideWidth, setSideWidth] = useState(CARD_EDITOR_SIDE_WIDTH_DEFAULT);
   const [resizingColumns, setResizingColumns] = useState(false);
@@ -98,6 +109,10 @@ export function CardEditor({
   const cardEditorBodyStyle = { "--card-editor-side-width": `${sideWidth}px` } as CSSProperties;
   const board = boards.find((item) => item.id === draft.boardId) ?? boards[0];
   const completedSubtasks = draft.subtasks.filter((subtask) => subtask.completed).length;
+  // Attachments persist immediately, so the lightbox reads the saved `card`
+  // (not `draft`) — same source the attachments list renders from.
+  const imageAttachments = card.attachments.filter(isImageAttachment);
+  const lightboxAttachment = lightboxIndex === null ? null : imageAttachments[lightboxIndex] ?? null;
 
   // Reset the draft only when a *different* card opens. Attachment actions
   // persist the open card immediately (adding/removing files can't be deferred),
@@ -108,6 +123,7 @@ export function CardEditor({
     setLabelInput("");
     setExpandedSubtasks(new Set());
     setLinkDraft(null);
+    setLightboxIndex(null);
     activeNotesLinkRef.current = null;
     pendingNotesLinkRangeRef.current = null;
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -250,6 +266,20 @@ export function CardEditor({
 
   function removeLabel(label: string) {
     setDraft((current) => ({ ...current, labels: current.labels.filter((item) => item !== label) }));
+  }
+
+  // Image attachments open in the in-app lightbox; everything else opens in the
+  // OS default app. The lightbox flips through image attachments only, so we map
+  // the clicked attachment to its position within that filtered list.
+  function openAttachment(attachment: Attachment) {
+    if (isImageAttachment(attachment)) {
+      const position = imageAttachments.findIndex((item) => item.id === attachment.id);
+      if (position >= 0) {
+        setLightboxIndex(position);
+        return;
+      }
+    }
+    void onOpenAttachment(card.id, attachment);
   }
 
   // Attachment add/remove persist to disk immediately (see the draft-reset note
@@ -925,7 +955,7 @@ export function CardEditor({
               cardId={card.id}
               busy={attachmentBusy}
               onAdd={() => void runAttachmentAction(() => onAddAttachments(card.id))}
-              onOpen={(attachment) => void onOpenAttachment(card.id, attachment)}
+              onOpen={openAttachment}
               onRemove={(attachment) => void runAttachmentAction(() => onRemoveAttachment(card.id, attachment))}
               onOpenContextMenu={onOpenContextMenu}
               onCopyText={onCopyText}
@@ -1266,7 +1296,29 @@ export function CardEditor({
             )}
           </button>
         </footer>
+
+        {fileDragActive && (
+          <div className="card-editor-dropzone" data-testid="card-editor-dropzone" aria-hidden="true">
+            <div className="card-editor-dropzone-inner">
+              <Icon name="paperclip" />
+              <p>Drop files to attach</p>
+            </div>
+          </div>
+        )}
       </aside>
+
+      {lightboxAttachment && lightboxIndex !== null && (
+        <AttachmentLightbox
+          attachments={imageAttachments}
+          index={lightboxIndex}
+          workspacePath={workspacePath}
+          cardId={card.id}
+          onClose={() => setLightboxIndex(null)}
+          onNavigate={setLightboxIndex}
+          onOpenExternally={(attachment) => void onOpenAttachment(card.id, attachment)}
+          onRevealInFolder={(attachment) => void onRevealAttachment(card.id, attachment)}
+        />
+      )}
     </div>
   );
 }

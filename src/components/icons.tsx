@@ -6,6 +6,8 @@ export type IconName =
   | "chat"
   | "check"
   | "chevron-down"
+  | "chevron-left"
+  | "chevron-right"
   | "chevron-up-right"
   | "clipboard"
   | "copy"
@@ -62,6 +64,8 @@ export function Icon({ name }: { name: IconName }) {
     ),
     check: <path d="m5 12 4 4L19 6" />,
     "chevron-down": <path d="m6 9 6 6 6-6" />,
+    "chevron-left": <path d="m14 6-6 6 6 6" />,
+    "chevron-right": <path d="m10 6 6 6-6 6" />,
     "chevron-up-right": (
       <>
         <path d="M7 17 17 7" />

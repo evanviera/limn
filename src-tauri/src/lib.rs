@@ -14,7 +14,7 @@ mod menu;
 
 use attachments::{
     add_attachment, delete_attachment, open_attachment, pick_attachment_files,
-    read_attachment_preview,
+    read_attachment_preview, reveal_attachment,
 };
 
 #[derive(Default)]
@@ -347,6 +347,7 @@ pub fn run() {
             add_attachment,
             delete_attachment,
             open_attachment,
+            reveal_attachment,
             read_attachment_preview,
             save_last_workspace,
             get_last_workspace,
