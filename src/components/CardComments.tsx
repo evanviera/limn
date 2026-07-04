@@ -7,6 +7,7 @@ import type {
 import type { Comment, Member } from "../types";
 import { countLabel, initials } from "../lib/format";
 import { MENTION_SPLIT_PATTERN, matchMention } from "../lib/mentions";
+import { MentionTextarea } from "./MentionTextarea";
 import { Icon } from "./icons";
 import { isEditableTextControl, textControlContextItems } from "./contextMenu";
 import type { ContextMenuItem, OpenContextMenu } from "./contextMenu";
@@ -214,12 +215,13 @@ export function CardComments({
                   </div>
                   {isEditing ? (
                     <form className="comment-edit-form" onSubmit={(event) => submitEdit(event, comment)}>
-                      <textarea
+                      <MentionTextarea
                         className="comment-textarea"
-                        data-testid={`comment-${comment.id}-edit-input`}
+                        testId={`comment-${comment.id}-edit-input`}
                         value={editDraft}
+                        members={members}
                         autoFocus
-                        onChange={(event) => setEditDraft(event.target.value)}
+                        onChange={setEditDraft}
                         onKeyDown={handleEditKeyDown}
                       />
                       <div className="comment-edit-actions">
@@ -247,13 +249,14 @@ export function CardComments({
             {initials(activeMember.name)}
           </span>
           <div className="comment-composer-main">
-            <textarea
+            <MentionTextarea
               className="comment-textarea"
-              data-testid="comment-input"
+              testId="comment-input"
               value={draft}
+              members={members}
               placeholder={`Comment as ${activeMember.name}…`}
-              aria-label="Write a comment"
-              onChange={(event) => setDraft(event.target.value)}
+              ariaLabel="Write a comment"
+              onChange={setDraft}
               onKeyDown={handleComposerKeyDown}
             />
             <div className="comment-composer-foot">

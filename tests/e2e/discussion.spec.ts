@@ -64,6 +64,44 @@ test.describe("discussion", () => {
     await expect.poll(async () => (await snapshot(page)).cards[0].content).toContain("comments: []");
   });
 
+  test("typing @ opens a member picker that inserts a mention", async ({ page }) => {
+    await openApp(page);
+    await openWorkspace(page);
+
+    await page.getByTestId("nav-members").click();
+    await page.getByTestId("member-name-input").fill("Ada Lovelace");
+    await page.getByTestId("add-member").click();
+    await page.getByTestId("member-name-input").fill("Grace Hopper");
+    await page.getByTestId("add-member").click();
+
+    await page.getByTestId("create-board").click();
+    await page.getByTestId("text-dialog-input").fill("Discussion Board");
+    await page.getByTestId("text-dialog-submit").click();
+
+    await page.getByTestId("add-card-todo").click();
+    await page.getByTestId("text-dialog-input").fill("Plan the launch");
+    await page.getByTestId("text-dialog-submit").click();
+
+    await page.getByTestId("comment-identify-ada-lovelace").click();
+
+    // Typing "@" plus a prefix filters the roster to a live picker.
+    const input = page.getByTestId("comment-input");
+    await input.click();
+    await input.pressSequentially("Ping @Gr");
+    const picker = page.getByTestId("comment-input-mentions");
+    await expect(picker).toBeVisible();
+    await expect(picker.getByRole("option")).toContainText(["Grace Hopper"]);
+
+    // Choosing a member replaces the in-progress token with a mention.
+    await page.getByTestId("comment-input-mention-grace-hopper").click();
+    await expect(input).toHaveValue("Ping @Grace ");
+    await expect(picker).toBeHidden();
+
+    // The inserted mention posts and highlights like any other.
+    await page.getByTestId("add-comment").click();
+    await expect(page.getByTestId("comment-list").locator(".mention")).toHaveText("@Grace");
+  });
+
   test("comments are unavailable until a workspace has members", async ({ page }) => {
     await openApp(page);
     await openWorkspace(page);
