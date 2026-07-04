@@ -99,6 +99,7 @@ pub(crate) fn build_app_menu(app: &AppHandle) -> tauri::Result<Menu<tauri::Wry>>
         true,
         &[
             &item(app, "limn:show-board", "Show Board", Some("CmdOrCtrl+1"))?,
+            &item(app, "limn:show-filter", "Filter Cards", Some("CmdOrCtrl+F"))?,
             &item(
                 app,
                 "limn:show-members",

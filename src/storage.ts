@@ -1,5 +1,6 @@
 import { invoke } from "./ipc.js";
-import type { Attachment, AttachmentPreviewData, Board, BoardGroup, Card, Comment, Member, MembersFile, SlackNotificationSettings, Subtask, SubtaskListItem, WorkspaceFiles, WorkspaceSettings, WriteResult } from "./types";
+import { EMPTY_FILTER } from "./lib/filter.js";
+import type { Attachment, AttachmentPreviewData, Board, BoardGroup, Card, CardFilter, Comment, Member, MembersFile, SavedView, SlackNotificationSettings, Subtask, SubtaskListItem, WorkspaceFiles, WorkspaceSettings, WriteResult } from "./types";
 
 const SCHEMA_VERSION = 1;
 
@@ -172,6 +173,7 @@ export function createDefaultSettings(workspaceName: string): WorkspaceSettings 
     slackWebhookUrl: "",
     slackNotifications: { ...DEFAULT_SLACK_NOTIFICATIONS },
     boardGroups: [],
+    savedViews: [],
     createdAt: now,
     updatedAt: now
   };
@@ -327,9 +329,54 @@ function normalizeWorkspaceSettings(settings: Partial<WorkspaceSettings> & { sla
     slackWebhookUrl: typeof settings.slackWebhookUrl === "string" ? settings.slackWebhookUrl : fallback.slackWebhookUrl,
     slackNotifications: normalizeSlackNotifications(settings.slackNotifications),
     boardGroups: normalizeBoardGroups(settings.boardGroups),
+    savedViews: normalizeSavedViews((settings as { savedViews?: unknown }).savedViews),
     createdAt: typeof settings.createdAt === "string" ? settings.createdAt : fallback.createdAt,
     updatedAt: typeof settings.updatedAt === "string" ? settings.updatedAt : fallback.updatedAt
   };
+}
+
+function normalizeSavedViews(value: unknown): SavedView[] {
+  if (!Array.isArray(value)) {
+    return [];
+  }
+
+  const seen = new Set<string>();
+  return value.flatMap((item) => {
+    if (!item || typeof item !== "object") {
+      return [];
+    }
+    const view = item as Partial<Record<keyof SavedView, unknown>>;
+    if (typeof view.id !== "string" || typeof view.name !== "string" || seen.has(view.id)) {
+      return [];
+    }
+    seen.add(view.id);
+
+    return [{
+      id: view.id,
+      name: view.name,
+      filter: normalizeCardFilter(view.filter),
+      createdAt: typeof view.createdAt === "string" ? view.createdAt : timestamp(),
+      updatedAt: typeof view.updatedAt === "string" ? view.updatedAt : timestamp()
+    }];
+  });
+}
+
+function normalizeCardFilter(value: unknown): CardFilter {
+  const filter = value && typeof value === "object" ? value as Partial<Record<keyof CardFilter, unknown>> : {};
+  return {
+    text: typeof filter.text === "string" ? filter.text : EMPTY_FILTER.text,
+    boardId: typeof filter.boardId === "string" ? filter.boardId : EMPTY_FILTER.boardId,
+    assignees: stringArray(filter.assignees),
+    labels: stringArray(filter.labels),
+    due: oneOf(filter.due, ["any", "overdue", "today", "soon", "later", "has", "none"] as const, EMPTY_FILTER.due),
+    completion: oneOf(filter.completion, ["active", "completed", "any"] as const, EMPTY_FILTER.completion),
+    archived: oneOf(filter.archived, ["active", "archived", "any"] as const, EMPTY_FILTER.archived),
+    sort: oneOf(filter.sort, ["updated", "created", "due", "title"] as const, EMPTY_FILTER.sort)
+  };
+}
+
+function oneOf<T extends string>(value: unknown, allowed: readonly T[], fallback: T): T {
+  return typeof value === "string" && (allowed as readonly string[]).includes(value) ? (value as T) : fallback;
 }
 
 function normalizeSlackNotifications(value: unknown): SlackNotificationSettings {

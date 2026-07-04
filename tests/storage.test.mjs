@@ -5,6 +5,15 @@ import { tmpdir } from "node:os";
 import { addActivity, attachmentDisplayName, attachmentStoredName, createBoard, createCard, createComment, parseCard, parseWorkspace, serializeCard } from "../.tmp/storage-test/src/storage.js";
 import { ORDER_STEP, compareCardsByOrder, nextOrderForList, placeInList } from "../.tmp/storage-test/src/lib/ordering.js";
 import { buildCalendar, describeDue, dueReminderCount, groupCardsByDue } from "../.tmp/storage-test/src/lib/dueDate.js";
+import {
+  EMPTY_FILTER,
+  FILTER_PRESETS,
+  UNASSIGNED_ASSIGNEE,
+  collectLabels,
+  filterCards,
+  filterIsActive,
+  matchesDue
+} from "../.tmp/storage-test/src/lib/filter.js";
 
 const baseCard = {
   id: "card_one",
@@ -170,6 +179,74 @@ assert.match(ics, /DTEND;VALUE=DATE:20260716/);
 assert.match(ics, /SUMMARY:✓ Ship\\, now\\; done/);
 assert.match(ics, /DTSTAMP:20260703T093000Z/);
 
+// --- Filter, presets, and saved views ---
+
+const searchNow = new Date(2026, 6, 3, 12, 0, 0); // 2026-07-03 local, noon
+const searchCards = [
+  { id: "a", title: "Fix parser bug", body: "crash on newline", boardId: "b1", listId: "todo", assignees: ["ada"], labels: ["bug"], due: "2026-07-05", completed: false, archived: false, createdAt: "2026-07-01T00:00:00.000Z", updatedAt: "2026-07-03T00:00:00.000Z" },
+  { id: "b", title: "Write docs", body: "getting started guide", boardId: "b1", listId: "todo", assignees: [], labels: ["docs"], due: "", completed: false, archived: false, createdAt: "2026-07-02T00:00:00.000Z", updatedAt: "2026-07-04T00:00:00.000Z" },
+  { id: "c", title: "Release notes", body: "", boardId: "b2", listId: "todo", assignees: ["grace"], labels: ["docs", "release"], due: "2026-07-01", completed: true, archived: false, createdAt: "2026-06-30T00:00:00.000Z", updatedAt: "2026-07-02T00:00:00.000Z" },
+  { id: "d", title: "Old idea", body: "", boardId: "b2", listId: "todo", assignees: ["ada"], labels: [], due: "", completed: false, archived: true, createdAt: "2026-06-01T00:00:00.000Z", updatedAt: "2026-06-05T00:00:00.000Z" }
+];
+const runFilter = (overrides) => filterCards(searchCards, { ...EMPTY_FILTER, ...overrides }, searchNow).map((card) => card.id);
+
+// The empty filter keeps active (not completed, not archived) cards, newest-updated first.
+assert.deepEqual(runFilter({}), ["b", "a"]);
+
+// Free text is AND-matched across title, notes, and labels (case-insensitive).
+assert.deepEqual(runFilter({ text: "parser" }), ["a"]);
+assert.deepEqual(runFilter({ text: "docs", completion: "any" }), ["b", "c"]);
+assert.deepEqual(runFilter({ text: "release notes", completion: "any" }), ["c"]);
+assert.deepEqual(runFilter({ text: "nomatch" }), []);
+
+// Assignee facet matches ANY selected member; the sentinel matches the unassigned.
+assert.deepEqual(runFilter({ assignees: ["ada"], completion: "any", archived: "any" }), ["a", "d"]);
+assert.deepEqual(runFilter({ assignees: [UNASSIGNED_ASSIGNEE] }), ["b"]);
+
+// Label facet matches ANY selected label; board facet scopes to one board.
+assert.deepEqual(runFilter({ labels: ["docs"], completion: "any" }), ["b", "c"]);
+assert.deepEqual(runFilter({ boardId: "b2", completion: "any", archived: "any" }), ["c", "d"]);
+
+// Due facet is day-delta based and independent of the Due view buckets.
+assert.deepEqual(runFilter({ due: "soon" }), ["a"]);
+assert.deepEqual(runFilter({ due: "none" }), ["b"]);
+assert.deepEqual(runFilter({ due: "overdue", completion: "any" }), ["c"]);
+
+// Completion + archived facets widen the default active scope.
+assert.deepEqual(runFilter({ completion: "completed", archived: "any" }), ["c"]);
+assert.deepEqual(runFilter({ archived: "archived" }), ["d"]);
+
+// Sort options reorder the same result set.
+assert.deepEqual(runFilter({ completion: "any", archived: "any", sort: "title" }), ["a", "d", "c", "b"]);
+assert.deepEqual(runFilter({ completion: "any", archived: "any", sort: "created" }), ["b", "a", "c", "d"]);
+
+// matchesDue classifies by whole-day delta.
+assert.equal(matchesDue({ due: "2026-07-01" }, "overdue", searchNow), true);
+assert.equal(matchesDue({ due: "2026-07-03" }, "today", searchNow), true);
+assert.equal(matchesDue({ due: "2026-07-05" }, "soon", searchNow), true);
+assert.equal(matchesDue({ due: "2026-07-20" }, "later", searchNow), true);
+assert.equal(matchesDue({ due: "" }, "none", searchNow), true);
+assert.equal(matchesDue({ due: "" }, "has", searchNow), false);
+assert.equal(matchesDue({ due: "2026-07-05" }, "any", searchNow), true);
+
+// collectLabels de-duplicates case-insensitively and sorts.
+assert.deepEqual(collectLabels(searchCards), ["bug", "docs", "release"]);
+
+// filterIsActive treats the empty filter as "not filtering".
+assert.equal(filterIsActive(EMPTY_FILTER), false);
+assert.equal(filterIsActive({ ...EMPTY_FILTER, text: "x" }), true);
+assert.equal(filterIsActive({ ...EMPTY_FILTER, completion: "any" }), true);
+assert.equal(filterIsActive({ ...EMPTY_FILTER, assignees: ["ada"] }), true);
+
+// Presets build filters; "My tasks" scopes to the current identity (empty when unset).
+const presetIds = FILTER_PRESETS.map((preset) => preset.id);
+assert.deepEqual(presetIds, ["my-tasks", "due-soon", "recently-updated"]);
+const myTasks = FILTER_PRESETS.find((preset) => preset.id === "my-tasks");
+assert.deepEqual(myTasks.build("ada").assignees, ["ada"]);
+assert.deepEqual(myTasks.build("").assignees, []);
+assert.equal(myTasks.requiresIdentity, true);
+assert.equal(FILTER_PRESETS.find((preset) => preset.id === "due-soon").build("").due, "soon");
+
 // Attachment path helpers sanitize names and strip directory prefixes.
 assert.equal(attachmentDisplayName("/Users/ada/Pictures/diagram final.png"), "diagram final.png");
 assert.equal(attachmentDisplayName("C:\\Users\\ada\\report.pdf"), "report.pdf");
@@ -259,6 +336,7 @@ assert.deepEqual(workspace.settings.slackNotifications, {
   subtaskCompleted: true
 });
 assert.deepEqual(workspace.settings.boardGroups, []);
+assert.deepEqual(workspace.settings.savedViews, []);
 assert.deepEqual(workspace.membersFile.members, []);
 assert.equal(workspace.boards.length, 1);
 assert.equal(workspace.boards[0].groupId, undefined);
@@ -268,6 +346,57 @@ assert(workspace.diagnostics.some((diagnostic) => diagnostic.includes("settings.
 assert(workspace.diagnostics.some((diagnostic) => diagnostic.includes("boards/bad.json")));
 assert(workspace.diagnostics.some((diagnostic) => diagnostic.includes("cards/bad.md")));
 assert(workspace.diagnostics.some((diagnostic) => diagnostic.includes("bad-utf8.md")));
+
+// Saved views round-trip through settings: valid views keep their filter,
+// duplicate/missing ids are dropped, and each filter facet is normalized.
+const savedViewWorkspace = parseWorkspace({
+  settings: JSON.stringify({
+    schemaVersion: 1,
+    workspaceName: "Views",
+    slackWebhookUrl: "",
+    slackNotifications: {},
+    boardGroups: [],
+    savedViews: [
+      {
+        id: "view_1",
+        name: "Blocking bugs",
+        filter: { text: "bug", boardId: "b1", assignees: ["ada"], labels: ["docs"], due: "soon", completion: "any", archived: "active", sort: "due" },
+        createdAt: "2026-07-01T00:00:00.000Z",
+        updatedAt: "2026-07-01T00:00:00.000Z"
+      },
+      { id: "view_1", name: "Duplicate id is dropped" },
+      { name: "Missing id is dropped" },
+      { id: "view_2", name: "Bad facets fall back", filter: { due: "bogus", completion: 5, sort: "nope", assignees: "x" } }
+    ],
+    createdAt: "2026-07-01T00:00:00.000Z",
+    updatedAt: "2026-07-01T00:00:00.000Z"
+  }),
+  members: JSON.stringify({ schemaVersion: 1, members: [] }),
+  boards: [],
+  cards: [],
+  warnings: []
+});
+assert.equal(savedViewWorkspace.settings.savedViews.length, 2);
+assert.deepEqual(savedViewWorkspace.settings.savedViews[0].filter, {
+  text: "bug",
+  boardId: "b1",
+  assignees: ["ada"],
+  labels: ["docs"],
+  due: "soon",
+  completion: "any",
+  archived: "active",
+  sort: "due"
+});
+assert.deepEqual(savedViewWorkspace.settings.savedViews[1].filter, {
+  text: "",
+  boardId: "",
+  assignees: [],
+  labels: [],
+  due: "any",
+  completion: "active",
+  archived: "active",
+  sort: "updated"
+});
 
 const workspaceRoot = await mkdtemp(join(tmpdir(), "limn-storage-e2e-"));
 try {

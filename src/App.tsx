@@ -41,7 +41,7 @@ import {
   timestamp,
   watchWorkspace
 } from "./storage";
-import { Attachment, Board, BoardGroup, BoardList, Card, Member, Subtask, SubtaskListItem, View, WorkspaceSettings, WriteResult } from "./types";
+import { Attachment, Board, BoardGroup, BoardList, Card, CardFilter, Member, SavedView, Subtask, SubtaskListItem, View, WorkspaceSettings, WriteResult } from "./types";
 import {
   canUseUpdater,
   checkForUpdate,
@@ -54,6 +54,7 @@ import {
 import { BoardView } from "./components/BoardView";
 import { CardEditor } from "./components/CardEditor";
 import { DueView } from "./components/DueView";
+import { FilterView } from "./components/FilterView";
 import { ConfirmDialog, EmptyState, TextDialog } from "./components/dialogs";
 import type { ConfirmDialogState, TextDialogState } from "./components/dialogs";
 import { ContextMenu, isEditableTextControl, textControlContextItems } from "./components/contextMenu";
@@ -851,11 +852,77 @@ export default function App() {
     }
   }
 
-  // Open a card from the cross-board Due view: focus its board so the editor has
-  // the right board/list context, then open the editor over the current view.
+  // Open a card from a cross-board view (Due or Filter): focus its board so the
+  // editor has the right board/list context, then open the editor over the view.
   function openCardFromDue(card: Card) {
     setActiveBoardId(card.boardId);
     setSelectedCardId(card.id);
+  }
+
+  // Saved views live in workspace settings so they are folder-synced and shared
+  // by everyone on the workspace. The Filter view owns filter state and hands the
+  // current filter here to be named and persisted.
+  const savedViews = settings?.savedViews ?? [];
+
+  function saveFilterView(filter: CardFilter) {
+    if (!settings) {
+      return;
+    }
+    openTextDialog({
+      title: "Save view",
+      label: "View name",
+      value: "",
+      confirmLabel: "Save view",
+      validate: (name) =>
+        savedViews.some((view) => view.name.trim().toLowerCase() === name.toLowerCase())
+          ? "A saved view with this name already exists."
+          : null,
+      onSubmit: async (name) => {
+        const now = timestamp();
+        const view: SavedView = { id: makeId("view"), name, filter, createdAt: now, updatedAt: now };
+        await persistWorkspaceSettings({ ...settings, savedViews: [...savedViews, view] }, "View saved.");
+      }
+    });
+  }
+
+  function renameFilterView(view: SavedView) {
+    if (!settings) {
+      return;
+    }
+    openTextDialog({
+      title: "Rename view",
+      label: "View name",
+      value: view.name,
+      confirmLabel: "Save view",
+      validate: (name) =>
+        savedViews.some((item) => item.id !== view.id && item.name.trim().toLowerCase() === name.toLowerCase())
+          ? "A saved view with this name already exists."
+          : null,
+      onSubmit: async (name) => {
+        await persistWorkspaceSettings({
+          ...settings,
+          savedViews: savedViews.map((item) => (item.id === view.id ? { ...item, name, updatedAt: timestamp() } : item))
+        }, "View renamed.");
+      }
+    });
+  }
+
+  function deleteFilterView(view: SavedView) {
+    if (!settings) {
+      return;
+    }
+    openConfirmDialog({
+      title: "Delete view",
+      message: `Delete saved view "${view.name}"?`,
+      confirmLabel: "Delete view",
+      destructive: true,
+      onConfirm: async () => {
+        await persistWorkspaceSettings({
+          ...settings,
+          savedViews: savedViews.filter((item) => item.id !== view.id)
+        }, "View deleted.");
+      }
+    });
   }
 
   // Export every non-archived card that has a due date to an .ics file inside the
@@ -1214,6 +1281,7 @@ export default function App() {
     if (settings) {
       items.push(
         { type: "separator" },
+        { label: "Filter cards", icon: "search", onSelect: () => setView("filter") },
         { label: "Create board", icon: "plus", onSelect: () => void addBoard() },
         { label: "Create category", icon: "tag", onSelect: () => void createBoardGroup() },
         { label: "Members", icon: "users", onSelect: () => setView("members") },
@@ -1392,6 +1460,13 @@ export default function App() {
             return;
           }
           setView("board");
+          return;
+        case "show-filter":
+          if (!settings) {
+            showCommandNotice("Open a workspace before filtering.", "warning");
+            return;
+          }
+          setView("filter");
           return;
         case "show-members":
           if (!settings) {
@@ -1615,6 +1690,9 @@ export default function App() {
           >
             <Icon name={themeMode === "dark" ? "sun" : "moon"} /> {themeMode === "dark" ? "Light mode" : "Dark mode"}
           </button>
+          <button className={view === "filter" ? "active" : ""} data-testid="nav-filter" onClick={() => setView("filter")}>
+            <Icon name="search" /> Filter
+          </button>
           <button className={view === "due" ? "active" : ""} data-testid="nav-due" onClick={() => setView("due")}>
             <Icon name="calendar" /> Due dates
             {dueReminders > 0 && (
@@ -1714,6 +1792,21 @@ export default function App() {
         )}
         {view === "board" && !activeBoard && (
           <EmptyState title="No board selected" body="Create a board to start adding lists and cards." action="Create board" onAction={addBoard} />
+        )}
+        {view === "filter" && (
+          <FilterView
+            cards={cards}
+            boards={boards}
+            members={members}
+            activeMemberId={activeMemberId}
+            savedViews={savedViews}
+            onOpenCard={openCardFromDue}
+            onSaveView={saveFilterView}
+            onRenameView={renameFilterView}
+            onDeleteView={deleteFilterView}
+            onOpenContextMenu={openContextMenu}
+            onCopyText={copyText}
+          />
         )}
         {view === "due" && (
           <DueView

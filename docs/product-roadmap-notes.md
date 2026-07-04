@@ -20,6 +20,8 @@ The main product risk is not card-editing depth. The larger gap is helping users
 
 Users need to find cards by text, assignee, label, due date, completion state, archived state, and board. Saved views such as "My Tasks", "Due Soon", and "Recently Updated" would likely matter more than adding more card fields.
 
+**Shipped.** A cross-board **Filter** view (sidebar nav, `Cmd/Ctrl+F`, or the "Filter Cards" menu item) narrows every card by free text (AND-matched across title, notes, and labels) plus structured facets: board, assignee (including an "Unassigned" option), label, due-date window (overdue / today / soon / later / has / no date), completion state, and archived state, with a sort control (recently updated/created, due date, or title). Built-in presets — **My tasks** (scoped to this device's chosen identity), **Due soon**, and **Recently updated** — sit above user **saved views**: any filter can be named and stored in `.workspace/settings.json` (`savedViews`), so it is folder-synced and shared by everyone on the workspace, and can be re-applied, renamed, or deleted. Results open the card editor in its board context. The matching engine is a pure module (`src/lib/filter.ts`), unit-tested alongside storage. Still open: filters are session-local (not encoded in a shareable URL/deep link), and saved views can be created/renamed/deleted but not edited in place (re-save to update).
+
 ### Precise Card Ordering
 
 Kanban boards rely on ordering inside a list as an implicit priority system. Limn supports dragging cards between lists, but precise in-list reordering should become a core board behavior.

@@ -1,4 +1,4 @@
-export type View = "board" | "due" | "members" | "settings";
+export type View = "board" | "filter" | "due" | "members" | "settings";
 
 export interface WorkspaceSettings {
   schemaVersion: number;
@@ -6,6 +6,46 @@ export interface WorkspaceSettings {
   slackWebhookUrl: string;
   slackNotifications: SlackNotificationSettings;
   boardGroups: BoardGroup[];
+  savedViews: SavedView[];
+  createdAt: string;
+  updatedAt: string;
+}
+
+// Which due-date window a filter is scoped to. Semantics are day-delta based and
+// independent of the Due view's bucketing — see lib/filter.ts.
+export type DueFilterKind = "any" | "overdue" | "today" | "soon" | "later" | "has" | "none";
+
+export type CompletionFilter = "active" | "completed" | "any";
+
+export type ArchivedFilter = "active" | "archived" | "any";
+
+export type FilterSort = "updated" | "created" | "due" | "title";
+
+// A card query: free text plus structured facets and a sort. Fully serializable
+// so it can be persisted as a named SavedView in the workspace settings.
+export interface CardFilter {
+  // Free text; whitespace-separated terms are AND-matched against title, notes,
+  // and labels.
+  text: string;
+  // "" = every board.
+  boardId: string;
+  // Member ids to match (a card matches if assigned to ANY of them). The
+  // UNASSIGNED_ASSIGNEE sentinel additionally matches cards with no assignee.
+  assignees: string[];
+  // Label names to match (a card matches if it carries ANY of them).
+  labels: string[];
+  due: DueFilterKind;
+  completion: CompletionFilter;
+  archived: ArchivedFilter;
+  sort: FilterSort;
+}
+
+// A named, reusable card query. Stored in the workspace settings so it is
+// folder-synced and shared by everyone on the workspace.
+export interface SavedView {
+  id: string;
+  name: string;
+  filter: CardFilter;
   createdAt: string;
   updatedAt: string;
 }

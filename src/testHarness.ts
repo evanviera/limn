@@ -42,6 +42,7 @@ const settings: WorkspaceSettings = {
     subtaskCompleted: true
   },
   boardGroups: [],
+  savedViews: [],
   createdAt: now,
   updatedAt: now
 };

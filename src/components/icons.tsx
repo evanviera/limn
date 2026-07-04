@@ -20,6 +20,7 @@ export type IconName =
   | "plus"
   | "refresh"
   | "save"
+  | "search"
   | "settings"
   | "sun"
   | "tag"
@@ -125,6 +126,12 @@ export function Icon({ name }: { name: IconName }) {
         <path d="M5 4h12l2 2v14H5z" />
         <path d="M8 4v6h8V4" />
         <path d="M8 20v-6h8v6" />
+      </>
+    ),
+    search: (
+      <>
+        <circle cx="11" cy="11" r="6" />
+        <path d="m20 20-3.5-3.5" />
       </>
     ),
     settings: (
