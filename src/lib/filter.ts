@@ -75,7 +75,8 @@ export function filterIsActive(filter: CardFilter): boolean {
     filter.labels.length > 0 ||
     filter.due !== EMPTY_FILTER.due ||
     filter.completion !== EMPTY_FILTER.completion ||
-    filter.archived !== EMPTY_FILTER.archived
+    filter.archived !== EMPTY_FILTER.archived ||
+    filter.sort !== EMPTY_FILTER.sort
   );
 }
 

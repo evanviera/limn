@@ -100,6 +100,20 @@ test.describe("filter, presets, and saved views", () => {
     await expect(page.getByTestId("filter-result-count")).toHaveText("2 cards");
     await expect(rows(page)).toHaveCount(2);
     await expect(rowWith(page, "Ship release")).toHaveCount(0);
+    await expect(page.getByTestId("filter-checkin-due")).toContainText("1");
+    await expect(page.getByTestId("filter-checkin-unassigned")).toContainText("2");
+    await expect(page.getByTestId("filter-checkin-nodue")).toContainText("1");
+    await expect(page.getByTestId("filter-checkin-done")).toContainText("1");
+
+    // Check-in tiles jump directly to common review queues.
+    await page.getByTestId("filter-checkin-done").click();
+    await expect(page.getByTestId("filter-completion")).toHaveValue("completed");
+    await expect(page.getByTestId("filter-active-completion")).toContainText("Status: Completed");
+    await expect(rows(page)).toHaveCount(1);
+    await expect(rowWith(page, "Ship release")).toBeVisible();
+    await page.getByTestId("filter-active-completion").click();
+    await expect(page.getByTestId("filter-completion")).toHaveValue("active");
+    await expect(rowWith(page, "Ship release")).toHaveCount(0);
 
     // Free text narrows to matching titles/notes/labels.
     await page.getByTestId("filter-input").fill("parser");
@@ -109,9 +123,11 @@ test.describe("filter, presets, and saved views", () => {
     // The label facet is an independent filter.
     await page.getByTestId("filter-input").fill("");
     await page.getByTestId("filter-label-bug").click();
+    await expect(page.getByTestId("filter-active-label-bug")).toContainText("Label: bug");
     await expect(rows(page)).toHaveCount(1);
     await expect(rowWith(page, "Parser crash")).toBeVisible();
-    await page.getByTestId("filter-label-bug").click();
+    await page.getByTestId("filter-active-label-bug").click();
+    await expect(page.getByTestId("filter-active-label-bug")).toHaveCount(0);
 
     // The due facet surfaces overdue work regardless of board.
     await page.getByTestId("filter-due").selectOption("overdue");

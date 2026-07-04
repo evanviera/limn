@@ -67,6 +67,17 @@ const SORT_OPTIONS: Array<{ value: FilterSort; label: string }> = [
   { value: "title", label: "Title (A–Z)" }
 ];
 
+const DUE_LABELS = new Map(DUE_OPTIONS.map((option) => [option.value, option.label]));
+const COMPLETION_LABELS = new Map(COMPLETION_OPTIONS.map((option) => [option.value, option.label]));
+const ARCHIVED_LABELS = new Map(ARCHIVED_OPTIONS.map((option) => [option.value, option.label]));
+const SORT_LABELS = new Map(SORT_OPTIONS.map((option) => [option.value, option.label]));
+
+interface ActiveFilterChip {
+  id: string;
+  label: string;
+  onRemove: () => void;
+}
+
 // Stable comparison key for a filter so an applied preset/saved view can be
 // highlighted regardless of the order facets were toggled in.
 function filterKey(filter: CardFilter): string {
@@ -91,6 +102,24 @@ export function FilterView(props: FilterViewProps) {
   const labels = useMemo(() => collectLabels(props.cards), [props.cards]);
   const results = useMemo(() => filterCards(props.cards, filter), [props.cards, filter]);
   const datedCount = useMemo(() => props.cards.filter((card) => !card.archived && card.due).length, [props.cards]);
+  const checkIn = useMemo(() => {
+    const scopedCards = filterCards(props.cards, {
+      ...filter,
+      due: "any",
+      completion: "any",
+      sort: "updated"
+    });
+    const activeScopedCards = scopedCards.filter((card) => !card.archived && !card.completed);
+    return {
+      dueSoon: activeScopedCards.filter((card) => {
+        const status = describeDue(card.due).status;
+        return status === "overdue" || status === "today" || status === "soon";
+      }).length,
+      unassigned: activeScopedCards.filter((card) => card.assignees.length === 0).length,
+      noDueDate: activeScopedCards.filter((card) => describeDue(card.due).status === "none").length,
+      completed: scopedCards.filter((card) => !card.archived && card.completed).length
+    };
+  }, [props.cards, filter]);
   const active = filterIsActive(filter);
   const currentKey = filterKey(filter);
   const matchedPresetId = FILTER_PRESETS.find((preset) => filterKey(preset.build(props.activeMemberId)) === currentKey)?.id;
@@ -114,9 +143,65 @@ export function FilterView(props: FilterViewProps) {
     setFilter((current) => ({ ...current, ...changes }));
   }
 
+  function memberName(memberId: string) {
+    return props.members.find((member) => member.id === memberId)?.name ?? "Unknown member";
+  }
+
   function toggleMembership(list: string[], value: string): string[] {
     return list.includes(value) ? list.filter((item) => item !== value) : [...list, value];
   }
+
+  function removeMembership(list: string[], value: string): string[] {
+    return list.filter((item) => item !== value);
+  }
+
+  function activeChips(): ActiveFilterChip[] {
+    const chips: ActiveFilterChip[] = [];
+    const text = filter.text.trim();
+    if (text) {
+      chips.push({ id: "text", label: `Text: ${text}`, onRemove: () => patch({ text: "" }) });
+    }
+    if (filter.boardId) {
+      chips.push({ id: "board", label: `Board: ${boardName(filter.boardId)}`, onRemove: () => patch({ boardId: "" }) });
+    }
+    if (filter.due !== EMPTY_FILTER.due) {
+      chips.push({ id: "due", label: `Due: ${DUE_LABELS.get(filter.due) ?? filter.due}`, onRemove: () => patch({ due: EMPTY_FILTER.due }) });
+    }
+    if (filter.completion !== EMPTY_FILTER.completion) {
+      chips.push({
+        id: "completion",
+        label: `Status: ${COMPLETION_LABELS.get(filter.completion) ?? filter.completion}`,
+        onRemove: () => patch({ completion: EMPTY_FILTER.completion })
+      });
+    }
+    if (filter.archived !== EMPTY_FILTER.archived) {
+      chips.push({
+        id: "archived",
+        label: `Archive: ${ARCHIVED_LABELS.get(filter.archived) ?? filter.archived}`,
+        onRemove: () => patch({ archived: EMPTY_FILTER.archived })
+      });
+    }
+    for (const assignee of filter.assignees) {
+      chips.push({
+        id: `assignee-${assignee}`,
+        label: assignee === UNASSIGNED_ASSIGNEE ? "Assignee: Unassigned" : `Assignee: ${memberName(assignee)}`,
+        onRemove: () => patch({ assignees: removeMembership(filter.assignees, assignee) })
+      });
+    }
+    for (const label of filter.labels) {
+      chips.push({
+        id: `label-${label.toLowerCase()}`,
+        label: `Label: ${label}`,
+        onRemove: () => patch({ labels: removeMembership(filter.labels, label) })
+      });
+    }
+    if (filter.sort !== EMPTY_FILTER.sort) {
+      chips.push({ id: "sort", label: `Sort: ${SORT_LABELS.get(filter.sort) ?? filter.sort}`, onRemove: () => patch({ sort: EMPTY_FILTER.sort }) });
+    }
+    return chips;
+  }
+
+  const chips = activeChips();
 
   return (
     <section className="filter-view">
@@ -161,41 +246,92 @@ export function FilterView(props: FilterViewProps) {
         </div>
       </header>
 
-      <div className="filter-quicklist" data-testid="filter-presets">
-        {FILTER_PRESETS.map((preset) => {
-          const disabled = Boolean(preset.requiresIdentity) && !props.activeMemberId;
-          return (
+      <section className="filter-view-section">
+        <div className="filter-section-heading">
+          <span>Quick views</span>
+          {props.savedViews.length > 0 && <span>{countLabel(props.savedViews.length, "saved view")}</span>}
+        </div>
+        <div className="filter-quicklist" data-testid="filter-presets">
+          {FILTER_PRESETS.map((preset) => {
+            const disabled = Boolean(preset.requiresIdentity) && !props.activeMemberId;
+            return (
+              <button
+                key={preset.id}
+                className={`filter-chip ${matchedPresetId === preset.id ? "active" : ""}`}
+                data-testid={`filter-preset-${preset.id}`}
+                disabled={disabled}
+                title={disabled ? "Choose who you are (bottom-left) to use this view" : `Show ${preset.name}`}
+                onClick={() => setFilter(preset.build(props.activeMemberId))}
+              >
+                {preset.name}
+              </button>
+            );
+          })}
+          {props.savedViews.map((view) => (
             <button
-              key={preset.id}
-              className={`filter-chip ${matchedPresetId === preset.id ? "active" : ""}`}
-              data-testid={`filter-preset-${preset.id}`}
-              disabled={disabled}
-              title={disabled ? "Choose who you are (bottom-left) to use this view" : `Show ${preset.name}`}
-              onClick={() => setFilter(preset.build(props.activeMemberId))}
+              key={view.id}
+              className={`filter-chip saved ${matchedSavedViewId === view.id ? "active" : ""}`}
+              data-testid={`filter-saved-${view.id}`}
+              title={`Apply saved view "${view.name}"`}
+              onClick={() => setFilter(view.filter)}
+              onContextMenu={(event) => props.onOpenContextMenu(event, [
+                { label: "Apply view", icon: "search", onSelect: () => setFilter(view.filter) },
+                { label: "Rename view", icon: "edit", onSelect: () => props.onRenameView(view) },
+                { label: "Copy view name", icon: "copy", onSelect: () => void props.onCopyText(view.name) },
+                { type: "separator" },
+                { label: "Delete view", icon: "trash", danger: true, onSelect: () => props.onDeleteView(view) }
+              ], view.name)}
             >
-              {preset.name}
+              <Icon name="save" />
+              {view.name}
             </button>
-          );
-        })}
-        {props.savedViews.map((view) => (
-          <button
-            key={view.id}
-            className={`filter-chip saved ${matchedSavedViewId === view.id ? "active" : ""}`}
-            data-testid={`filter-saved-${view.id}`}
-            title={`Apply saved view "${view.name}"`}
-            onClick={() => setFilter(view.filter)}
-            onContextMenu={(event) => props.onOpenContextMenu(event, [
-              { label: "Apply view", icon: "search", onSelect: () => setFilter(view.filter) },
-              { label: "Rename view", icon: "edit", onSelect: () => props.onRenameView(view) },
-              { label: "Copy view name", icon: "copy", onSelect: () => void props.onCopyText(view.name) },
-              { type: "separator" },
-              { label: "Delete view", icon: "trash", danger: true, onSelect: () => props.onDeleteView(view) }
-            ], view.name)}
-          >
-            <Icon name="save" />
-            {view.name}
-          </button>
-        ))}
+          ))}
+        </div>
+      </section>
+
+      <div className="filter-checkin" aria-label="Task check-in" data-testid="filter-checkin">
+        <button className="filter-checkin-item" data-testid="filter-checkin-due" onClick={() => patch({ due: "soon", completion: "active", archived: "active", sort: "due" })}>
+          <Icon name="calendar" />
+          <strong>{checkIn.dueSoon}</strong>
+          <span>Due soon</span>
+        </button>
+        <button className="filter-checkin-item" data-testid="filter-checkin-unassigned" onClick={() => patch({ assignees: [UNASSIGNED_ASSIGNEE], due: "any", completion: "active", archived: "active" })}>
+          <Icon name="users" />
+          <strong>{checkIn.unassigned}</strong>
+          <span>Unassigned</span>
+        </button>
+        <button className="filter-checkin-item" data-testid="filter-checkin-nodue" onClick={() => patch({ due: "none", completion: "active", archived: "active" })}>
+          <Icon name="calendar" />
+          <strong>{checkIn.noDueDate}</strong>
+          <span>No due date</span>
+        </button>
+        <button className="filter-checkin-item" data-testid="filter-checkin-done" onClick={() => patch({ due: "any", completion: "completed", archived: "active" })}>
+          <Icon name="check" />
+          <strong>{checkIn.completed}</strong>
+          <span>Done</span>
+        </button>
+      </div>
+
+      <div className="filter-active-strip" data-testid="filter-active-summary">
+        <span className="filter-active-label">Current view</span>
+        <div className="filter-active-chips">
+          {filter.completion === EMPTY_FILTER.completion && <span className="filter-state-chip">Active cards</span>}
+          {filter.archived === EMPTY_FILTER.archived && <span className="filter-state-chip">Not archived</span>}
+          {chips.length === 0 ? (
+            <span className="filter-state-chip muted">Default sort</span>
+          ) : chips.map((chip) => (
+            <button
+              key={chip.id}
+              className="filter-state-chip removable"
+              data-testid={`filter-active-${chip.id}`}
+              title={`Remove ${chip.label}`}
+              onClick={chip.onRemove}
+            >
+              <span>{chip.label}</span>
+              <Icon name="x" />
+            </button>
+          ))}
+        </div>
       </div>
 
       <div className="filter-controls">
@@ -311,18 +447,24 @@ export function FilterView(props: FilterViewProps) {
 
       {results.length === 0 ? (
         <div className="empty-state" data-testid="filter-empty">
-          <h2>No cards match</h2>
-          <p>Try broadening your text, clearing a filter, or including completed and archived cards.</p>
+          <h2>{props.cards.length === 0 ? "No cards yet" : "No cards match"}</h2>
+          <p>
+            {props.cards.length === 0
+              ? "Create a card to start tracking work."
+              : "Try broadening your text, clearing a filter, or including completed and archived cards."}
+          </p>
         </div>
       ) : (
         <ul className="filter-results">
           {results.map((card) => {
             const due = describeDue(card.due);
+            const assignees = props.members.filter((member) => card.assignees.includes(member.id));
             return (
               <li key={card.id}>
                 <button
                   className={`filter-row ${card.completed ? "completed" : ""}`}
                   data-testid={`filter-row-${card.id}`}
+                  aria-label={`${card.title}, ${due.label}, ${boardName(card.boardId)}, ${listName(card.boardId, card.listId)}`}
                   onClick={() => props.onOpenCard(card)}
                   onContextMenu={(event) => props.onOpenContextMenu(event, [
                     { label: "Open card", icon: "edit", onSelect: () => props.onOpenCard(card) },
@@ -330,22 +472,26 @@ export function FilterView(props: FilterViewProps) {
                   ], card.title)}
                 >
                   <span className={`due-badge due-${card.completed ? "complete" : due.status}`}>{due.label}</span>
-                  <span className="filter-row-title">
-                    {card.completed && <span className="done-check" aria-hidden="true">✓ </span>}
-                    {card.title}
-                    {card.archived && <span className="filter-tag" title="Archived">Archived</span>}
-                  </span>
-                  {card.labels.length > 0 && (
-                    <span className="filter-row-labels">
-                      {card.labels.map((label) => (
-                        <span className="filter-row-label" key={label}>{label}</span>
-                      ))}
+                  <span className="filter-row-main">
+                    <span className="filter-row-title">
+                      {card.completed && <span className="done-check" aria-hidden="true">✓ </span>}
+                      {card.title}
+                      {card.archived && <span className="filter-tag" title="Archived">Archived</span>}
                     </span>
-                  )}
-                  <span className="filter-row-context">
-                    {boardName(card.boardId)} · {listName(card.boardId, card.listId)}
+                    <span className="filter-row-context">
+                      {boardName(card.boardId)} · {listName(card.boardId, card.listId)}
+                    </span>
+                    {card.labels.length > 0 && (
+                      <span className="filter-row-labels">
+                        {card.labels.map((label) => (
+                          <span className="filter-row-label" key={label}>{label}</span>
+                        ))}
+                      </span>
+                    )}
                   </span>
-                  <MemberDots members={props.members.filter((member) => card.assignees.includes(member.id))} />
+                  <span className="filter-row-owner">
+                    <MemberDots members={assignees} />
+                  </span>
                 </button>
               </li>
             );
