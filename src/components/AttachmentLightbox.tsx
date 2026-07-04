@@ -32,7 +32,15 @@ export function AttachmentLightbox({
   const attachment = attachments[index];
   const count = attachments.length;
   const showNav = count > 1;
-  const { src, failed } = useAttachmentObjectUrl(workspacePath, cardId, attachment?.storedName ?? "");
+  // Progressive load: the tiny cover thumbnail is already cached, so it paints
+  // almost instantly and stands in (softly) while the fit-to-screen preview loads,
+  // which is what keeps opening a huge attachment feeling immediate.
+  const storedName = attachment?.storedName ?? "";
+  const thumb = useAttachmentObjectUrl(workspacePath, cardId, storedName, "thumbnail");
+  const large = useAttachmentObjectUrl(workspacePath, cardId, storedName, "large");
+  const src = large.src ?? thumb.src;
+  const sharpening = !large.src && !large.failed && Boolean(thumb.src);
+  const failed = !src && large.failed;
   useModalKeys(dialogRef, onClose);
 
   // Focus the dialog on open so the arrow-key handler and focus trap engage.
@@ -133,8 +141,9 @@ export function AttachmentLightbox({
           {src ? (
             <img
               alt={attachment.name}
-              className="lightbox-image"
+              className={`lightbox-image${sharpening ? " is-sharpening" : ""}`}
               data-testid="attachment-lightbox-image"
+              decoding="async"
               draggable={false}
               src={src}
             />

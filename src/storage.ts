@@ -1,6 +1,6 @@
 import { invoke } from "./ipc.js";
 import { EMPTY_FILTER } from "./lib/filter.js";
-import type { Attachment, AttachmentPreviewData, Board, BoardGroup, Card, CardFilter, Comment, Member, MembersFile, SavedView, SlackNotificationSettings, Subtask, SubtaskListItem, WorkspaceFiles, WorkspaceSettings, WriteResult } from "./types";
+import type { Attachment, Board, BoardGroup, Card, CardFilter, Comment, Member, MembersFile, SavedView, SlackNotificationSettings, Subtask, SubtaskListItem, WorkspaceFiles, WorkspaceSettings, WriteResult } from "./types";
 
 const SCHEMA_VERSION = 1;
 
@@ -112,8 +112,19 @@ export async function revealAttachmentFile(path: string, cardId: string, storedN
   await invoke("reveal_attachment", { path, cardId, storedName });
 }
 
-export async function loadAttachmentPreview(path: string, cardId: string, storedName: string): Promise<AttachmentPreviewData> {
-  return invoke<AttachmentPreviewData>("read_attachment_preview", { path, cardId, storedName });
+// A small, cached, downscaled version of an image attachment — used for the board
+// covers and attachment rows so a huge original never has to cross IPC or be
+// decoded at full resolution just to paint a tiny thumbnail. The bytes arrive as a
+// raw binary buffer (never a JSON number array), which keeps large images cheap.
+export async function loadAttachmentThumbnail(path: string, cardId: string, storedName: string): Promise<ArrayBuffer> {
+  return invoke<ArrayBuffer>("read_attachment_thumbnail", { path, cardId, storedName });
+}
+
+// A cached, fit-to-screen version of an image attachment — used by the lightbox so
+// opening a huge image decodes a few megapixels instead of tens. The untouched
+// original stays reachable through "Open in default app".
+export async function loadAttachmentLargePreview(path: string, cardId: string, storedName: string): Promise<ArrayBuffer> {
+  return invoke<ArrayBuffer>("read_attachment_large_preview", { path, cardId, storedName });
 }
 
 // The last path segment of an OS path, used to show the original file name.

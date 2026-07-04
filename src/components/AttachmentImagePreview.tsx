@@ -20,5 +20,5 @@ export function AttachmentImagePreview({
     return <span aria-hidden="true" className={`${className} ${failed ? "attachment-image-failed" : "attachment-image-loading"}`} data-testid={testId} />;
   }
 
-  return <img alt={attachment.name} className={className} data-testid={testId} draggable={false} loading="lazy" src={src} />;
+  return <img alt={attachment.name} className={className} data-testid={testId} decoding="async" draggable={false} loading="lazy" src={src} />;
 }

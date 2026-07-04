@@ -1,3 +1,4 @@
+use super::attachments::{attachment_preview, attachment_rendering, LIGHTBOX_TIER, THUMBNAIL_TIER};
 use super::*;
 use std::{
     io::{Read, Write},
@@ -201,14 +202,9 @@ fn image_attachment_preview_reads_only_supported_images() {
     )
     .expect("attachment copies");
 
-    let preview = read_attachment_preview(
-        path.clone(),
-        "card_x".to_string(),
-        "att_2-logo.png".to_string(),
-    )
-    .expect("image preview reads");
-    assert_eq!(preview.mime_type, "image/png");
-    assert_eq!(preview.bytes, b"png-bytes");
+    let preview =
+        attachment_preview(&path, "card_x", "att_2-logo.png").expect("image preview reads");
+    assert_eq!(preview, b"png-bytes");
 
     let source = root.join("notes.txt");
     fs::write(&source, b"text").expect("source writes");
@@ -219,13 +215,114 @@ fn image_attachment_preview_reads_only_supported_images() {
         source.to_string_lossy().to_string(),
     )
     .expect("attachment copies");
-    let unsupported = read_attachment_preview(
-        path.clone(),
-        "card_x".to_string(),
-        "att_3-notes.txt".to_string(),
-    )
-    .expect_err("text preview rejected");
+    let unsupported =
+        attachment_preview(&path, "card_x", "att_3-notes.txt").expect_err("text preview rejected");
     assert!(unsupported.contains("supported image"));
+
+    let _ = fs::remove_dir_all(root);
+}
+
+#[test]
+fn thumbnail_downscales_caches_and_falls_back() {
+    let root = test_workspace("attachment_thumbnail");
+    let path = root.to_string_lossy().to_string();
+    init_workspace(path.clone()).expect("workspace initializes");
+
+    // A large opaque image: adding it should pre-build both cached tiers on disk.
+    let big = root.join("big.png");
+    image::RgbImage::from_fn(3000, 2000, |x, y| {
+        image::Rgb([(x % 256) as u8, (y % 256) as u8, 128])
+    })
+    .save(&big)
+    .expect("source image writes");
+
+    add_attachment(
+        path.clone(),
+        "card_img".to_string(),
+        "att_1-big.png".to_string(),
+        big.to_string_lossy().to_string(),
+    )
+    .expect("attachment copies");
+
+    let cached = root.join("attachments/card_img/.thumbnails/att_1-big.png.jpg");
+    let cached_preview = root.join("attachments/card_img/.thumbnails/att_1-big.png.preview.jpg");
+    assert!(cached.exists(), "add_attachment pre-builds a cached thumbnail");
+    assert!(
+        cached_preview.exists(),
+        "add_attachment pre-builds a cached lightbox preview"
+    );
+
+    let thumbnail = attachment_rendering(&path, "card_img", "att_1-big.png", &THUMBNAIL_TIER)
+        .expect("thumbnail reads");
+    // The 3000x2000 original is shrunk to fit the 640px budget so a huge image is
+    // never decoded at full resolution just to paint a thumbnail.
+    let decoded = image::load_from_memory(&thumbnail).expect("thumbnail decodes");
+    assert_eq!(
+        decoded.width().max(decoded.height()),
+        640,
+        "thumbnail fits the 640px budget"
+    );
+
+    // The lightbox tier shrinks the same original to the larger 2560px budget: big
+    // enough to look full-quality fit-to-screen, small enough to open instantly.
+    let large = attachment_rendering(&path, "card_img", "att_1-big.png", &LIGHTBOX_TIER)
+        .expect("large preview reads");
+    let decoded_large = image::load_from_memory(&large).expect("large preview decodes");
+    assert_eq!(
+        decoded_large.width().max(decoded_large.height()),
+        2560,
+        "large preview fits the 2560px budget"
+    );
+
+    // A transparent source is cached as PNG so its alpha survives.
+    let logo = root.join("logo.png");
+    image::RgbaImage::from_fn(800, 800, |x, _| {
+        image::Rgba([200, 100, 50, (x % 256) as u8])
+    })
+    .save(&logo)
+    .expect("logo writes");
+    add_attachment(
+        path.clone(),
+        "card_img".to_string(),
+        "att_2-logo.png".to_string(),
+        logo.to_string_lossy().to_string(),
+    )
+    .expect("logo copies");
+    let logo_thumb = attachment_rendering(&path, "card_img", "att_2-logo.png", &THUMBNAIL_TIER)
+        .expect("logo thumbnail reads");
+    assert!(!logo_thumb.is_empty());
+    // A source with transparency is cached as PNG so its alpha survives.
+    assert!(root
+        .join("attachments/card_img/.thumbnails/att_2-logo.png.png")
+        .exists());
+
+    // A non-raster attachment falls back to the raw bytes rather than erroring.
+    let svg = root.join("vector.svg");
+    let svg_bytes = b"<svg xmlns=\"http://www.w3.org/2000/svg\"></svg>";
+    fs::write(&svg, svg_bytes).expect("svg writes");
+    add_attachment(
+        path.clone(),
+        "card_img".to_string(),
+        "att_3-vector.svg".to_string(),
+        svg.to_string_lossy().to_string(),
+    )
+    .expect("svg copies");
+    let svg_thumb = attachment_rendering(&path, "card_img", "att_3-vector.svg", &THUMBNAIL_TIER)
+        .expect("svg falls back to raw preview");
+    assert_eq!(svg_thumb, svg_bytes, "undecodable formats return raw bytes");
+
+    // Deleting an attachment clears every cached tier too.
+    delete_attachment(
+        path.clone(),
+        "card_img".to_string(),
+        "att_1-big.png".to_string(),
+    )
+    .expect("attachment deletes");
+    assert!(!cached.exists(), "delete removes the cached thumbnail");
+    assert!(
+        !cached_preview.exists(),
+        "delete removes the cached lightbox preview"
+    );
 
     let _ = fs::remove_dir_all(root);
 }
