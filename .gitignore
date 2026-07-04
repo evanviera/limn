@@ -18,3 +18,4 @@ playwright/.cache/
 # screenshots/snapshots, but keep the findings report tracked in the repo.
 qa-artifacts/*
 !qa-artifacts/QA-REPORT.md
+/reports/assets
