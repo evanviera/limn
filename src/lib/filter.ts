@@ -125,8 +125,7 @@ function matchesArchived(card: Card, archived: ArchivedFilter): boolean {
   return true;
 }
 
-// Day-delta based due matching, independent of the Due view's status buckets so
-// each option means exactly what its label says.
+// Day-delta based due matching so each option means exactly what its label says.
 export function matchesDue(card: Card, kind: DueFilterKind, now: Date = new Date()): boolean {
   if (kind === "any") {
     return true;

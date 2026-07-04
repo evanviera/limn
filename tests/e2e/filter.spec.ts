@@ -43,6 +43,45 @@ const rows = (page: Page) => page.locator('[data-testid^="filter-row-"]');
 const rowWith = (page: Page, title: string) => rows(page).filter({ hasText: title });
 
 test.describe("filter, presets, and saved views", () => {
+  test("surfaces due reminders in filter and exports a calendar", async ({ page }) => {
+    await openApp(page);
+    await openWorkspace(page);
+
+    await page.getByTestId("create-board").click();
+    await page.getByTestId("text-dialog-input").fill("Due Work");
+    await page.getByTestId("text-dialog-submit").click();
+
+    await createCard(page, "Overdue task", { due: dueOffset(-2) });
+    await createCard(page, "Today task", { due: dueOffset(0) });
+    await createCard(page, "Future task", { due: dueOffset(30) });
+    await createCard(page, "Someday");
+
+    // Overdue + due-today count now nudges from the Filter nav item.
+    await expect(page.getByTestId("due-reminder-count")).toHaveText("2");
+    await page.getByTestId("due-reminder-count").click();
+    await expect(page.getByTestId("filter-due")).toHaveValue("soon");
+    await expect(page.getByTestId("filter-sort")).toHaveValue("due");
+    await expect(rows(page)).toHaveCount(2);
+    await expect(rowWith(page, "Overdue task")).toBeVisible();
+    await expect(rowWith(page, "Today task")).toBeVisible();
+    await expect(rowWith(page, "Future task")).toHaveCount(0);
+    await expect(rowWith(page, "Someday")).toHaveCount(0);
+
+    // A filtered result opens the card editor with the right card.
+    await rowWith(page, "Overdue task").click();
+    await expect(page.getByTestId("card-title-input")).toHaveValue("Overdue task");
+    await page.keyboard.press("Escape");
+    await expect(page.getByTestId("card-title-input")).toBeHidden();
+
+    // Exporting writes an .ics with a VEVENT per dated card (Someday is skipped).
+    await page.getByTestId("due-export").click();
+    await expect.poll(async () => {
+      const state = await snapshot(page);
+      const ics = state.exports.find((file) => file.path === "exports/limn-due-dates.ics");
+      return ics ? (ics.content.match(/BEGIN:VEVENT/g) ?? []).length : 0;
+    }).toBe(3);
+  });
+
   test("filters cards by text, label, due, and status, then opens a result", async ({ page }) => {
     await openApp(page);
     await openWorkspace(page);

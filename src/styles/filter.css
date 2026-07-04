@@ -1,5 +1,5 @@
 /* Cross-board filter: preset/saved-view chips, the filter control surface, and
-   the flat results list. Card-urgency pills reuse the Due view's badge scale. */
+   the flat results list. Card-urgency pills use a compact badge scale. */
 
 .filter-view {
   display: flex;

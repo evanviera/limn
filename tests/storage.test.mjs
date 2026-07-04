@@ -4,7 +4,7 @@ import { join } from "node:path";
 import { tmpdir } from "node:os";
 import { addActivity, attachmentDisplayName, attachmentStoredName, createBoard, createCard, createComment, parseCard, parseWorkspace, serializeCard } from "../.tmp/storage-test/src/storage.js";
 import { ORDER_STEP, compareCardsByOrder, nextOrderForList, placeInList } from "../.tmp/storage-test/src/lib/ordering.js";
-import { buildCalendar, describeDue, dueReminderCount, groupCardsByDue } from "../.tmp/storage-test/src/lib/dueDate.js";
+import { buildCalendar, describeDue, dueReminderCount } from "../.tmp/storage-test/src/lib/dueDate.js";
 import {
   EMPTY_FILTER,
   FILTER_PRESETS,
@@ -149,19 +149,6 @@ assert.equal(
   2
 );
 
-// Grouping keeps non-empty buckets in order, sorted by due date within each.
-const dueGroups = groupCardsByDue(
-  [
-    { id: "late2", due: "2026-06-30", completed: false, archived: false, createdAt: "", title: "" },
-    { id: "late1", due: "2026-07-01", completed: false, archived: false, createdAt: "", title: "" },
-    { id: "today", due: "2026-07-03", completed: false, archived: false, createdAt: "", title: "" },
-    { id: "none", due: "", completed: false, archived: false, createdAt: "", title: "" }
-  ],
-  dueNow
-);
-assert.deepEqual(dueGroups.map((group) => group.key), ["overdue", "today", "none"]);
-assert.deepEqual(dueGroups[0].cards.map((card) => card.id), ["late2", "late1"]);
-
 // buildCalendar emits one all-day VEVENT per dated entry, escaping TEXT values
 // and skipping entries without a valid due date.
 const ics = buildCalendar(
@@ -207,7 +194,7 @@ assert.deepEqual(runFilter({ assignees: [UNASSIGNED_ASSIGNEE] }), ["b"]);
 assert.deepEqual(runFilter({ labels: ["docs"], completion: "any" }), ["b", "c"]);
 assert.deepEqual(runFilter({ boardId: "b2", completion: "any", archived: "any" }), ["c", "d"]);
 
-// Due facet is day-delta based and independent of the Due view buckets.
+// Due facet is day-delta based.
 assert.deepEqual(runFilter({ due: "soon" }), ["a"]);
 assert.deepEqual(runFilter({ due: "none" }), ["b"]);
 assert.deepEqual(runFilter({ due: "overdue", completion: "any" }), ["c"]);

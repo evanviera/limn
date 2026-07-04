@@ -1,8 +1,8 @@
 import type { Card } from "../types";
 
 // Cards due within this many days (from today) read as "due soon" rather than
-// merely "upcoming". Today (0) and tomorrow (1) are always included.
-const SOON_DAYS = 3;
+// merely "upcoming". This matches the Filter view's "Due soon" facet.
+const SOON_DAYS = 7;
 
 // Sort key for a card's due date. Cards with no due date sort last.
 export function dueSortValue(card: Card): string {
@@ -108,7 +108,7 @@ export function describeDue(due: string, now: Date = new Date()): DueInfo {
 }
 
 // Count active cards (not completed, not archived) that are overdue or due
-// today — the "reminder" surface shown as a badge on the Due nav item.
+// today — the reminder surface shown as a badge on the Filter nav item.
 export function dueReminderCount(cards: Card[], now: Date = new Date()): number {
   return cards.filter((card) => {
     if (card.completed || card.archived) {
@@ -117,34 +117,6 @@ export function dueReminderCount(cards: Card[], now: Date = new Date()): number 
     const status = describeDue(card.due, now).status;
     return status === "overdue" || status === "today";
   }).length;
-}
-
-export interface DueGroup {
-  key: DueStatus;
-  title: string;
-  cards: Card[];
-}
-
-const DUE_GROUP_ORDER: Array<{ key: DueStatus; title: string }> = [
-  { key: "overdue", title: "Overdue" },
-  { key: "today", title: "Today" },
-  { key: "soon", title: "Due soon" },
-  { key: "later", title: "Upcoming" },
-  { key: "none", title: "No due date" }
-];
-
-// Bucket cards by due status for the Due view. Each non-empty group is returned
-// in overdue → upcoming → none order, with cards sorted by due date inside it.
-export function groupCardsByDue(cards: Card[], now: Date = new Date()): DueGroup[] {
-  const buckets: Record<DueStatus, Card[]> = { overdue: [], today: [], soon: [], later: [], none: [] };
-  for (const card of cards) {
-    buckets[describeDue(card.due, now).status].push(card);
-  }
-  return DUE_GROUP_ORDER.map(({ key, title }) => ({
-    key,
-    title,
-    cards: buckets[key].slice().sort(compareCardsByDueDate)
-  })).filter((group) => group.cards.length > 0);
 }
 
 export interface CalendarEntry {

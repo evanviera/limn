@@ -1,4 +1,4 @@
-export type View = "board" | "filter" | "due" | "members" | "settings";
+export type View = "board" | "filter" | "members" | "settings";
 
 export interface WorkspaceSettings {
   schemaVersion: number;
@@ -11,8 +11,8 @@ export interface WorkspaceSettings {
   updatedAt: string;
 }
 
-// Which due-date window a filter is scoped to. Semantics are day-delta based and
-// independent of the Due view's bucketing — see lib/filter.ts.
+// Which due-date window a filter is scoped to. Semantics are day-delta based;
+// see lib/filter.ts.
 export type DueFilterKind = "any" | "overdue" | "today" | "soon" | "later" | "has" | "none";
 
 export type CompletionFilter = "active" | "completed" | "any";

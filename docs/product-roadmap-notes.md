@@ -34,9 +34,9 @@ Archived cards need a visible recovery path: archive browser, unarchive, and pos
 
 ### Due-Date Workflow
 
-Due dates need overdue/upcoming grouping, reminders, and possibly calendar export. Without a workflow around them, due dates are mostly passive metadata.
+Due dates need searchable due windows, reminders, and possibly calendar export. Without a workflow around them, due dates are mostly passive metadata.
 
-**Shipped.** Due dates are now active. Board cards show a colour-coded due chip (overdue/today/soon), and a new cross-board **Due dates** view groups every card by how soon it is due (Overdue → Today → Due soon → Upcoming → No due date), with a "show completed" filter and click-through to the card. Reminders surface as a red count badge on the Due nav item (overdue + due-today) and a notice when a workspace with overdue work is opened. The card editor gained Today/Tomorrow/Next week/Clear shortcuts plus a live status hint. Calendar export writes an all-day `.ics` (one VEVENT per dated card) into `exports/limn-due-dates.ics` inside the workspace, keeping it in the local-first, folder-synced model. Still open: reminders are in-app only (no OS/Slack push, which would need a background scheduler).
+**Shipped.** Due dates are now active. Board cards show a colour-coded due chip (overdue/today/soon), and the cross-board **Filter** view can scope by due date, sort by due date, save due-date views, and open matching cards. Reminders surface as a red count badge on the Filter nav item (overdue + due-today) and a notice when a workspace with overdue work is opened. The card editor gained Today/Tomorrow/Next week/Clear shortcuts plus a live status hint. Calendar export writes an all-day `.ics` (one VEVENT per dated card) into `exports/limn-due-dates.ics` inside the workspace, keeping it in the local-first, folder-synced model. Still open: reminders are in-app only (no OS/Slack push, which would need a background scheduler).
 
 ### Conflict Review and Version History
 
@@ -75,4 +75,3 @@ The next major product step should make larger workspaces navigable and safer:
 3. Archive recovery.
 4. Conflict review and version history.
 5. Due-date workflow.
-

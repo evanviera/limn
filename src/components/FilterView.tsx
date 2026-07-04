@@ -1,4 +1,4 @@
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import type { ArchivedFilter, Board, Card, CardFilter, CompletionFilter, DueFilterKind, Member, SavedView, FilterSort } from "../types";
 import {
   EMPTY_FILTER,
@@ -22,13 +22,20 @@ export interface FilterViewProps {
   // Who "you" are on this device, so the "My tasks" preset scopes to your cards.
   activeMemberId: string;
   savedViews: SavedView[];
+  requestedFilter: FilterRequest | null;
   onOpenCard: (card: Card) => void;
+  onExportCalendar: () => Promise<void>;
   // Persist the current filter as a new named view (App handles naming + write).
   onSaveView: (filter: CardFilter) => void;
   onRenameView: (view: SavedView) => void;
   onDeleteView: (view: SavedView) => void;
   onOpenContextMenu: OpenContextMenu;
   onCopyText: (text: string) => Promise<void>;
+}
+
+export interface FilterRequest {
+  id: number;
+  filter: CardFilter;
 }
 
 const DUE_OPTIONS: Array<{ value: DueFilterKind; label: string }> = [
@@ -83,10 +90,17 @@ export function FilterView(props: FilterViewProps) {
 
   const labels = useMemo(() => collectLabels(props.cards), [props.cards]);
   const results = useMemo(() => filterCards(props.cards, filter), [props.cards, filter]);
+  const datedCount = useMemo(() => props.cards.filter((card) => !card.archived && card.due).length, [props.cards]);
   const active = filterIsActive(filter);
   const currentKey = filterKey(filter);
   const matchedPresetId = FILTER_PRESETS.find((preset) => filterKey(preset.build(props.activeMemberId)) === currentKey)?.id;
   const matchedSavedViewId = props.savedViews.find((view) => filterKey(view.filter) === currentKey)?.id;
+
+  useEffect(() => {
+    if (props.requestedFilter) {
+      setFilter(props.requestedFilter.filter);
+    }
+  }, [props.requestedFilter]);
 
   function boardName(boardId: string) {
     return props.boards.find((board) => board.id === boardId)?.name ?? "Unknown board";
@@ -135,6 +149,14 @@ export function FilterView(props: FilterViewProps) {
             onClick={() => props.onSaveView(filter)}
           >
             <Icon name="save" /> Save view
+          </button>
+          <button
+            data-testid="due-export"
+            disabled={datedCount === 0}
+            title={datedCount === 0 ? "No cards have a due date yet" : "Export due dates as a calendar file"}
+            onClick={() => void props.onExportCalendar()}
+          >
+            <Icon name="calendar" /> Export .ics
           </button>
         </div>
       </header>

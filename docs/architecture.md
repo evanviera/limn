@@ -27,7 +27,7 @@ focused" section before adding code to an existing large file.**
 - `AttachmentImagePreview.tsx` — the inline image thumbnail shown for image attachments (loads bytes via `useAttachmentObjectUrl`).
 - `AttachmentLightbox.tsx` — the full-screen image viewer opened by clicking an image attachment; arrow keys / chevrons flip through the card's image attachments.
 - `CardComments.tsx` — the card editor's discussion section: threaded comments, composer, @mention highlighting, and the "who are you?" identity prompt, fully prop-driven.
-- `FilterView.tsx` — the cross-board Filter view: free-text box, facet controls (board / assignee / label / due / status / archive / sort), preset + saved-view chips, and the results list. Filter state is local; the engine lives in `lib/filter.ts`.
+- `FilterView.tsx` — the cross-board Filter view: free-text box, facet controls (board / assignee / label / due / status / archive / sort), preset + saved-view chips, due reminder entry point, calendar export, and the results list. Filter state is local; the engine lives in `lib/filter.ts`.
 - `MembersView.tsx`, `SettingsView.tsx`, `CardEditor.tsx`, `WindowsTitlebar.tsx` — the remaining views.
 
 ### `src/lib/`
@@ -50,9 +50,9 @@ cascade order. Never add rules to it. Rules live in `src/styles/`:
 
 `tokens.css` (design tokens) → `base.css` (element resets, buttons, inputs) →
 `shell.css` (titlebar, sidebar, header) → `board.css` → `filter.css`
-(cross-board filter) → `due.css` → `feedback.css` (banners/empty states) →
-`settings.css` → `dialogs.css` → `card-editor.css` → `comments.css` (card
-discussion + @mentions) → `responsive.css` (media queries).
+(cross-board filter) → `feedback.css` (banners/empty states) → `settings.css` →
+`dialogs.css` → `card-editor.css` → `comments.css` (card discussion +
+@mentions) → `responsive.css` (media queries).
 
 Order matters: the barrel concatenates these, so keep cascade-sensitive rules in
 order and add new partials to the barrel at the right position.
@@ -70,8 +70,8 @@ order and add new partials to the barrel at the right position.
 
 - `harness.ts` — shared Playwright page helpers.
 - Feature specs: `board.spec.ts`, `card-editor.spec.ts`, `notes.spec.ts`,
-  `discussion.spec.ts`, `due.spec.ts`, `filter.spec.ts`,
-  `integrations.spec.ts` (Slack + updater), plus `qa-sweep.spec.ts`.
+  `discussion.spec.ts`, `filter.spec.ts`, `integrations.spec.ts` (Slack +
+  updater), plus `qa-sweep.spec.ts`.
 
 ## Keeping files focused
 

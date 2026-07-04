@@ -53,8 +53,8 @@ import {
 
 import { BoardView } from "./components/BoardView";
 import { CardEditor } from "./components/CardEditor";
-import { DueView } from "./components/DueView";
 import { FilterView } from "./components/FilterView";
+import type { FilterRequest } from "./components/FilterView";
 import { ConfirmDialog, EmptyState, TextDialog } from "./components/dialogs";
 import type { ConfirmDialogState, TextDialogState } from "./components/dialogs";
 import { ContextMenu, isEditableTextControl, textControlContextItems } from "./components/contextMenu";
@@ -66,6 +66,7 @@ import { WindowsTitlebar } from "./components/WindowsTitlebar";
 import { THEME_STORAGE_KEY } from "./lib/constants";
 import type { SlackNotificationKey, ThemeMode } from "./lib/constants";
 import { buildCalendar, dueReminderCount, type CalendarEntry } from "./lib/dueDate";
+import { EMPTY_FILTER } from "./lib/filter";
 import { compareCardsByOrder, nextOrderForList, placeInList } from "./lib/ordering";
 import { countLabel, errorText, initials, readStoredThemeMode, sameJson, selectActiveBoardId, slackTag, upsertById } from "./lib/format";
 import { readActiveMemberId, resolveActiveMember, writeActiveMemberId } from "./lib/identity";
@@ -98,6 +99,7 @@ export default function App() {
   const [cards, setCards] = useState<Card[]>([]);
   const [activeBoardId, setActiveBoardId] = useState("");
   const [view, setView] = useState<View>("board");
+  const [filterRequest, setFilterRequest] = useState<FilterRequest | null>(null);
   const [selectedCardId, setSelectedCardId] = useState<string | null>(null);
   const [error, setError] = useState("");
   const [notice, setNotice] = useState("");
@@ -124,8 +126,8 @@ export default function App() {
   const selectedCard = cards.find((card) => card.id === selectedCardId) ?? null;
   const activeMember = resolveActiveMember(members, activeMemberId);
   const updaterAvailable = canUseUpdater();
-  // Overdue + due-today count across every board — the "reminder" nudge shown on
-  // the Due nav item.
+  // Overdue + due-today count across every board — the reminder nudge shown on
+  // the Filter nav item.
   const dueReminders = dueReminderCount(cards);
 
   useLayoutEffect(() => {
@@ -339,7 +341,7 @@ export default function App() {
         setNotice(data.diagnostics.join(" "));
         setNoticeKind("warning");
       } else if (reminders > 0) {
-        setNotice(`${countLabel(reminders, "card")} overdue or due today. Open Due dates to review.`);
+        setNotice(`${countLabel(reminders, "card")} overdue or due today. Open Filter to review.`);
         setNoticeKind("warning");
       } else {
         setNotice("");
@@ -852,11 +854,19 @@ export default function App() {
     }
   }
 
-  // Open a card from a cross-board view (Due or Filter): focus its board so the
+  // Open a card from a cross-board view: focus its board so the
   // editor has the right board/list context, then open the editor over the view.
-  function openCardFromDue(card: Card) {
+  function openCardFromWorkspaceView(card: Card) {
     setActiveBoardId(card.boardId);
     setSelectedCardId(card.id);
+  }
+
+  function openDueReminderFilter() {
+    setView("filter");
+    setFilterRequest((current) => ({
+      id: (current?.id ?? 0) + 1,
+      filter: { ...EMPTY_FILTER, due: "soon", sort: "due" }
+    }));
   }
 
   // Saved views live in workspace settings so they are folder-synced and shared
@@ -1690,13 +1700,25 @@ export default function App() {
           >
             <Icon name={themeMode === "dark" ? "sun" : "moon"} /> {themeMode === "dark" ? "Light mode" : "Dark mode"}
           </button>
-          <button className={view === "filter" ? "active" : ""} data-testid="nav-filter" onClick={() => setView("filter")}>
+          <button
+            className={view === "filter" ? "active" : ""}
+            data-testid="nav-filter"
+            onClick={(event) => {
+              const target = event.target as HTMLElement;
+              if (target.closest("[data-testid='due-reminder-count']")) {
+                openDueReminderFilter();
+                return;
+              }
+              setView("filter");
+            }}
+          >
             <Icon name="search" /> Filter
-          </button>
-          <button className={view === "due" ? "active" : ""} data-testid="nav-due" onClick={() => setView("due")}>
-            <Icon name="calendar" /> Due dates
             {dueReminders > 0 && (
-              <span className="nav-badge" data-testid="due-reminder-count" title={`${countLabel(dueReminders, "card")} overdue or due today`}>
+              <span
+                className="nav-badge"
+                data-testid="due-reminder-count"
+                title={`${countLabel(dueReminders, "card")} overdue or due today. Click to filter by due date.`}
+              >
                 {dueReminders}
               </span>
             )}
@@ -1800,21 +1822,12 @@ export default function App() {
             members={members}
             activeMemberId={activeMemberId}
             savedViews={savedViews}
-            onOpenCard={openCardFromDue}
+            requestedFilter={filterRequest}
+            onOpenCard={openCardFromWorkspaceView}
+            onExportCalendar={exportDueCalendar}
             onSaveView={saveFilterView}
             onRenameView={renameFilterView}
             onDeleteView={deleteFilterView}
-            onOpenContextMenu={openContextMenu}
-            onCopyText={copyText}
-          />
-        )}
-        {view === "due" && (
-          <DueView
-            cards={cards}
-            boards={boards}
-            members={members}
-            onOpenCard={openCardFromDue}
-            onExportCalendar={exportDueCalendar}
             onOpenContextMenu={openContextMenu}
             onCopyText={copyText}
           />
