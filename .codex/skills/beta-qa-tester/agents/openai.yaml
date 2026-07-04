@@ -1,0 +1,4 @@
+interface:
+  display_name: "Beta QA Tester"
+  short_description: "Evaluate productivity apps like a real user"
+  default_prompt: "Use $beta-qa-tester to test this productivity app like an expert user and write the report under reports/."
