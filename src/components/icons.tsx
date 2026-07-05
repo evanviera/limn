@@ -11,6 +11,7 @@ export type IconName =
   | "chevron-up-right"
   | "clipboard"
   | "copy"
+  | "drag-handle"
   | "edit"
   | "folder"
   | "maximize"
@@ -83,6 +84,16 @@ export function Icon({ name }: { name: IconName }) {
       <>
         <path d="M8 8h11v11H8z" />
         <path d="M5 16H4V5h11v1" />
+      </>
+    ),
+    "drag-handle": (
+      <>
+        <circle cx="9" cy="6" r="1" />
+        <circle cx="15" cy="6" r="1" />
+        <circle cx="9" cy="12" r="1" />
+        <circle cx="15" cy="12" r="1" />
+        <circle cx="9" cy="18" r="1" />
+        <circle cx="15" cy="18" r="1" />
       </>
     ),
     edit: (

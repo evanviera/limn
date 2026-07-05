@@ -1,15 +1,11 @@
 import { Fragment, useEffect, useRef, useState } from "react";
 import type { MouseEvent as ReactMouseEvent, PointerEvent as ReactPointerEvent } from "react";
 import type { Board, BoardList, Card, Member } from "../types";
-import { openExternal } from "../storage";
-import { latestImageAttachment } from "../lib/attachments";
-import { countLabel, initials } from "../lib/format";
-import { describeDue } from "../lib/dueDate";
+import { countLabel } from "../lib/format";
 import { compareCardsByOrder } from "../lib/ordering";
-import { AttachmentImagePreview } from "./AttachmentImagePreview";
 import { Icon } from "./icons";
 import { EmptyState } from "./dialogs";
-import { RichNoteText } from "./RichNoteText";
+import { TaskCardBody } from "./TaskCard";
 import type { ContextMenuItem, OpenContextMenu } from "./contextMenu";
 
 export interface BoardViewProps {
@@ -24,6 +20,7 @@ export interface BoardViewProps {
   onDeleteBoard: (board: Board) => Promise<void>;
   onRenameList: (list: BoardList) => Promise<void>;
   onDeleteList: (list: BoardList) => Promise<void>;
+  onMoveList: (listId: string, index: number) => Promise<void>;
   onAddCard: (listId: string) => Promise<void>;
   // `index` is where the card should land among the *other* cards already in the
   // target list (0 = top, omitted = append to the bottom).
@@ -48,11 +45,24 @@ export function BoardView(props: BoardViewProps) {
     height: number;
   };
 
+  type ListDragState = {
+    listId: string;
+    startX: number;
+    startY: number;
+    didMove: boolean;
+  };
+
+  const columnsRef = useRef<HTMLDivElement | null>(null);
   const pointerDragRef = useRef<{
     pointerId: number;
     state: DragState;
   } | null>(null);
+  const pointerListDragRef = useRef<{
+    pointerId: number;
+    state: ListDragState;
+  } | null>(null);
   const mouseDragRef = useRef<DragState | null>(null);
+  const mouseListDragRef = useRef<ListDragState | null>(null);
   const [dragPreview, setDragPreview] = useState<{
     cardId: string;
     left: number;
@@ -63,14 +73,20 @@ export function BoardView(props: BoardViewProps) {
   // Where the dragged card would land: which list, and the insertion index among
   // that list's other cards. Drives the insertion line shown during a drag.
   const [dropTarget, setDropTarget] = useState<{ listId: string; index: number } | null>(null);
+  const [draggingListId, setDraggingListId] = useState<string | null>(null);
+  const [listDropTarget, setListDropTarget] = useState<{ index: number } | null>(null);
+  const [compactCards, setCompactCards] = useState(false);
   const mouseDragCleanupRef = useRef<(() => void) | null>(null);
+  const mouseListDragCleanupRef = useRef<(() => void) | null>(null);
   const suppressCardClickRef = useRef<string | null>(null);
   const dragThreshold = 6;
 
   useEffect(
     () => () => {
       mouseDragCleanupRef.current?.();
+      mouseListDragCleanupRef.current?.();
       document.body.classList.remove("is-card-dragging");
+      document.body.classList.remove("is-list-dragging");
     },
     []
   );
@@ -105,6 +121,58 @@ export function BoardView(props: BoardViewProps) {
     document.body.classList.remove("is-card-dragging");
     setDragPreview(null);
     setDropTarget(null);
+  }
+
+  function createListDragState(listId: string, clientX: number, clientY: number): ListDragState {
+    return {
+      listId,
+      startX: clientX,
+      startY: clientY,
+      didMove: false
+    };
+  }
+
+  function computeListDropTarget(clientX: number, clientY: number, draggedListId: string): { index: number } | null {
+    const columns = columnsRef.current;
+    if (!columns) {
+      return null;
+    }
+    const columnsRect = columns.getBoundingClientRect();
+    if (clientY < columnsRect.top || clientY > columnsRect.bottom) {
+      return null;
+    }
+
+    const listElements = Array.from(columns.querySelectorAll<HTMLElement>(":scope > [data-list-id]"))
+      .filter((element) => element.dataset.listId !== draggedListId);
+    let index = listElements.length;
+    for (let position = 0; position < listElements.length; position += 1) {
+      const rect = listElements[position].getBoundingClientRect();
+      if (clientX < rect.left + rect.width / 2) {
+        index = position;
+        break;
+      }
+    }
+    return { index };
+  }
+
+  function updateListDrag(drag: ListDragState, clientX: number, clientY: number) {
+    document.body.classList.add("is-list-dragging");
+    setDraggingListId(drag.listId);
+    setListDropTarget(computeListDropTarget(clientX, clientY, drag.listId));
+  }
+
+  function clearListDrag() {
+    document.body.classList.remove("is-list-dragging");
+    setDraggingListId(null);
+    setListDropTarget(null);
+  }
+
+  function dropListAtPoint(listId: string, clientX: number, clientY: number) {
+    const target = computeListDropTarget(clientX, clientY, listId);
+    clearListDrag();
+    if (target) {
+      void props.onMoveList(listId, target.index);
+    }
   }
 
   // Resolve the pointer location to a target list and an insertion index among
@@ -211,6 +279,72 @@ export function BoardView(props: BoardViewProps) {
     clearDragPreview();
   }
 
+  function beginListPointerDrag(event: ReactPointerEvent<HTMLElement>, listId: string) {
+    if (event.pointerType === "mouse") {
+      return;
+    }
+
+    if (event.button !== 0) {
+      return;
+    }
+
+    event.preventDefault();
+    event.stopPropagation();
+    pointerListDragRef.current = {
+      pointerId: event.pointerId,
+      state: createListDragState(listId, event.clientX, event.clientY)
+    };
+    event.currentTarget.setPointerCapture(event.pointerId);
+  }
+
+  function updateListPointerDrag(event: ReactPointerEvent<HTMLElement>) {
+    const drag = pointerListDragRef.current;
+    if (!drag || drag.pointerId !== event.pointerId) {
+      return;
+    }
+
+    const moved = Math.hypot(event.clientX - drag.state.startX, event.clientY - drag.state.startY) >= dragThreshold;
+    if (!drag.state.didMove && moved) {
+      drag.state.didMove = true;
+    }
+
+    if (drag.state.didMove) {
+      event.preventDefault();
+      updateListDrag(drag.state, event.clientX, event.clientY);
+    }
+  }
+
+  function finishListPointerDrag(event: ReactPointerEvent<HTMLElement>) {
+    const drag = pointerListDragRef.current;
+    if (!drag || drag.pointerId !== event.pointerId) {
+      return;
+    }
+
+    pointerListDragRef.current = null;
+    if (event.currentTarget.hasPointerCapture(event.pointerId)) {
+      event.currentTarget.releasePointerCapture(event.pointerId);
+    }
+
+    if (!drag.state.didMove) {
+      clearListDrag();
+      return;
+    }
+
+    event.preventDefault();
+    event.stopPropagation();
+    dropListAtPoint(drag.state.listId, event.clientX, event.clientY);
+  }
+
+  function cancelListPointerDrag(event: ReactPointerEvent<HTMLElement>) {
+    const drag = pointerListDragRef.current;
+    if (!drag || drag.pointerId !== event.pointerId) {
+      return;
+    }
+
+    pointerListDragRef.current = null;
+    clearListDrag();
+  }
+
   function beginMouseDrag(event: ReactMouseEvent<HTMLElement>, cardId: string) {
     if (event.button !== 0 || pointerDragRef.current) {
       return;
@@ -259,6 +393,57 @@ export function BoardView(props: BoardViewProps) {
     window.addEventListener("mousemove", handleMouseMove);
     window.addEventListener("mouseup", handleMouseUp);
     mouseDragCleanupRef.current = cleanup;
+  }
+
+  function beginListMouseDrag(event: ReactMouseEvent<HTMLElement>, listId: string) {
+    if (event.button !== 0 || pointerListDragRef.current) {
+      return;
+    }
+
+    event.preventDefault();
+    event.stopPropagation();
+    mouseListDragCleanupRef.current?.();
+    mouseListDragRef.current = createListDragState(listId, event.clientX, event.clientY);
+
+    const handleMouseMove = (nativeEvent: MouseEvent) => {
+      const drag = mouseListDragRef.current;
+      if (!drag) {
+        return;
+      }
+
+      const moved = Math.hypot(nativeEvent.clientX - drag.startX, nativeEvent.clientY - drag.startY) >= dragThreshold;
+      if (!drag.didMove && moved) {
+        drag.didMove = true;
+      }
+
+      if (drag.didMove) {
+        nativeEvent.preventDefault();
+        updateListDrag(drag, nativeEvent.clientX, nativeEvent.clientY);
+      }
+    };
+
+    const handleMouseUp = (nativeEvent: MouseEvent) => {
+      mouseListDragCleanupRef.current?.();
+      const drag = mouseListDragRef.current;
+      mouseListDragRef.current = null;
+      if (!drag?.didMove) {
+        clearListDrag();
+        return;
+      }
+
+      nativeEvent.preventDefault();
+      dropListAtPoint(drag.listId, nativeEvent.clientX, nativeEvent.clientY);
+    };
+
+    const cleanup = () => {
+      window.removeEventListener("mousemove", handleMouseMove);
+      window.removeEventListener("mouseup", handleMouseUp);
+      mouseListDragCleanupRef.current = null;
+    };
+
+    window.addEventListener("mousemove", handleMouseMove);
+    window.addEventListener("mouseup", handleMouseUp);
+    mouseListDragCleanupRef.current = cleanup;
   }
 
   function openCard(cardId: string) {
@@ -315,6 +500,13 @@ export function BoardView(props: BoardViewProps) {
   }
 
   const dragPreviewCard = dragPreview ? props.cards.find((card) => card.id === dragPreview.cardId) : null;
+  const draggedListIndex = draggingListId ? props.board.lists.findIndex((list) => list.id === draggingListId) : -1;
+  const listIndicatorAt =
+    listDropTarget && draggedListIndex !== -1
+      ? listDropTarget.index >= draggedListIndex
+        ? listDropTarget.index + 1
+        : listDropTarget.index
+      : -1;
 
   return (
     <section className="board-view" onContextMenu={(event) => props.onOpenContextMenu(event, boardContextItems(), props.board.name)}>
@@ -331,17 +523,26 @@ export function BoardView(props: BoardViewProps) {
           <button aria-label="Delete board" className="icon-button" data-testid="delete-board" title="Delete board" onClick={() => void props.onDeleteBoard(props.board)}>
             <Icon name="trash" />
           </button>
+          <button
+            aria-pressed={compactCards}
+            className={`compact-toggle ${compactCards ? "active" : ""}`}
+            data-testid="compact-board-toggle"
+            title={compactCards ? "Show full cards" : "Show compact cards"}
+            onClick={() => setCompactCards((current) => !current)}
+          >
+            <Icon name={compactCards ? "maximize" : "minus"} /> Compact
+          </button>
           <button className="primary" data-testid="add-list" onClick={() => void props.onAddList()}>
             <Icon name="plus" /> Add list
           </button>
         </div>
       </header>
 
-      <div className="columns">
+      <div className="columns" ref={columnsRef}>
         {props.board.lists.length === 0 && (
           <EmptyState title="No lists yet" body="Add a list to organize cards on this board." action="Add list" onAction={props.onAddList} />
         )}
-        {props.board.lists.map((list) => {
+        {props.board.lists.map((list, listPosition) => {
           const listCards = props.cards.filter((card) => card.listId === list.id).sort(compareCardsByOrder);
           // Map the drop index (measured over the *other* cards) onto a position
           // in the rendered list, which still includes the dimmed dragged card.
@@ -354,13 +555,27 @@ export function BoardView(props: BoardViewProps) {
               : -1;
           return (
             <section
-              className="column"
+              className={`column ${draggingListId === list.id ? "list-drag-source" : ""} ${listIndicatorAt === listPosition ? "list-drop-before" : ""} ${listIndicatorAt === listPosition + 1 ? "list-drop-after" : ""}`}
               data-list-id={list.id}
               data-testid={`list-${list.id}`}
               key={list.id}
               onContextMenu={(event) => props.onOpenContextMenu(event, listContextItems(list), list.name)}
             >
               <header className="column-header">
+                <button
+                  aria-label={`Drag list ${list.name}`}
+                  className="list-drag-handle"
+                  data-testid={`list-drag-${list.id}`}
+                  title="Drag list"
+                  onContextMenu={(event) => event.stopPropagation()}
+                  onPointerCancel={cancelListPointerDrag}
+                  onPointerDown={(event) => beginListPointerDrag(event, list.id)}
+                  onPointerMove={updateListPointerDrag}
+                  onPointerUp={finishListPointerDrag}
+                  onMouseDown={(event) => beginListMouseDrag(event, list.id)}
+                >
+                  <Icon name="drag-handle" />
+                </button>
                 <h2>{list.name}</h2>
                 <span>{listCards.length}</span>
                 <button aria-label={`Rename ${list.name}`} title="Rename list" data-testid={`rename-list-${list.id}`} onClick={() => void props.onRenameList(list)}>
@@ -377,7 +592,7 @@ export function BoardView(props: BoardViewProps) {
                   <Fragment key={card.id}>
                     <article
                       aria-label={`${card.title}${card.completed ? " (completed)" : ""}`}
-                      className={`task-card ${card.completed ? "completed" : ""} ${dragPreview?.cardId === card.id ? "drag-source" : ""} ${props.dropTargetCardId === card.id ? "drop-target" : ""}`}
+                      className={`task-card ${compactCards ? "compact" : ""} ${card.completed ? "completed" : ""} ${dragPreview?.cardId === card.id ? "drag-source" : ""} ${props.dropTargetCardId === card.id ? "drop-target" : ""}`}
                       data-card-id={card.id}
                       data-testid={`card-${card.id}`}
                       onClick={() => openCard(card.id)}
@@ -390,6 +605,7 @@ export function BoardView(props: BoardViewProps) {
                     >
                       <TaskCardBody
                         card={card}
+                        compact={compactCards}
                         members={props.members}
                         workspacePath={props.workspacePath}
                         onOpen={openCard}
@@ -411,7 +627,7 @@ export function BoardView(props: BoardViewProps) {
       </div>
       {dragPreview && dragPreviewCard && (
         <article
-          className={`task-card drag-preview ${dragPreviewCard.completed ? "completed" : ""}`}
+          className={`task-card drag-preview ${compactCards ? "compact" : ""} ${dragPreviewCard.completed ? "completed" : ""}`}
           data-testid="card-drag-preview"
           style={{
             height: dragPreview.height,
@@ -419,221 +635,9 @@ export function BoardView(props: BoardViewProps) {
             width: dragPreview.width
           }}
         >
-          <TaskCardBody card={dragPreviewCard} members={props.members} workspacePath={props.workspacePath} />
+          <TaskCardBody card={dragPreviewCard} compact={compactCards} members={props.members} workspacePath={props.workspacePath} />
         </article>
       )}
     </section>
-  );
-}
-export function TaskCardBody({
-  card,
-  members,
-  workspacePath,
-  onOpen,
-  onToggleSubtask,
-  onOpenContextMenu,
-  onCopyText
-}: {
-  card: Card;
-  members: Member[];
-  workspacePath?: string | null;
-  onOpen?: (cardId: string) => void;
-  onToggleSubtask?: (cardId: string, subtaskId: string, completed: boolean) => void;
-  onOpenContextMenu?: OpenContextMenu;
-  onCopyText?: (text: string) => Promise<void>;
-}) {
-  const doneCount = card.subtasks.filter((subtask) => subtask.completed).length;
-  const noteText = card.body.trim();
-  const coverAttachment = workspacePath ? latestImageAttachment(card.attachments) : null;
-  const due = describeDue(card.due);
-  // Completed cards never nag: their due date reads as a neutral chip.
-  const dueClass = card.completed ? "due-badge due-complete" : `due-badge due-${due.status}`;
-  return (
-    <>
-      {coverAttachment && (
-        <AttachmentImagePreview
-          attachment={coverAttachment}
-          cardId={card.id}
-          className="task-card-cover"
-          testId={`card-${card.id}-image-cover`}
-          workspacePath={workspacePath ?? null}
-        />
-      )}
-      <h3>
-        {card.completed && (
-          <>
-            <span className="sr-only">Completed: </span>
-            <span className="done-check" aria-hidden="true">✓ </span>
-          </>
-        )}
-        {onOpen ? (
-          <button
-            className="card-open"
-            data-testid={`card-open-${card.id}`}
-            type="button"
-            onClick={(event) => {
-              event.stopPropagation();
-              onOpen(card.id);
-            }}
-          >
-            {card.title}
-          </button>
-        ) : (
-          card.title
-        )}
-      </h3>
-      {card.labels.length > 0 && (
-        <div className="label-row">
-          {card.labels.map((label) => (
-            <span key={label}>{label}</span>
-          ))}
-        </div>
-      )}
-      {card.subtasks.length > 0 && (
-        <ul className="card-subtasks">
-          {card.subtasks.map((subtask) => {
-            const subtaskUrl = subtask.url.trim();
-            const title = subtask.title || subtaskUrl || "Untitled sub-task";
-            const listItems = subtask.items.filter((item) => item.text.trim() || item.url.trim());
-            return (
-              <li
-                key={subtask.id}
-                className={`card-subtask ${subtask.completed ? "completed" : ""}`}
-                onContextMenu={(event) => {
-                  if (!onOpenContextMenu) {
-                    return;
-                  }
-                  onOpenContextMenu(event, [
-                    {
-                      label: subtask.completed ? "Mark step incomplete" : "Mark step complete",
-                      icon: "check",
-                      disabled: !onToggleSubtask,
-                      onSelect: () => onToggleSubtask?.(card.id, subtask.id, !subtask.completed)
-                    },
-                    { label: "Open card", icon: "edit", disabled: !onOpen, onSelect: () => onOpen?.(card.id) },
-                    { label: "Copy step title", icon: "copy", onSelect: () => void onCopyText?.(title) },
-                    ...(subtaskUrl
-                      ? ([
-                          { type: "separator" },
-                          { label: "Open step link", icon: "chevron-up-right", onSelect: () => void openExternal(subtaskUrl) },
-                          { label: "Copy step link", icon: "copy", onSelect: () => void onCopyText?.(subtaskUrl) }
-                        ] satisfies ContextMenuItem[])
-                      : [])
-                  ], title);
-                }}
-              >
-                <div className="card-subtask-main">
-                  <input
-                    checked={subtask.completed}
-                    data-testid={`card-subtask-${subtask.id}-toggle`}
-                    disabled={!onToggleSubtask}
-                    type="checkbox"
-                    onClick={(event) => event.stopPropagation()}
-                    onPointerDown={(event) => event.stopPropagation()}
-                    onChange={(event) => onToggleSubtask?.(card.id, subtask.id, event.target.checked)}
-                  />
-                  {subtaskUrl ? (
-                    <a
-                      className="card-subtask-title card-subtask-link"
-                      data-testid={`card-subtask-${subtask.id}-link`}
-                      href={subtaskUrl}
-                      onPointerDown={(event) => event.stopPropagation()}
-                      onContextMenu={(event) => {
-                        if (!onOpenContextMenu) {
-                          return;
-                        }
-                        onOpenContextMenu(event, [
-                          { label: "Open step link", icon: "chevron-up-right", onSelect: () => void openExternal(subtaskUrl) },
-                          { label: "Copy step link", icon: "copy", onSelect: () => void onCopyText?.(subtaskUrl) },
-                          { label: "Copy step title", icon: "copy", onSelect: () => void onCopyText?.(title) }
-                        ], title);
-                      }}
-                      onClick={(event) => {
-                        event.preventDefault();
-                        event.stopPropagation();
-                        void openExternal(subtaskUrl);
-                      }}
-                    >
-                      {title}
-                    </a>
-                  ) : (
-                    <span className="card-subtask-title">{title}</span>
-                  )}
-                </div>
-                {listItems.length > 0 && (
-                  <ul className="card-subtask-items">
-                    {listItems.map((item) => {
-                      const itemUrl = item.url.trim();
-                      const itemText = item.text || itemUrl || "Untitled item";
-                      return (
-                        <li key={item.id} className="card-subtask-item">
-                          {itemUrl ? (
-                            <a
-                              className="card-subtask-item-content card-subtask-link"
-                              data-testid={`card-subtask-item-${item.id}-link`}
-                              href={itemUrl}
-                              onPointerDown={(event) => event.stopPropagation()}
-                              onContextMenu={(event) => {
-                                if (!onOpenContextMenu) {
-                                  return;
-                                }
-                                onOpenContextMenu(event, [
-                                  { label: "Open detail link", icon: "chevron-up-right", onSelect: () => void openExternal(itemUrl) },
-                                  { label: "Copy detail link", icon: "copy", onSelect: () => void onCopyText?.(itemUrl) },
-                                  { label: "Copy detail text", icon: "copy", onSelect: () => void onCopyText?.(itemText) }
-                                ], itemText);
-                              }}
-                              onClick={(event) => {
-                                event.preventDefault();
-                                event.stopPropagation();
-                                void openExternal(itemUrl);
-                              }}
-                            >
-                              {itemText}
-                            </a>
-                          ) : (
-                            <span className="card-subtask-item-content">{itemText}</span>
-                          )}
-                        </li>
-                      );
-                    })}
-                  </ul>
-                )}
-              </li>
-            );
-          })}
-        </ul>
-      )}
-      {noteText && (
-        <p className="card-notes-preview" data-testid={`card-notes-${card.id}`}>
-          <RichNoteText text={noteText} testIdPrefix={`card-note-link-${card.id}`} onOpenContextMenu={onOpenContextMenu} onCopyText={onCopyText} />
-        </p>
-      )}
-      <footer>
-        <span className={dueClass} data-testid={`card-due-${card.id}`} title={due.status === "none" ? "No due date" : due.label}>
-          {due.label}
-        </span>
-        {card.subtasks.length > 0 && (
-          <span className="subtask-badge" title="Sub-tasks completed">
-            <Icon name="check" /> {doneCount}/{card.subtasks.length}
-          </span>
-        )}
-        <MemberDots members={members.filter((member) => card.assignees.includes(member.id))} />
-      </footer>
-    </>
-  );
-}
-export function MemberDots({ members }: { members: Member[] }) {
-  if (members.length === 0) {
-    return <span className="muted">Unassigned</span>;
-  }
-  return (
-    <span className="member-dots">
-      {members.slice(0, 4).map((member) => (
-        <span className="avatar small" key={member.id} style={{ background: member.color }}>
-          {initials(member.name)}
-        </span>
-      ))}
-    </span>
   );
 }

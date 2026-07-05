@@ -135,6 +135,45 @@ test.describe("smoke", () => {
     expect(titles).toEqual(["Earlier", "Later"]);
   });
 
+  test("compact board mode shows only card titles and footer metadata", async ({ page }) => {
+    await openApp(page);
+    await openWorkspace(page);
+
+    await page.getByTestId("create-board").click();
+    await page.getByTestId("text-dialog-input").fill("Compact Board");
+    await page.getByTestId("text-dialog-submit").click();
+
+    await page.getByTestId("add-card-todo").click();
+    await page.getByTestId("text-dialog-input").fill("Compact candidate");
+    await page.getByTestId("text-dialog-submit").click();
+    await expect(page.getByTestId("card-title-input")).toBeVisible();
+    await page.getByTestId("card-due-input").fill("2026-07-15");
+    await page.getByTestId("card-labels-input").fill("Planning");
+    await page.keyboard.press("Enter");
+    await page.getByTestId("add-subtask").click();
+    await page.locator('[data-testid^="subtask-"][data-testid$="-title"]').last().fill("Checklist");
+    await page.getByTestId("card-notes-input").fill("This note should collapse in compact mode.");
+    await page.getByTestId("save-card").click();
+    await expect(page.getByTestId("card-title-input")).toBeHidden();
+
+    const card = page.getByTestId("list-todo").locator(".task-card").first();
+    await expect(card.locator("h3")).toContainText("Compact candidate");
+    await expect(card.locator(".label-row")).toContainText("Planning");
+    await expect(card.locator(".card-subtasks")).toContainText("Checklist");
+    await expect(card.locator(".card-notes-preview")).toContainText("This note should collapse");
+
+    await page.getByTestId("compact-board-toggle").click();
+    await expect(page.getByTestId("compact-board-toggle")).toHaveAttribute("aria-pressed", "true");
+    await expect(card).toHaveClass(/compact/);
+    await expect(card.locator("h3")).toContainText("Compact candidate");
+    await expect(card.locator("footer")).toContainText("0/1");
+    await expect(card.locator("footer")).toContainText("Unassigned");
+    await expect(card.locator(".due-badge")).toBeVisible();
+    await expect(card.locator(".label-row")).toHaveCount(0);
+    await expect(card.locator(".card-subtasks")).toHaveCount(0);
+    await expect(card.locator(".card-notes-preview")).toHaveCount(0);
+  });
+
   test("cards can be reordered within a list by dragging", async ({ page }) => {
     await openApp(page);
     await openWorkspace(page);
@@ -187,5 +226,38 @@ test.describe("smoke", () => {
       const match = alphaCard?.match(/^order:\s*(\d+)/m);
       return match ? Number(match[1]) : 0;
     }).toBeGreaterThan(0);
+  });
+
+  test("lists can be reordered by dragging", async ({ page }) => {
+    await openApp(page);
+    await openWorkspace(page);
+
+    await page.getByTestId("create-board").click();
+    await page.getByTestId("text-dialog-input").fill("Workflow Board");
+    await page.getByTestId("text-dialog-submit").click();
+
+    const listTitles = () => page.locator(".column-header h2").allTextContents();
+    expect(await listTitles()).toEqual(["To Do", "In Progress", "Done"]);
+
+    const todoHandle = page.getByTestId("list-drag-todo");
+    const doneList = page.getByTestId("list-done");
+    const handleBox = await todoHandle.boundingBox();
+    const doneBox = await doneList.boundingBox();
+    if (!handleBox || !doneBox) {
+      throw new Error("list bounding boxes unavailable");
+    }
+
+    await page.mouse.move(handleBox.x + handleBox.width / 2, handleBox.y + handleBox.height / 2);
+    await page.mouse.down();
+    await page.mouse.move(handleBox.x + handleBox.width / 2 + 20, handleBox.y + handleBox.height / 2);
+    await page.mouse.move(doneBox.x + doneBox.width - 4, doneBox.y + doneBox.height / 2);
+    await page.mouse.up();
+
+    await expect.poll(async () => listTitles()).toEqual(["In Progress", "Done", "To Do"]);
+    await expect.poll(async () => {
+      const state = await snapshot(page);
+      const board = JSON.parse(state.boards[0].content) as { lists: Array<{ id: string }> };
+      return board.lists.map((list) => list.id);
+    }).toEqual(["in-progress", "done", "todo"]);
   });
 });

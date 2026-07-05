@@ -11,7 +11,7 @@ import {
 import { describeDue } from "../lib/dueDate";
 import { countLabel, initials } from "../lib/format";
 import { Icon } from "./icons";
-import { MemberDots } from "./BoardView";
+import { MemberDots } from "./TaskCard";
 import type { OpenContextMenu } from "./contextMenu";
 
 export interface FilterViewProps {

@@ -916,6 +916,31 @@ export default function App() {
     });
   }
 
+  async function moveList(listId: string, index: number) {
+    if (!activeBoard) {
+      return;
+    }
+    const list = activeBoard.lists.find((item) => item.id === listId);
+    if (!list) {
+      return;
+    }
+
+    const otherLists = activeBoard.lists.filter((item) => item.id !== listId);
+    const clampedIndex = Math.max(0, Math.min(index, otherLists.length));
+    const nextLists = [...otherLists];
+    nextLists.splice(clampedIndex, 0, list);
+
+    if (nextLists.every((item, position) => item.id === activeBoard.lists[position]?.id)) {
+      return;
+    }
+
+    try {
+      await persistBoard({ ...activeBoard, lists: nextLists, updatedAt: timestamp() });
+    } catch (reason) {
+      setError(`Move list failed: ${errorText(reason)}`);
+    }
+  }
+
   async function addCard(listId: string) {
     if (!activeBoard) {
       return;
@@ -2035,6 +2060,7 @@ export default function App() {
             onDeleteBoard={removeBoard}
             onRenameList={renameList}
             onDeleteList={deleteList}
+            onMoveList={moveList}
             onAddCard={addCard}
             onMoveCard={moveCard}
             onOpenCard={openCardFromBoard}

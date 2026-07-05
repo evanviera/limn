@@ -17,6 +17,7 @@
 }
 
 .column {
+  position: relative;
   display: grid;
   grid-template-rows: auto minmax(0, 1fr) auto;
   gap: var(--space-4);
@@ -27,6 +28,31 @@
   border: 1px solid var(--border-soft);
   border-radius: var(--radius-lg);
   transition: border-color var(--transition), background var(--transition);
+}
+
+.column.list-drag-source {
+  opacity: 0.46;
+}
+
+.column.list-drop-before::before,
+.column.list-drop-after::after {
+  content: "";
+  position: absolute;
+  top: 8px;
+  bottom: 8px;
+  z-index: 2;
+  width: 2px;
+  background: var(--accent);
+  border-radius: var(--radius-pill);
+  box-shadow: 0 0 0 1px var(--accent-border);
+}
+
+.column.list-drop-before::before {
+  left: -13px;
+}
+
+.column.list-drop-after::after {
+  right: -13px;
 }
 
 .column:focus-within,
@@ -42,7 +68,7 @@ body.is-card-dragging .column:hover {
 
 .column-header {
   display: grid;
-  grid-template-columns: minmax(0, 1fr) auto auto auto;
+  grid-template-columns: auto minmax(0, 1fr) auto auto auto;
   align-items: center;
   gap: var(--space-3);
   min-height: 28px;
@@ -82,6 +108,24 @@ body.is-card-dragging .column:hover {
   color: var(--text-strong);
 }
 
+.column-header .list-drag-handle {
+  cursor: grab;
+}
+
+.column-header .list-drag-handle:active {
+  cursor: grabbing;
+}
+
+.compact-toggle.active {
+  color: var(--accent-text);
+  background: var(--accent);
+  border-color: var(--button-border);
+}
+
+.compact-toggle.active:hover:not(:disabled) {
+  background: var(--accent-hover);
+}
+
 .card-stack {
   overflow-y: auto;
   display: grid;
@@ -105,6 +149,11 @@ body.is-card-dragging .column:hover {
   -webkit-user-select: none;
   transition: background var(--transition), border-color var(--transition),
     box-shadow var(--transition), opacity var(--transition);
+}
+
+.task-card.compact {
+  gap: var(--space-3);
+  padding: 10px 11px;
 }
 
 .task-card:hover {
@@ -146,7 +195,9 @@ body.is-card-dragging .column:hover {
 }
 
 body.is-card-dragging,
-body.is-card-dragging * {
+body.is-card-dragging *,
+body.is-list-dragging,
+body.is-list-dragging * {
   cursor: grabbing !important;
   user-select: none !important;
   -webkit-user-select: none !important;
@@ -218,6 +269,10 @@ body.is-card-dragging * {
   color: var(--text-muted);
   font-size: var(--text-sm);
   line-height: 1.25;
+}
+
+.task-card.compact footer {
+  gap: var(--space-2) var(--space-3);
 }
 
 .task-card footer > span:first-child {
