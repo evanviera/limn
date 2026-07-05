@@ -1,6 +1,6 @@
 ---
 name: release-limn
-description: Release automation for the Limn Tauri app. Use when Codex needs to cut a Limn production release, bump all versioned files, run release validation, commit the release prep, create the vX.Y.Z tag, push main and the tag, watch GitHub Actions, or verify the updater feed.
+description: Release automation for the Limn Tauri app. Use when Codex needs to cut a Limn production release, bump all versioned files, run release validation, commit the release prep, create the vX.Y.Z tag, and push main plus the tag. Do not watch GitHub Actions or verify the updater feed unless the user explicitly asks.
 ---
 
 # Release Limn
@@ -17,7 +17,7 @@ From the Limn repo root:
 .codex/skills/release-limn/scripts/cut-release.sh 0.1.3
 ```
 
-The script bumps all versioned files through `npm run release:version`, runs the release checks, commits `Prepare vX.Y.Z release`, creates tag `vX.Y.Z`, and pushes `main` plus the tag. The Release workflow is expected to create a non-draft GitHub release (`releaseDraft: false`) so the release goes directly to production after the workflow uploads assets.
+The script bumps all versioned files through `npm run release:version`, runs the release checks, commits `Prepare vX.Y.Z release`, creates tag `vX.Y.Z`, and pushes `main` plus the tag. The Release workflow is expected to create a non-draft GitHub release (`releaseDraft: false`) so the release goes directly to production after the workflow uploads assets, but the user will monitor that workflow manually by default.
 
 Use `--skip-e2e` only when the user explicitly accepts that risk. Use `--no-push` for a local rehearsal that still commits and tags.
 
@@ -39,12 +39,14 @@ Use `--skip-e2e` only when the user explicitly accepts that risk. Use `--no-push
    - Let it run all checks unless the user explicitly asks to skip a check.
    - If a check fails, do not tag or push. Fix the cause or report the blocker.
 
-4. After the tag push, watch the Release workflow.
-   - Use `gh run list --workflow Release --limit 10` to find the run for tag `vX.Y.Z`.
-   - Use `gh run watch <run-id> --exit-status`.
-   - Confirm both macOS and Windows jobs pass.
+4. After the tag push, stop instead of watching GitHub Actions.
+   - Do not run `gh run watch`.
+   - Do not repeatedly poll `gh run list`, `gh run view`, the release page, or the updater feed.
+   - If useful, provide the manual follow-up commands below and let the user run them.
 
-5. Verify the production GitHub release.
+5. Manual post-release checks for the user.
+   - Find the run for the tag: `gh run list --workflow Release --limit 10`.
+   - Confirm both macOS and Windows jobs pass in GitHub Actions.
    - Inspect the release: `gh release view vX.Y.Z --json isDraft,isPrerelease,assets,url,tagName,name`.
    - Confirm `isDraft` and `isPrerelease` are both `false`.
    - Verify the updater feed:
@@ -54,8 +56,9 @@ curl -sL https://github.com/evanviera/limn/releases/latest/download/latest.json
 ```
 
 6. Report the outcome.
-   - Include the version, commit hash, tag, workflow result, release URL, and updater feed verification.
-   - If GitHub CLI network access is blocked, stop and give the exact commands still needed.
+   - Include the version, commit hash, tag, and push result.
+   - State that GitHub Actions and updater-feed verification are left for the user's manual follow-up unless the user explicitly asked Codex to verify them.
+   - If GitHub CLI network access is blocked before the push completes, stop and give the exact commands still needed.
 
 ## Versioned Files
 
