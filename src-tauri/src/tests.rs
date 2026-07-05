@@ -25,26 +25,32 @@ fn workspace_init_and_load_creates_expected_layout() {
 }
 
 #[test]
-fn card_write_uses_conflict_copy_when_updated_at_changed() {
-    let root = test_workspace("conflict_copy");
+fn card_write_returns_disk_content_on_version_mismatch() {
+    let root = test_workspace("conflict_detect");
     let path = root.to_string_lossy().to_string();
     init_workspace(path.clone()).expect("workspace initializes");
 
     let original = card_markdown("card_test", "2026-06-27T00:00:00.000Z", "Original");
     write_card_file(path.clone(), "card_test.md".to_string(), original, None).expect("card writes");
 
+    // A well-behaved update: the expected version still matches disk, so it lands.
     let changed = card_markdown("card_test", "2026-06-27T01:00:00.000Z", "Changed elsewhere");
-    write_card_file(
+    let ok = write_card_file(
         path.clone(),
         "card_test.md".to_string(),
         changed,
         Some("2026-06-27T00:00:00.000Z".to_string()),
     )
     .expect("second card write succeeds");
+    assert!(!ok.conflict);
+    assert!(ok.current_content.is_none());
 
+    // A stale write: disk moved on to T1, so the write is refused and the current
+    // disk content is returned for the caller to three-way-merge. No copy is
+    // written here — the frontend decides whether a merge or a copy is needed.
     let conflict = card_markdown("card_test", "2026-06-27T02:00:00.000Z", "User edit");
     let result = write_card_file(
-        path,
+        path.clone(),
         "card_test.md".to_string(),
         conflict,
         Some("2026-06-27T00:00:00.000Z".to_string()),
@@ -52,54 +58,142 @@ fn card_write_uses_conflict_copy_when_updated_at_changed() {
     .expect("conflict card writes");
 
     assert!(result.conflict);
-    assert!(result
-        .relative_path
-        .starts_with("cards/card_test_conflict_"));
+    assert_eq!(result.relative_path, "cards/card_test.md");
+    let disk = result.current_content.expect("disk content returned");
+    assert!(disk.contains("Changed elsewhere"));
+    assert!(disk.contains("2026-06-27T01:00:00.000Z"));
 
     let (card_files, warnings) = read_text_dir(&root.join("cards"), "md").expect("cards load");
-    assert_eq!(card_files.len(), 2);
+    assert_eq!(card_files.len(), 1, "no conflict copy is written by the CAS itself");
     assert!(warnings.is_empty());
 
     let _ = fs::remove_dir_all(root);
 }
 
 #[test]
-fn repeated_conflicts_get_distinct_copy_names() {
-    let root = test_workspace("conflict_copy_names");
+fn missing_file_with_expected_version_reports_remote_delete() {
+    let root = test_workspace("remote_delete");
     let path = root.to_string_lossy().to_string();
     init_workspace(path.clone()).expect("workspace initializes");
 
-    let original = card_markdown("card_test", "2026-06-27T00:00:00.000Z", "Original");
-    write_card_file(path.clone(), "card_test.md".to_string(), original, None).expect("card writes");
+    let original = card_markdown("card_gone", "2026-06-27T00:00:00.000Z", "Original");
+    write_card_file(path.clone(), "card_gone.md".to_string(), original, None).expect("card writes");
+    fs::remove_file(root.join("cards/card_gone.md")).expect("card removed elsewhere");
 
-    let changed = card_markdown("card_test", "2026-06-27T01:00:00.000Z", "Changed elsewhere");
+    let result = write_card_file(
+        path,
+        "card_gone.md".to_string(),
+        card_markdown("card_gone", "2026-06-27T02:00:00.000Z", "Local edit"),
+        Some("2026-06-27T00:00:00.000Z".to_string()),
+    )
+    .expect("write reports conflict");
+
+    assert!(result.conflict);
+    assert!(
+        result.current_content.is_none(),
+        "a remote delete is a conflict with no disk content"
+    );
+
+    let _ = fs::remove_dir_all(root);
+}
+
+#[test]
+fn json_entity_write_detects_version_mismatch() {
+    let root = test_workspace("json_conflict");
+    let path = root.to_string_lossy().to_string();
+    init_workspace(path.clone()).expect("workspace initializes");
+
+    let board = |updated: &str| {
+        format!(
+            "{{\n  \"schemaVersion\": 1,\n  \"id\": \"board_main\",\n  \"name\": \"Launch\",\n  \"lists\": [],\n  \"createdAt\": \"2026-06-27T00:00:00.000Z\",\n  \"updatedAt\": \"{updated}\"\n}}\n"
+        )
+    };
+
+    write_board_file(path.clone(), "board_main.json".to_string(), board("2026-06-27T00:00:00.000Z"), None)
+        .expect("board writes");
+
+    let stale = write_board_file(
+        path.clone(),
+        "board_main.json".to_string(),
+        board("2026-06-27T02:00:00.000Z"),
+        Some("wrong-version".to_string()),
+    )
+    .expect("stale board write returns a conflict");
+    assert!(stale.conflict);
+    assert!(stale
+        .current_content
+        .expect("disk board returned")
+        .contains("2026-06-27T00:00:00.000Z"));
+
+    let ok = write_board_file(
+        path,
+        "board_main.json".to_string(),
+        board("2026-06-27T03:00:00.000Z"),
+        Some("2026-06-27T00:00:00.000Z".to_string()),
+    )
+    .expect("matching board write lands");
+    assert!(!ok.conflict);
+
+    let _ = fs::remove_dir_all(root);
+}
+
+#[test]
+fn conflict_copies_are_preserved_with_distinct_names() {
+    let root = test_workspace("conflict_copies");
+    let path = root.to_string_lossy().to_string();
+    init_workspace(path.clone()).expect("workspace initializes");
+
     write_card_file(
         path.clone(),
         "card_test.md".to_string(),
-        changed,
-        Some("2026-06-27T00:00:00.000Z".to_string()),
+        card_markdown("card_test", "2026-06-27T00:00:00.000Z", "Original"),
+        None,
     )
-    .expect("second card write succeeds");
+    .expect("card writes");
 
-    let first = write_card_file(
+    // Card conflict copies live beside the card so they surface as a recoverable
+    // duplicate on the board.
+    let first = write_conflict_copy(
         path.clone(),
+        "cards".to_string(),
         "card_test.md".to_string(),
         card_markdown("card_test", "2026-06-27T02:00:00.000Z", "User edit 1"),
-        Some("2026-06-27T00:00:00.000Z".to_string()),
     )
-    .expect("first conflict writes");
-    let second = write_card_file(
-        path,
+    .expect("first copy writes");
+    let second = write_conflict_copy(
+        path.clone(),
+        "cards".to_string(),
         "card_test.md".to_string(),
         card_markdown("card_test", "2026-06-27T03:00:00.000Z", "User edit 2"),
-        Some("2026-06-27T00:00:00.000Z".to_string()),
     )
-    .expect("second conflict writes");
+    .expect("second copy writes");
+    assert_ne!(first, second);
+    assert!(first.starts_with("cards/card_test_conflict_"));
 
-    assert_ne!(first.relative_path, second.relative_path);
-    let (card_files, warnings) = read_text_dir(&root.join("cards"), "md").expect("cards load");
-    assert_eq!(card_files.len(), 3);
-    assert!(warnings.is_empty());
+    let (card_files, _) = read_text_dir(&root.join("cards"), "md").expect("cards load");
+    assert_eq!(card_files.len(), 3, "original card plus two conflict copies");
+
+    // Non-card entities keep their copies in .workspace/conflicts so they never
+    // masquerade as real boards/settings.
+    let board_copy = write_conflict_copy(
+        path.clone(),
+        ".workspace/conflicts".to_string(),
+        "board_main.json".to_string(),
+        "{\"id\":\"board_main\"}".to_string(),
+    )
+    .expect("board copy writes");
+    assert!(board_copy.starts_with(".workspace/conflicts/board_main_conflict_"));
+    assert!(root.join(&board_copy).exists());
+
+    // Unknown destinations are refused.
+    let bad = write_conflict_copy(
+        path,
+        "boards".to_string(),
+        "board_main.json".to_string(),
+        "{}".to_string(),
+    )
+    .expect_err("unsupported conflict directory rejected");
+    assert!(bad.contains("Unsupported conflict directory"));
 
     let _ = fs::remove_dir_all(root);
 }

@@ -45,7 +45,7 @@ Due dates need searchable due windows, reminders, and possibly calendar export. 
 
 Because Limn is local-first and folder-synced, conflict handling is a core product concern. Users need to compare conflict copies, choose a version, and understand what changed.
 
-**Partially covered.** Writes detect stale `updatedAt` values and preserve the attempted save as a conflict copy instead of overwriting disk state, with an in-app warning that reloads the workspace. Still open: there is no comparison/review UI, choose-version flow, or broader version history.
+**Partially covered.** Writes now run through a reusable, typed **three-way merge** layer (`src/lib/merge.ts` + `src/lib/mergeWrite.ts`) on top of a generic optimistic compare-and-swap in Rust (`src-tauri/src/persist.rs`). Every entity kind — cards, boards, workspace settings, members — is reconciled by composing field policies (scalars, set-like arrays like labels/assignees, keyed/append arrays like comments/activity/lists, deletes/tombstones). When the disk copy changed under a save, structured edits merge automatically and silently (e.g. two people adding different labels, comments, or board columns); only free text that both sides rewrote (a card's title/body, a board's name) is a hard conflict, which preserves the local version as a conflict copy and warns. Settings and members always auto-merge. Remote deletes restore the local edit rather than lose it. Still open: there is still no comparison/review UI, choose-version flow, or broader version history — and text/body conflicts are preserved as copies rather than merged via a CRDT/diff3. The typed change-record foundation is intended to make future peer-to-peer or encrypted-relay sync a plug-in rather than a rewrite.
 
 ### [x] Attachments
 

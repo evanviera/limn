@@ -377,4 +377,55 @@ test.describe("smoke", () => {
     await expect(page.locator(".task-card.completed", { hasText: "Context card" })).toBeVisible();
     expect((await snapshot(page)).cards[0].content).toContain("completed: true");
   });
+
+  test("an external edit to an open card auto-merges on save instead of clobbering", async ({ page }) => {
+    await openApp(page);
+    await openWorkspace(page);
+
+    await page.getByTestId("create-board").click();
+    await page.getByTestId("text-dialog-input").fill("Merge Board");
+    await page.getByTestId("text-dialog-submit").click();
+
+    // Creating a card opens it in edit mode: this is the merge base the editor
+    // remembers. Let the create's watch-refresh settle first.
+    await page.getByTestId("add-card-todo").click();
+    await page.getByTestId("text-dialog-input").fill("Merge card");
+    await page.getByTestId("text-dialog-submit").click();
+    await expect(page.getByTestId("card-title-input")).toHaveValue("Merge card");
+    await page.waitForTimeout(300);
+
+    // Another device adds a label to the same card (a different field) and bumps
+    // its version while we still have it open.
+    const before = await snapshot(page);
+    const cardFile = before.cards[0];
+    await page.evaluate(({ fileName, content }) => {
+      const api = (window as { __LIMN_E2E__?: { externalEditCard(fileName: string, content: string): void } }).__LIMN_E2E__;
+      if (!api) {
+        throw new Error("Limn E2E harness not loaded");
+      }
+      const edited = content
+        .replace(/^updatedAt: .*$/m, 'updatedAt: "2026-12-01T00:00:00.000Z"')
+        .replace(/^labels: .*$/m, 'labels: ["external"]');
+      api.externalEditCard(fileName, edited);
+    }, { fileName: cardFile.file_name, content: cardFile.content });
+
+    // The disk-change notice confirms the refresh landed before we edit + save.
+    await expect(page.locator(".banner")).toContainText("changed on disk");
+
+    // Make our own change (the notes) and save. The stale-base save should merge
+    // the two edits rather than overwrite the external label.
+    const notes = page.getByTestId("card-notes-input");
+    if (!(await notes.isVisible())) {
+      await page.getByTestId("edit-card").click();
+    }
+    await notes.fill("Local edit");
+    await page.getByTestId("save-card").click();
+
+    // Both changes survive, in a single card — no scary conflict duplicate.
+    await expect(page.locator(".banner")).toContainText("Merged edits");
+    await expect.poll(async () => (await snapshot(page)).cards.length).toBe(1);
+    const merged = (await snapshot(page)).cards[0].content;
+    expect(merged).toContain('"external"');
+    expect(merged).toContain("Local edit");
+  });
 });

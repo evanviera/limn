@@ -42,6 +42,8 @@ focused" section before adding code to an existing large file.**
 - `useModalKeys.ts` — modal focus-trap / Escape hook and the modal stack.
 - `useAttachmentObjectUrl.ts` — loads an image attachment's bytes into an object URL (with cleanup), shared by the thumbnail and the lightbox.
 - `attachments.ts` — image-extension detection helpers (`isImageAttachment`, `latestImageAttachment`, `attachmentFileExtension`).
+- `merge.ts` — the reusable, typed **three-way merge engine** (base/ours/theirs). Field-level policies (`threeWayScalar`, `threeWayStringSet`, `threeWayListById`) compose into per-entity mergers (`mergeCard`, `mergeBoard`, `mergeSettings`, `mergeMembers`). Structured data (labels, assignees, comments, activity, subtasks, board lists, groups, saved views, members) merges automatically; only free text both sides rewrote (a card's title/body, a board's name) is a hard conflict. Pure, no IO.
+- `mergeWrite.ts` — the generic, IO-injected conflict-write orchestrator (`resolveConflictWrite`): optimistic compare-and-swap → three-way merge → bounded retry, falling back to a preserved conflict copy for hard conflicts and restoring on a remote delete. Returns a `SaveOutcome` (`written` / `merged` / `conflict` / `restored`).
 
 ## Styles (`src/styles.css` → `src/styles/`)
 
@@ -63,6 +65,11 @@ order and add new partials to the barrel at the right position.
   the workspace/filesystem helpers + data structs. Attachments are copied into
   `attachments/<cardId>/` in the workspace and referenced from each card's
   frontmatter; the folder is removed when its card is deleted.
+- `persist.rs` — the format-agnostic conflict-aware write primitives shared by
+  every workspace write: `conditional_write` (optimistic compare-and-swap keyed
+  on each entity's `updatedAt`, returning disk content on a version mismatch so
+  the frontend can three-way-merge) and `write_conflict_copy`. Card conflict
+  copies land beside the card in `cards/`; other entities in `.workspace/conflicts/`.
 - `menu.rs` — the native application menu (`build_app_menu` + `item`).
 - `tests.rs` — `#[cfg(test)]` integration tests (workspace round-trips, Slack posts).
 

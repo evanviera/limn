@@ -74,6 +74,9 @@ export interface Member {
 export interface MembersFile {
   schemaVersion: number;
   members: Member[];
+  // Optimistic-concurrency token for conflict-aware writes. Older members.json
+  // files predate this field; the loader defaults it so the first save stamps it.
+  updatedAt: string;
 }
 
 export interface BoardList {
@@ -173,4 +176,7 @@ export interface WorkspaceFiles {
 export interface WriteResult {
   relative_path: string;
   conflict: boolean;
+  // On conflict: the current on-disk content to three-way-merge against, or null
+  // when the file was deleted remotely. Absent/null on a clean write.
+  current_content?: string | null;
 }

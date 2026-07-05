@@ -47,7 +47,7 @@ const settings: WorkspaceSettings = {
   updatedAt: now
 };
 
-const members: MembersFile = { schemaVersion: 1, members: [] };
+const members: MembersFile = { schemaVersion: 1, members: [], updatedAt: now };
 const boards = new Map<string, string>();
 const cards = new Map<string, string>();
 // Attachment files keyed by `${cardId}/${storedName}` → byte size. There is no
@@ -162,9 +162,32 @@ function contentArg(args: Record<string, unknown> | undefined): string {
   return content;
 }
 
-function updatedAt(content: string): string | null {
-  const match = content.match(/^updatedAt:\s*(.+)$/m);
-  return match?.[1]?.trim().replace(/^"|"$/g, "") ?? null;
+// Mirrors the Rust `file_version` helper: the optimistic-concurrency token is the
+// entity's `updatedAt`, read from Markdown frontmatter or top-level JSON.
+function versionOf(content: string): string | null {
+  if (content.trimStart().startsWith("---")) {
+    const match = content.match(/^updatedAt:\s*(.+)$/m);
+    return match?.[1]?.trim().replace(/^"|"$/g, "") ?? null;
+  }
+  try {
+    const value = JSON.parse(content) as { updatedAt?: unknown };
+    return typeof value.updatedAt === "string" ? value.updatedAt : null;
+  } catch {
+    return null;
+  }
+}
+
+// The harness stand-in for the Rust compare-and-swap: refuse the write and hand
+// back the current content when the expected version no longer matches disk.
+function casResult(relativePath: string, current: string | undefined, expected: string | undefined): WriteResult | null {
+  if (expected !== undefined && current !== undefined && versionOf(current) !== expected) {
+    return { relative_path: relativePath, conflict: true, current_content: current };
+  }
+  return null;
+}
+
+function expectedVersionArg(args: Record<string, unknown> | undefined): string | undefined {
+  return typeof args?.expectedVersion === "string" ? args.expectedVersion : undefined;
 }
 
 function attachmentPreview(storedName: string): ArrayBuffer {
@@ -193,18 +216,40 @@ window.__LIMN_TEST_IPC__ = {
         loadWorkspaceCount += 1;
         return loadFiles() as T;
       case "write_workspace_settings": {
-        Object.assign(settings, JSON.parse(contentArg(args)) as WorkspaceSettings);
+        const content = contentArg(args);
+        const conflict = casResult(".workspace/settings.json", `${JSON.stringify(settings, null, 2)}\n`, expectedVersionArg(args));
+        if (conflict) {
+          return conflict as T;
+        }
+        for (const key of Object.keys(settings)) {
+          delete (settings as unknown as Record<string, unknown>)[key];
+        }
+        Object.assign(settings, JSON.parse(content) as WorkspaceSettings);
         emit("workspace-changed");
-        return undefined as T;
+        return { relative_path: ".workspace/settings.json", conflict: false } satisfies WriteResult as T;
       }
-      case "write_members":
-        members.members = (JSON.parse(contentArg(args)) as MembersFile).members;
+      case "write_members": {
+        const content = contentArg(args);
+        const conflict = casResult(".workspace/members.json", `${JSON.stringify(members, null, 2)}\n`, expectedVersionArg(args));
+        if (conflict) {
+          return conflict as T;
+        }
+        const parsed = JSON.parse(content) as MembersFile;
+        members.members = parsed.members;
+        members.updatedAt = parsed.updatedAt;
         emit("workspace-changed");
-        return undefined as T;
-      case "write_board_file":
-        boards.set(fileNameArg(args), contentArg(args));
+        return { relative_path: ".workspace/members.json", conflict: false } satisfies WriteResult as T;
+      }
+      case "write_board_file": {
+        const fileName = fileNameArg(args);
+        const conflict = casResult(`boards/${fileName}`, boards.get(fileName), expectedVersionArg(args));
+        if (conflict) {
+          return conflict as T;
+        }
+        boards.set(fileName, contentArg(args));
         emit("workspace-changed");
-        return undefined as T;
+        return { relative_path: `boards/${fileName}`, conflict: false } satisfies WriteResult as T;
+      }
       case "delete_board_file":
         boards.delete(fileNameArg(args));
         emit("workspace-changed");
@@ -214,15 +259,35 @@ window.__LIMN_TEST_IPC__ = {
         const content = contentArg(args);
         const expected = typeof args?.expectedUpdatedAt === "string" ? args.expectedUpdatedAt : undefined;
         const current = cards.get(fileName);
-        if (expected && current && updatedAt(current) !== expected) {
-          const conflictName = fileName.replace(/\.md$/, `_conflict_${Date.now()}.md`);
-          cards.set(conflictName, content);
-          emit("workspace-changed");
-          return { relative_path: `cards/${conflictName}`, conflict: true } satisfies WriteResult as T;
+        // Match the Rust CAS: on a version mismatch, refuse and return disk
+        // content (or null when the card was deleted remotely) for the caller to
+        // three-way-merge. No conflict copy is written here.
+        if (expected !== undefined) {
+          if (current === undefined) {
+            return { relative_path: `cards/${fileName}`, conflict: true, current_content: null } satisfies WriteResult as T;
+          }
+          if (versionOf(current) !== expected) {
+            return { relative_path: `cards/${fileName}`, conflict: true, current_content: current } satisfies WriteResult as T;
+          }
         }
         cards.set(fileName, content);
         emit("workspace-changed");
         return { relative_path: `cards/${fileName}`, conflict: false } satisfies WriteResult as T;
+      }
+      case "write_conflict_copy": {
+        const relativeDir = String(args?.relativeDir ?? "");
+        const fileName = fileNameArg(args);
+        const content = contentArg(args);
+        const stem = fileName.replace(/\.[^.]+$/, "");
+        const ext = fileName.split(".").pop() ?? "md";
+        const copyName = `${stem}_conflict_${Date.now()}.${ext}`;
+        // Card copies surface as a recoverable duplicate; other entities would
+        // land in .workspace/conflicts (not modelled by the harness snapshot).
+        if (relativeDir === "cards") {
+          cards.set(copyName, content);
+          emit("workspace-changed");
+        }
+        return `${relativeDir}/${copyName}` as T;
       }
       case "delete_card_file": {
         const fileName = fileNameArg(args);

@@ -1,6 +1,10 @@
 import { invoke } from "./ipc.js";
 import { EMPTY_FILTER } from "./lib/filter.js";
+import { mergeBoard, mergeCard, mergeMembers, mergeSettings, type EntityMergeResult } from "./lib/merge.js";
+import { resolveConflictWrite, type ConflictWriteAdapter, type SaveOutcome } from "./lib/mergeWrite.js";
 import type { Attachment, Board, BoardGroup, Card, CardFilter, Comment, Member, MembersFile, SavedView, SlackNotificationSettings, Subtask, SubtaskListItem, WorkspaceFiles, WorkspaceSettings, WriteResult } from "./types";
+
+export type { SaveOutcome } from "./lib/mergeWrite.js";
 
 const SCHEMA_VERSION = 1;
 
@@ -40,25 +44,104 @@ export async function watchWorkspace(path: string): Promise<void> {
   await invoke("watch_workspace", { path });
 }
 
-export async function saveSettings(path: string, settings: WorkspaceSettings): Promise<void> {
-  await invoke("write_workspace_settings", {
+// A pretty-printed JSON workspace file (boards, settings, members).
+function serializeJson(value: unknown): string {
+  return `${JSON.stringify(value, null, 2)}\n`;
+}
+
+// Every entity save runs through the same conflict-aware pipeline: an optimistic
+// compare-and-swap write, and — only when the disk copy changed under us — a
+// typed three-way merge (base = what we last loaded, ours = the local edit,
+// theirs = disk). Clean merges land silently; a hard conflict preserves our
+// version as a copy. See src/lib/merge.ts and src/lib/mergeWrite.ts.
+async function saveEntity<T>(opts: {
+  path: string;
+  ours: T;
+  base: T | undefined;
+  serialize: (entity: T) => string;
+  parse: (raw: string) => T | null;
+  merge: (base: T, ours: T, theirs: T) => EntityMergeResult<T>;
+  versionOf: (entity: T) => string;
+  write: (content: string, expectedVersion: string | undefined) => Promise<WriteResult>;
+  conflictDir: "cards" | ".workspace/conflicts";
+  conflictName: string;
+}): Promise<SaveOutcome> {
+  const { path, ours, base } = opts;
+  const ourContent = opts.serialize(ours);
+  const expected = base ? opts.versionOf(base) || undefined : undefined;
+
+  const adapter: ConflictWriteAdapter = {
+    async write(content, expectedVersion) {
+      const result = await opts.write(content, expectedVersion);
+      return { conflict: result.conflict, currentContent: result.current_content ?? null };
+    },
+    merge(theirsRaw) {
+      const theirs = opts.parse(theirsRaw);
+      if (!theirs || !base) {
+        // No common base, or disk is unparseable: keep the local version intact
+        // via a conflict copy rather than risk discarding it in a bad merge.
+        return { content: ourContent, conflict: true, theirsVersion: theirs ? opts.versionOf(theirs) || undefined : undefined };
+      }
+      const merged = opts.merge(base, ours, theirs);
+      return { content: opts.serialize(merged.value), conflict: !merged.clean, theirsVersion: opts.versionOf(theirs) || undefined };
+    },
+    ours() {
+      return ourContent;
+    },
+    async writeConflictCopy(content) {
+      return writeConflictCopy(path, opts.conflictDir, opts.conflictName, content);
+    }
+  };
+
+  return resolveConflictWrite(ourContent, expected, adapter);
+}
+
+async function writeConflictCopy(path: string, relativeDir: string, fileName: string, content: string): Promise<string> {
+  return invoke<string>("write_conflict_copy", { path, relativeDir, fileName, content });
+}
+
+export async function saveSettings(path: string, settings: WorkspaceSettings, base?: WorkspaceSettings): Promise<SaveOutcome> {
+  return saveEntity({
     path,
-    content: `${JSON.stringify(settings, null, 2)}\n`
+    ours: settings,
+    base,
+    serialize: serializeJson,
+    parse: parseSettingsJson,
+    merge: mergeSettings,
+    versionOf: (value) => value.updatedAt,
+    write: (content, expectedVersion) => invoke<WriteResult>("write_workspace_settings", { path, content, expectedVersion }),
+    conflictDir: ".workspace/conflicts",
+    conflictName: "settings.json"
   });
 }
 
-export async function saveMembers(path: string, membersFile: MembersFile): Promise<void> {
-  await invoke("write_members", {
+export async function saveMembers(path: string, membersFile: MembersFile, base?: MembersFile): Promise<SaveOutcome> {
+  return saveEntity({
     path,
-    content: `${JSON.stringify(membersFile, null, 2)}\n`
+    ours: membersFile,
+    base,
+    serialize: serializeJson,
+    parse: parseMembersJson,
+    merge: mergeMembers,
+    versionOf: (value) => value.updatedAt,
+    write: (content, expectedVersion) => invoke<WriteResult>("write_members", { path, content, expectedVersion }),
+    conflictDir: ".workspace/conflicts",
+    conflictName: "members.json"
   });
 }
 
-export async function saveBoard(path: string, board: Board): Promise<void> {
-  await invoke("write_board_file", {
+export async function saveBoard(path: string, board: Board, base?: Board): Promise<SaveOutcome> {
+  return saveEntity({
     path,
-    fileName: boardFileName(board.id),
-    content: `${JSON.stringify(board, null, 2)}\n`
+    ours: board,
+    base,
+    serialize: serializeJson,
+    parse: parseBoardJson,
+    merge: mergeBoard,
+    versionOf: (value) => value.updatedAt,
+    write: (content, expectedVersion) => invoke<WriteResult>("write_board_file", { path, fileName: boardFileName(board.id), content, expectedVersion }),
+    conflictDir: ".workspace/conflicts",
+    conflictName: boardFileName(board.id)
   });
 }
 
@@ -69,13 +152,42 @@ export async function deleteBoard(path: string, boardId: string): Promise<void> 
   });
 }
 
-export async function saveCard(path: string, card: Card, expectedUpdatedAt?: string): Promise<WriteResult> {
-  return invoke<WriteResult>("write_card_file", {
+export async function saveCard(path: string, card: Card, base?: Card): Promise<SaveOutcome> {
+  return saveEntity({
     path,
-    fileName: card.fileName,
-    content: serializeCard(card),
-    expectedUpdatedAt
+    ours: card,
+    base,
+    serialize: serializeCard,
+    parse: (raw) => parseCard(raw, card.fileName),
+    merge: mergeCard,
+    versionOf: (value) => value.updatedAt,
+    write: (content, expectedVersion) => invoke<WriteResult>("write_card_file", { path, fileName: card.fileName, content, expectedUpdatedAt: expectedVersion }),
+    conflictDir: "cards",
+    conflictName: card.fileName
   });
+}
+
+function parseBoardJson(raw: string): Board | null {
+  const result = safeJson<Board | null>(raw, null);
+  return result.ok && result.value?.id ? normalizeBoard(result.value) : null;
+}
+
+function parseSettingsJson(raw: string): WorkspaceSettings | null {
+  const result = safeJson<Partial<WorkspaceSettings>>(raw, {});
+  return result.ok ? normalizeWorkspaceSettings(result.value) : null;
+}
+
+function parseMembersJson(raw: string): MembersFile | null {
+  const result = safeJson<Partial<MembersFile>>(raw, {});
+  return result.ok ? normalizeMembersFile(result.value) : null;
+}
+
+function normalizeMembersFile(value: Partial<MembersFile>): MembersFile {
+  return {
+    schemaVersion: typeof value.schemaVersion === "number" ? value.schemaVersion : SCHEMA_VERSION,
+    members: normalizeMembers(value.members),
+    updatedAt: typeof value.updatedAt === "string" ? value.updatedAt : ""
+  };
 }
 
 export async function deleteCard(path: string, card: Card): Promise<void> {
@@ -288,7 +400,7 @@ export function addActivity(card: Card, type: Card["activity"][number]["type"], 
 export function parseWorkspace(files: WorkspaceFiles): WorkspaceData {
   const diagnostics = [...(files.warnings ?? [])];
   const settingsResult = safeJson<Partial<WorkspaceSettings> & { slackNotifications?: unknown }>(files.settings, createDefaultSettings("Limn Workspace"));
-  const membersResult = safeJson<MembersFile>(files.members, { schemaVersion: SCHEMA_VERSION, members: [] });
+  const membersResult = safeJson<Partial<MembersFile>>(files.members, { schemaVersion: SCHEMA_VERSION, members: [], updatedAt: "" });
   const settings = normalizeWorkspaceSettings(settingsResult.value);
   const membersFile = membersResult.value;
   const boards: Board[] = [];
@@ -322,10 +434,7 @@ export function parseWorkspace(files: WorkspaceFiles): WorkspaceData {
 
   return {
     settings,
-    membersFile: {
-      schemaVersion: membersFile.schemaVersion ?? SCHEMA_VERSION,
-      members: normalizeMembers(membersFile.members)
-    },
+    membersFile: normalizeMembersFile(membersFile),
     boards,
     cards,
     diagnostics

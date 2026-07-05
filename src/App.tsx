@@ -39,9 +39,10 @@ import {
   saveMembers,
   saveSettings,
   timestamp,
-  watchWorkspace
+  watchWorkspace,
+  type SaveOutcome
 } from "./storage";
-import { Attachment, Board, BoardGroup, BoardList, Card, CardFilter, Member, SavedView, Subtask, SubtaskListItem, View, WorkspaceSettings, WriteResult } from "./types";
+import { Attachment, Board, BoardGroup, BoardList, Card, CardFilter, Member, MembersFile, SavedView, Subtask, SubtaskListItem, View, WorkspaceSettings } from "./types";
 import {
   canUseUpdater,
   checkForUpdate,
@@ -142,8 +143,22 @@ export default function App() {
   selectedCardIdRef.current = selectedCardId;
   const cardsRef = useRef(cards);
   cardsRef.current = cards;
+  const boardsRef = useRef(boards);
+  boardsRef.current = boards;
   const membersRef = useRef(members);
   membersRef.current = members;
+  // The members.json version last seen on disk. Members are held in state as a
+  // bare array, so this ref carries the file-level `updatedAt` we compare-and-swap
+  // against on the next members write.
+  const membersVersionRef = useRef<string>("");
+  // The card version the open editor started from — the true common ancestor for
+  // a three-way merge. It is captured at open time and only advanced by our own
+  // saves, never by a background disk refresh, so an external edit landing while
+  // the editor is open still merges from the right base instead of clobbering it.
+  const editorBaseRef = useRef<Card | null>(null);
+  // The id of an open card we just auto-merged, so the reload that follows applies
+  // the reconciled copy without a misleading "changed on disk" warning.
+  const reconciledOpenCardRef = useRef<string | null>(null);
   // Points at the latest "attach these dropped files to a card" closure so the
   // window drag-drop listener (subscribed once) never reads stale state.
   const attachToCardRef = useRef<(cardId: string, paths: string[]) => void>(() => undefined);
@@ -299,6 +314,15 @@ export default function App() {
     };
   }, [workspacePath]);
 
+  // Snapshot the merge base whenever a different card opens (or the editor
+  // closes). Keyed on the id alone so later disk changes to the same card never
+  // move the ancestor out from under an in-progress edit.
+  useEffect(() => {
+    editorBaseRef.current = selectedCardId
+      ? cardsRef.current.find((card) => card.id === selectedCardId) ?? null
+      : null;
+  }, [selectedCardId]);
+
   useEffect(() => {
     let disposed = false;
     let unlisten: (() => void) | undefined;
@@ -333,6 +357,7 @@ export default function App() {
       settingsRef.current = data.settings;
       setSettings(data.settings);
       setMembers(data.membersFile.members);
+      membersVersionRef.current = data.membersFile.updatedAt;
       setActiveMemberId(readActiveMemberId(selectedPath));
       setBoards(data.boards);
       setCards(data.cards);
@@ -375,6 +400,10 @@ export default function App() {
       if (openId && before && expectedSelfWrite && after?.updatedAt === expectedSelfWrite) {
         cardsToApply = data.cards.map((card) => (card.id === openId ? before : card));
         delete pendingCardWriteRef.current[openId];
+      } else if (openId && reconciledOpenCardRef.current === openId) {
+        // We just auto-merged this open card; apply the reconciled disk copy
+        // silently rather than telling the user it "changed on disk".
+        reconciledOpenCardRef.current = null;
       } else if (before && after && before.updatedAt !== after.updatedAt) {
         openCardChangedOnDisk = true;
       }
@@ -403,6 +432,7 @@ export default function App() {
     settingsRef.current = settingsToApply;
     setSettings(settingsToApply);
     setMembers(membersToApply);
+    membersVersionRef.current = data.membersFile.updatedAt;
     setBoards(data.boards);
     setCards(cardsToApply);
     setActiveBoardId((current) => selectActiveBoardId(current, data.boards));
@@ -515,43 +545,84 @@ export default function App() {
     }
   }
 
+  // Turn a non-trivial save outcome into user feedback. A plain "written" needs
+  // nothing; a "merged"/"restored"/"conflict" means disk changed under us, so we
+  // reload to show the reconciled state (and, for a hard conflict, point at the
+  // preserved copy). See src/lib/merge.ts for what merges automatically.
+  async function handleSaveOutcome(outcome: SaveOutcome, label: string) {
+    if (outcome.status === "written") {
+      return;
+    }
+    if (outcome.status === "merged") {
+      setNotice(`Merged edits from another device into the ${label}.`);
+      setNoticeKind("info");
+    } else if (outcome.status === "restored") {
+      setNotice(`The ${label} was deleted on another device; your version was restored.`);
+      setNoticeKind("warning");
+    } else {
+      setNotice(`Couldn't fully merge the ${label}; your version was saved to ${outcome.copyPath}. Reloading disk state.`);
+      setNoticeKind("warning");
+    }
+    await refreshWorkspace(false);
+  }
+
   async function persistBoard(nextBoard: Board) {
     if (!workspacePath) {
       return;
     }
+    const base = boardsRef.current.find((board) => board.id === nextBoard.id);
     setBoards((current) => upsertById(current, nextBoard));
-    await saveBoard(workspacePath, nextBoard);
+    const outcome = await saveBoard(workspacePath, nextBoard, base);
+    await handleSaveOutcome(outcome, "board");
   }
 
   async function persistWorkspaceSettings(nextSettings: WorkspaceSettings, savedNotice: string) {
     if (!workspacePath) {
       return;
     }
+    const base = settingsRef.current ?? undefined;
     const updated = { ...nextSettings, updatedAt: timestamp() };
     settingsRef.current = updated;
     pendingSettingsWriteRef.current = updated;
     setSettings(updated);
-    await saveSettings(workspacePath, updated);
-    if (savedNotice) {
+    const outcome = await saveSettings(workspacePath, updated, base);
+    if (outcome.status === "written" && savedNotice) {
       setNotice(savedNotice);
       setNoticeKind("info");
+    } else {
+      await handleSaveOutcome(outcome, "workspace settings");
     }
   }
 
-  async function persistCard(nextCard: Card, previous?: Card): Promise<WriteResult | null> {
+  async function persistMembers(nextMembers: Member[], baseMembers: Member[]) {
+    if (!workspacePath) {
+      return;
+    }
+    const ours: MembersFile = { schemaVersion: 1, members: nextMembers, updatedAt: timestamp() };
+    const base: MembersFile = { schemaVersion: 1, members: baseMembers, updatedAt: membersVersionRef.current };
+    const outcome = await saveMembers(workspacePath, ours, base);
+    if (outcome.status === "written") {
+      membersVersionRef.current = ours.updatedAt;
+    }
+    await handleSaveOutcome(outcome, "members list");
+  }
+
+  async function persistCard(nextCard: Card, previous?: Card): Promise<SaveOutcome | null> {
     if (!workspacePath) {
       return null;
     }
-    const expectedUpdatedAt = previous?.updatedAt;
     pendingCardWriteRef.current[nextCard.id] = nextCard.updatedAt;
-    const result = await saveCard(workspacePath, nextCard, expectedUpdatedAt);
+    const outcome = await saveCard(workspacePath, nextCard, previous);
     setCards((current) => upsertById(current, nextCard));
-    if (result.conflict) {
-      setNotice(`Conflict copy written to ${result.relative_path}. Reloading disk state.`);
-      setNoticeKind("warning");
-      await refreshWorkspace(false);
+    if (outcome.status !== "written") {
+      // A merge/restore/conflict changed disk; drop the self-write marker so the
+      // reload actually applies the reconciled card instead of our local draft,
+      // and mark it reconciled so that reload doesn't warn "changed on disk".
+      delete pendingCardWriteRef.current[nextCard.id];
+      reconciledOpenCardRef.current = nextCard.id;
+      await handleSaveOutcome(outcome, "card");
     }
-    return result;
+    return outcome;
   }
 
   async function addBoard(groupId?: string) {
@@ -677,10 +748,9 @@ export default function App() {
         };
         const now = timestamp();
         const nextBoards = groupedBoards.map((board) => ({ ...board, groupId: undefined, updatedAt: now }));
-        setBoards((current) => current.map((board) => nextBoards.find((item) => item.id === board.id) ?? board));
         await Promise.all([
           persistWorkspaceSettings(nextSettings, "Category deleted."),
-          ...nextBoards.map((board) => saveBoard(workspacePath, board))
+          ...nextBoards.map((board) => persistBoard(board))
         ]);
       }
     });
@@ -849,7 +919,7 @@ export default function App() {
         : addActivity({ ...card, listId, order: placement.order }, "moved", `Moved from ${previousList?.name ?? "Unknown"} to ${list?.name ?? "Unknown"}`);
       const result = await persistCard(moved, card);
 
-      if (result && !result.conflict && !sameList && list?.name.trim().toLowerCase() === "done") {
+      if (result && result.status !== "conflict" && !sameList && list?.name.trim().toLowerCase() === "done") {
         await sendSlack("cardMovedToDone", `➡️ Card moved to Done: ${moved.title}\nAssigned to: ${assigneeSlackTags(moved)}\nBoard: ${activeBoard.name}`);
       }
     } catch (reason) {
@@ -1130,14 +1200,18 @@ export default function App() {
   }
 
   async function saveCardFromEditor(nextCard: Card) {
-    const previous = cards.find((card) => card.id === nextCard.id);
+    const live = cards.find((card) => card.id === nextCard.id);
+    // The merge ancestor is the version the editor opened from, not the live
+    // (possibly disk-refreshed) copy — that is what makes an external edit landing
+    // mid-session merge cleanly rather than get overwritten.
+    const previous = editorBaseRef.current ?? live;
     // Attachments and comments are persisted immediately and aren't tracked in
     // the editor draft, so keep the live copy's lists instead of the draft's
     // stale ones.
     const normalized = {
       ...nextCard,
-      attachments: previous?.attachments ?? nextCard.attachments,
-      comments: previous?.comments ?? nextCard.comments,
+      attachments: live?.attachments ?? nextCard.attachments,
+      comments: live?.comments ?? nextCard.comments,
       // Discard blank checklist steps (e.g. from clicking "Add step" without
       // typing) so they don't clutter the card or skew its "N of M complete"
       // count. A step is kept if it carries a title, a link, or list content.
@@ -1181,7 +1255,12 @@ export default function App() {
     }
 
     const result = await persistCard(withActivity, previous);
-    if (result && !result.conflict) {
+    if (result && result.status === "written") {
+      // Clean save: our version is now the ancestor for any follow-up edit in the
+      // same session. (After a merge/conflict the reload supplies a fresh base.)
+      editorBaseRef.current = withActivity;
+    }
+    if (result && result.status !== "conflict") {
       for (const slackMessage of slackMessages) {
         await sendSlack(slackMessage.key, slackMessage.message);
       }
@@ -1192,10 +1271,11 @@ export default function App() {
     if (!workspacePath) {
       return;
     }
+    const baseMembers = members;
     const nextMembers = upsertById(members, member);
     pendingMembersWriteRef.current = nextMembers;
     setMembers(nextMembers);
-    await saveMembers(workspacePath, { schemaVersion: 1, members: nextMembers });
+    await persistMembers(nextMembers, baseMembers);
   }
 
   async function removeMember(memberId: string) {
@@ -1216,6 +1296,7 @@ export default function App() {
       confirmLabel: "Remove member",
       destructive: true,
       onConfirm: async () => {
+        const baseMembers = members;
         const nextMembers = members.filter((item) => item.id !== memberId);
         pendingMembersWriteRef.current = nextMembers;
         setMembers(nextMembers);
@@ -1223,7 +1304,7 @@ export default function App() {
         if (activeMemberId === memberId) {
           selectActiveMember("");
         }
-        await saveMembers(workspacePath, { schemaVersion: 1, members: nextMembers });
+        await persistMembers(nextMembers, baseMembers);
         // Clear stale assignee references so the id can't silently resurrect the
         // assignment if a same-named member is later re-added.
         for (const card of assignedCards) {

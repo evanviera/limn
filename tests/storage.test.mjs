@@ -14,6 +14,16 @@ import {
   filterIsActive,
   matchesDue
 } from "../.tmp/storage-test/src/lib/filter.js";
+import {
+  mergeBoard,
+  mergeCard,
+  mergeMembers,
+  mergeSettings,
+  threeWayListById,
+  threeWayScalar,
+  threeWayStringSet
+} from "../.tmp/storage-test/src/lib/merge.js";
+import { resolveConflictWrite } from "../.tmp/storage-test/src/lib/mergeWrite.js";
 
 const baseCard = {
   id: "card_one",
@@ -384,6 +394,206 @@ assert.deepEqual(savedViewWorkspace.settings.savedViews[1].filter, {
   archived: "active",
   sort: "updated"
 });
+
+// --- Conflict-aware merge engine ---
+
+// Field primitives: three-way scalar resolution.
+assert.deepEqual(threeWayScalar("a", "a", "a"), { value: "a", conflict: false });
+assert.deepEqual(threeWayScalar("a", "b", "a"), { value: "b", conflict: false }); // only ours changed
+assert.deepEqual(threeWayScalar("a", "a", "c"), { value: "c", conflict: false }); // only theirs changed
+assert.deepEqual(threeWayScalar("a", "b", "b"), { value: "b", conflict: false }); // both to same value
+assert.deepEqual(threeWayScalar("a", "b", "c"), { value: "c", conflict: true }); // divergent -> keep theirs, flag
+
+// Set merge: adds from either side union; a removal by either side wins.
+assert.deepEqual(threeWayStringSet(["a", "b"], ["a", "b", "c"], ["a", "b", "d"]), ["a", "b", "c", "d"]);
+assert.deepEqual(threeWayStringSet(["a", "b"], ["a"], ["a", "b"]), ["a"]); // ours removed b
+assert.deepEqual(threeWayStringSet(["a", "b"], ["b", "a"], ["a", "b"]), ["b", "a"]); // our order preserved
+assert.deepEqual(threeWayStringSet([], ["x"], ["x"]), ["x"]); // concurrent identical add
+
+// Keyed-list merge: union of adds, honour deletes, keep an edit over a delete.
+const listMerge = threeWayListById(
+  [{ id: "1", v: "base" }, { id: "2", v: "base" }],
+  [{ id: "1", v: "ours" }, { id: "2", v: "base" }, { id: "3", v: "new-ours" }],
+  [{ id: "2", v: "base" }],
+  { id: (item) => item.id, mergeItem: (b, o, t) => (JSON.stringify(o) === JSON.stringify(b) ? t : o) }
+);
+// id 1: ours edited it, theirs deleted -> our edit survives. id 2: unchanged, present. id 3: our add.
+assert.deepEqual(listMerge, [{ id: "1", v: "ours" }, { id: "2", v: "base" }, { id: "3", v: "new-ours" }]);
+// A delete of an untouched item is honoured.
+assert.deepEqual(
+  threeWayListById([{ id: "1", v: "b" }], [{ id: "1", v: "b" }], [], { id: (i) => i.id, mergeItem: (b, o, t) => t }),
+  []
+);
+
+const mkCard = (overrides = {}) => ({
+  id: "card_m",
+  title: "Title",
+  boardId: "b1",
+  listId: "todo",
+  assignees: [],
+  labels: [],
+  due: "",
+  order: 0,
+  completed: false,
+  archived: false,
+  createdAt: "2026-07-01T00:00:00.000Z",
+  updatedAt: "2026-07-01T00:00:00.000Z",
+  activity: [],
+  subtasks: [],
+  attachments: [],
+  comments: [],
+  body: "",
+  fileName: "card_m.md",
+  ...overrides
+});
+
+// Card merge: structured data (labels, assignees, comments, activity) unions
+// cleanly with no user involvement.
+const cardBase = mkCard({ labels: ["bug"], assignees: ["ada"], comments: [{ id: "c1", authorId: "ada", authorName: "Ada", body: "hi", createdAt: "2026-07-01T00:00:00.000Z" }] });
+const cardOurs = mkCard({
+  labels: ["bug", "ui"],
+  assignees: ["ada", "grace"],
+  updatedAt: "2026-07-01T03:00:00.000Z",
+  comments: [
+    { id: "c1", authorId: "ada", authorName: "Ada", body: "hi", createdAt: "2026-07-01T00:00:00.000Z" },
+    { id: "c2", authorId: "ada", authorName: "Ada", body: "our comment", createdAt: "2026-07-01T02:00:00.000Z" }
+  ]
+});
+const cardTheirs = mkCard({
+  labels: ["bug", "backend"],
+  assignees: ["ada"],
+  updatedAt: "2026-07-01T02:30:00.000Z",
+  comments: [
+    { id: "c1", authorId: "ada", authorName: "Ada", body: "hi", createdAt: "2026-07-01T00:00:00.000Z" },
+    { id: "c3", authorId: "grace", authorName: "Grace", body: "their comment", createdAt: "2026-07-01T01:00:00.000Z" }
+  ]
+});
+const cardMerged = mergeCard(cardBase, cardOurs, cardTheirs);
+assert.equal(cardMerged.clean, true);
+assert.deepEqual(cardMerged.value.labels, ["bug", "ui", "backend"]);
+assert.deepEqual(cardMerged.value.assignees, ["ada", "grace"]);
+// Comments from both sides are unioned and ordered by createdAt.
+assert.deepEqual(cardMerged.value.comments.map((c) => c.id), ["c1", "c3", "c2"]);
+// The merged version adopts the later of the two updatedAt values.
+assert.equal(cardMerged.value.updatedAt, "2026-07-01T03:00:00.000Z");
+
+// A field only one side changed is taken automatically, no conflict.
+const dueOnlyTheirs = mergeCard(mkCard({ due: "" }), mkCard({ due: "" }), mkCard({ due: "2026-08-01", updatedAt: "2026-07-02T00:00:00.000Z" }));
+assert.equal(dueOnlyTheirs.clean, true);
+assert.equal(dueOnlyTheirs.value.due, "2026-08-01");
+
+// Divergent free text (title / body) is a hard conflict the caller must preserve.
+const titleClash = mergeCard(mkCard({ title: "A" }), mkCard({ title: "Ours" }), mkCard({ title: "Theirs" }));
+assert.equal(titleClash.clean, false);
+assert.deepEqual(titleClash.conflicts, ["title"]);
+const bodyClash = mergeCard(mkCard({ body: "base" }), mkCard({ body: "ours body" }), mkCard({ body: "their body" }));
+assert.deepEqual(bodyClash.conflicts, ["body"]);
+// Structural clashes (both moved list) resolve to disk without a hard conflict.
+const listClash = mergeCard(mkCard({ listId: "todo" }), mkCard({ listId: "doing" }), mkCard({ listId: "done" }));
+assert.equal(listClash.clean, true);
+assert.equal(listClash.value.listId, "done");
+
+// Board merge: list renames reconcile, adds union, deletes are honoured.
+const boardBase = { schemaVersion: 1, id: "b1", name: "Board", lists: [{ id: "todo", name: "To Do" }, { id: "doing", name: "Doing" }], createdAt: "2026-07-01T00:00:00.000Z", updatedAt: "2026-07-01T00:00:00.000Z" };
+const boardOurs = { ...boardBase, updatedAt: "2026-07-01T02:00:00.000Z", lists: [{ id: "todo", name: "Backlog" }, { id: "doing", name: "Doing" }, { id: "review", name: "Review" }] };
+const boardTheirs = { ...boardBase, updatedAt: "2026-07-01T01:00:00.000Z", lists: [{ id: "doing", name: "In Progress" }] };
+const boardMerged = mergeBoard(boardBase, boardOurs, boardTheirs);
+assert.equal(boardMerged.clean, true);
+// todo: ours renamed it (theirs deleted, our edit wins). doing: theirs renamed. review: our add.
+assert.deepEqual(boardMerged.value.lists, [{ id: "todo", name: "Backlog" }, { id: "doing", name: "In Progress" }, { id: "review", name: "Review" }]);
+const boardNameClash = mergeBoard(boardBase, { ...boardBase, name: "Ours" }, { ...boardBase, name: "Theirs" });
+assert.deepEqual(boardNameClash.conflicts, ["name"]);
+
+// Settings merge: never hard-conflicts; different edits union.
+const settingsBase = { schemaVersion: 1, workspaceName: "WS", slackWebhookUrl: "", slackNotifications: { cardMovedToDone: true, cardCompleted: true, cardAssigned: true, subtaskCompleted: true }, boardGroups: [], savedViews: [], createdAt: "2026-07-01T00:00:00.000Z", updatedAt: "2026-07-01T00:00:00.000Z" };
+const settingsOurs = { ...settingsBase, slackWebhookUrl: "https://hook", updatedAt: "2026-07-01T02:00:00.000Z", savedViews: [{ id: "v1", name: "Mine", filter: EMPTY_FILTER, createdAt: "x", updatedAt: "x" }] };
+const settingsTheirs = { ...settingsBase, slackNotifications: { ...settingsBase.slackNotifications, cardCompleted: false }, updatedAt: "2026-07-01T01:00:00.000Z" };
+const settingsMerged = mergeSettings(settingsBase, settingsOurs, settingsTheirs);
+assert.equal(settingsMerged.clean, true);
+assert.equal(settingsMerged.value.slackWebhookUrl, "https://hook"); // our change
+assert.equal(settingsMerged.value.slackNotifications.cardCompleted, false); // their change
+assert.equal(settingsMerged.value.savedViews.length, 1); // our added view
+
+// Members merge: adds union, removals honoured, never hard-conflicts.
+const membersBase = { schemaVersion: 1, updatedAt: "2026-07-01T00:00:00.000Z", members: [{ id: "ada", name: "Ada", color: "#111" }, { id: "grace", name: "Grace", color: "#222" }] };
+const membersOurs = { ...membersBase, updatedAt: "2026-07-01T02:00:00.000Z", members: [{ id: "ada", name: "Ada Lovelace", color: "#111" }, { id: "grace", name: "Grace", color: "#222" }] };
+const membersTheirs = { ...membersBase, updatedAt: "2026-07-01T01:00:00.000Z", members: [{ id: "ada", name: "Ada", color: "#111" }, { id: "alan", name: "Alan", color: "#333" }] };
+const membersMerged = mergeMembers(membersBase, membersOurs, membersTheirs);
+assert.equal(membersMerged.clean, true);
+// ada: our rename wins. grace: theirs deleted, unchanged by us -> dropped. alan: their add.
+assert.deepEqual(membersMerged.value.members.map((m) => `${m.id}:${m.name}`), ["ada:Ada Lovelace", "alan:Alan"]);
+
+// --- Conflict-write orchestration ---
+
+// A fake adapter drives resolveConflictWrite without any real IO.
+function fakeAdapter({ script, merge }) {
+  const writes = [];
+  const attempts = [...script];
+  return {
+    log: writes,
+    async write(content, expectedVersion) {
+      writes.push({ content, expectedVersion });
+      return attempts.shift();
+    },
+    merge,
+    ours: () => "OURS",
+    copies: writes,
+    async writeConflictCopy() {
+      writes.push({ copy: true });
+      return ".workspace/conflicts/x_conflict_1.json";
+    }
+  };
+}
+
+// Clean first write -> "written".
+{
+  const adapter = fakeAdapter({ script: [{ conflict: false, currentContent: null }] });
+  const outcome = await resolveConflictWrite("OURS", "v0", adapter);
+  assert.equal(outcome.status, "written");
+}
+
+// Conflict, clean merge, retry lands -> "merged".
+{
+  const adapter = fakeAdapter({
+    script: [
+      { conflict: true, currentContent: "THEIRS" },
+      { conflict: false, currentContent: null }
+    ],
+    merge: () => ({ content: "MERGED", conflict: false, theirsVersion: "v1" })
+  });
+  const outcome = await resolveConflictWrite("OURS", "v0", adapter);
+  assert.equal(outcome.status, "merged");
+  // The retry writes the merged content, CAS-ing against the disk version.
+  assert.deepEqual(adapter.log[1], { content: "MERGED", expectedVersion: "v1" });
+}
+
+// Conflict, hard merge -> conflict copy preserved + best-effort merge written.
+{
+  const adapter = fakeAdapter({
+    script: [
+      { conflict: true, currentContent: "THEIRS" },
+      { conflict: false, currentContent: null }
+    ],
+    merge: () => ({ content: "MERGED", conflict: true, theirsVersion: "v1" })
+  });
+  const outcome = await resolveConflictWrite("OURS", "v0", adapter);
+  assert.equal(outcome.status, "conflict");
+  assert.match(outcome.copyPath, /_conflict_/);
+}
+
+// Remote delete surfaces as "restored".
+{
+  const adapter = fakeAdapter({
+    script: [
+      { conflict: true, currentContent: null },
+      { conflict: false, currentContent: null }
+    ]
+  });
+  const outcome = await resolveConflictWrite("OURS", "v0", adapter);
+  assert.equal(outcome.status, "restored");
+  // The restore write is unconditional.
+  assert.equal(adapter.log[1].expectedVersion, undefined);
+}
 
 const workspaceRoot = await mkdtemp(join(tmpdir(), "limn-storage-e2e-"));
 try {

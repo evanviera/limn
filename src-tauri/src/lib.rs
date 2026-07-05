@@ -11,12 +11,14 @@ use tauri::{AppHandle, Emitter, Manager, State, Window};
 
 mod attachments;
 mod menu;
+mod persist;
 
 use attachments::{
     add_attachment, delete_attachment, open_attachment, pick_attachment_files,
     read_attachment_large_preview, read_attachment_preview, read_attachment_thumbnail,
     reveal_attachment,
 };
+use persist::{conditional_write, WriteOutcome, WriteResult};
 
 #[derive(Default)]
 struct WatchState {
@@ -36,12 +38,6 @@ struct WorkspaceFiles {
 struct TextFile {
     file_name: String,
     content: String,
-}
-
-#[derive(Serialize)]
-struct WriteResult {
-    relative_path: String,
-    conflict: bool,
 }
 
 #[tauri::command]
@@ -94,25 +90,53 @@ fn load_workspace(path: String) -> Result<WorkspaceFiles, String> {
 }
 
 #[tauri::command]
-fn write_workspace_settings(path: String, content: String) -> Result<(), String> {
+fn write_workspace_settings(
+    path: String,
+    content: String,
+    expected_version: Option<String>,
+) -> Result<WriteResult, String> {
     let root = workspace_root(&path)?;
     fs::create_dir_all(root.join(".workspace")).map_err(display_err)?;
-    atomic_write(&root.join(".workspace/settings.json"), content)
+    let outcome = conditional_write(
+        &root.join(".workspace/settings.json"),
+        &content,
+        expected_version.as_deref(),
+    )?;
+    Ok(finish_write(outcome, ".workspace/settings.json".to_string()))
 }
 
 #[tauri::command]
-fn write_members(path: String, content: String) -> Result<(), String> {
+fn write_members(
+    path: String,
+    content: String,
+    expected_version: Option<String>,
+) -> Result<WriteResult, String> {
     let root = workspace_root(&path)?;
     fs::create_dir_all(root.join(".workspace")).map_err(display_err)?;
-    atomic_write(&root.join(".workspace/members.json"), content)
+    let outcome = conditional_write(
+        &root.join(".workspace/members.json"),
+        &content,
+        expected_version.as_deref(),
+    )?;
+    Ok(finish_write(outcome, ".workspace/members.json".to_string()))
 }
 
 #[tauri::command]
-fn write_board_file(path: String, file_name: String, content: String) -> Result<(), String> {
+fn write_board_file(
+    path: String,
+    file_name: String,
+    content: String,
+    expected_version: Option<String>,
+) -> Result<WriteResult, String> {
     let root = workspace_root(&path)?;
     validate_file_name(&file_name, "json")?;
     fs::create_dir_all(root.join("boards")).map_err(display_err)?;
-    atomic_write(&root.join("boards").join(file_name), content)
+    let outcome = conditional_write(
+        &root.join("boards").join(&file_name),
+        &content,
+        expected_version.as_deref(),
+    )?;
+    Ok(finish_write(outcome, format!("boards/{file_name}")))
 }
 
 #[tauri::command]
@@ -125,38 +149,52 @@ fn write_card_file(
     let root = workspace_root(&path)?;
     validate_file_name(&file_name, "md")?;
     fs::create_dir_all(root.join("cards")).map_err(display_err)?;
+    let outcome = conditional_write(
+        &root.join("cards").join(&file_name),
+        &content,
+        expected_updated_at.as_deref(),
+    )?;
+    Ok(finish_write(outcome, format!("cards/{file_name}")))
+}
 
-    let target = root.join("cards").join(&file_name);
-    let mut relative_path = format!("cards/{file_name}");
-    let mut conflict = false;
-
-    if let Some(expected) = expected_updated_at {
-        if target.exists() {
-            let current = fs::read_to_string(&target).map_err(display_err)?;
-            if extract_frontmatter_value(&current, "updatedAt").as_deref()
-                != Some(expected.as_str())
-            {
-                conflict = true;
-                let stem = file_name.trim_end_matches(".md");
-                let conflict_name = format!(
-                    "{stem}_conflict_{}.md",
-                    chrono::Utc::now().format("%Y%m%d%H%M%S%f")
-                );
-                relative_path = format!("cards/{conflict_name}");
-                atomic_write(&root.join("cards").join(conflict_name), content)?;
-                return Ok(WriteResult {
-                    relative_path,
-                    conflict,
-                });
-            }
-        }
+// Preserve a local version that could not be safely merged (a hard free-text
+// conflict, or a save that lost every compare-and-swap retry). Cards keep the
+// existing sibling-copy behaviour in `cards/`; other entities land in
+// `.workspace/conflicts/` so they never masquerade as real boards/settings.
+#[tauri::command]
+fn write_conflict_copy(
+    path: String,
+    relative_dir: String,
+    file_name: String,
+    content: String,
+) -> Result<String, String> {
+    if !matches!(relative_dir.as_str(), "cards" | ".workspace/conflicts") {
+        return Err("Unsupported conflict directory".to_string());
     }
+    if file_name.contains('/')
+        || file_name.contains('\\')
+        || file_name.starts_with('.')
+        || !file_name.contains('.')
+    {
+        return Err("Invalid file name".to_string());
+    }
+    let root = workspace_root(&path)?;
+    persist::write_conflict_copy(&root, &relative_dir, &file_name, &content)
+}
 
-    atomic_write(&target, content)?;
-    Ok(WriteResult {
-        relative_path,
-        conflict,
-    })
+fn finish_write(outcome: WriteOutcome, relative_path: String) -> WriteResult {
+    match outcome {
+        WriteOutcome::Written => WriteResult {
+            relative_path,
+            conflict: false,
+            current_content: None,
+        },
+        WriteOutcome::Conflict(current_content) => WriteResult {
+            relative_path,
+            conflict: true,
+            current_content,
+        },
+    }
 }
 
 #[tauri::command]
@@ -342,6 +380,7 @@ pub fn run() {
             write_members,
             write_board_file,
             write_card_file,
+            write_conflict_copy,
             delete_card_file,
             delete_board_file,
             pick_attachment_files,
