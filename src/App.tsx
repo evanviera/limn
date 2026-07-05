@@ -21,8 +21,10 @@ import {
   deleteAttachmentFile,
   deleteBoard,
   deleteCard,
+  discardConflict,
   exportCalendar,
   getLastWorkspace,
+  listConflicts,
   loadWorkspace,
   makeId,
   normalizeUrl,
@@ -54,6 +56,10 @@ import {
 
 import { BoardView } from "./components/BoardView";
 import { CardEditor } from "./components/CardEditor";
+import { ConflictReview } from "./components/ConflictReview";
+import type { ConflictChoice } from "./components/ConflictReview";
+import { buildConflicts } from "./lib/conflicts";
+import type { ResolveEntity, ReviewConflict, WorkspaceEntities } from "./lib/conflicts";
 import { FilterView } from "./components/FilterView";
 import type { FilterRequest } from "./components/FilterView";
 import { ConfirmDialog, EmptyState, TextDialog } from "./components/dialogs";
@@ -117,6 +123,10 @@ export default function App() {
   const [updateProgress, setUpdateProgress] = useState<DownloadProgress | null>(null);
   const [themeMode, setThemeMode] = useState<ThemeMode>(() => readStoredThemeMode());
   const [contextMenu, setContextMenu] = useState<ContextMenuState | null>(null);
+  // Preserved conflict artifacts awaiting in-app review, and whether the review
+  // surface is open. Refreshed on every workspace load/reload.
+  const [conflicts, setConflicts] = useState<ReviewConflict[]>([]);
+  const [conflictReviewOpen, setConflictReviewOpen] = useState(false);
   // True while OS files are being dragged over the window, used to invite a drop
   // onto the open card editor.
   const [fileDragActive, setFileDragActive] = useState(false);
@@ -375,6 +385,12 @@ export default function App() {
         setNoticeKind("info");
       }
       await saveLastWorkspace(selectedPath);
+      await reloadConflicts(selectedPath, {
+        cards: data.cards,
+        boards: data.boards,
+        settings: data.settings,
+        membersFile: data.membersFile,
+      });
     } finally {
       setOpening(false);
     }
@@ -447,6 +463,12 @@ export default function App() {
       setNotice("This card changed on disk. Reopen it to see the latest version.");
       setNoticeKind("warning");
     }
+    await reloadConflicts(workspacePath, {
+      cards: data.cards,
+      boards: data.boards,
+      settings: data.settings,
+      membersFile: data.membersFile,
+    });
   }
 
   function clearScheduledWatchRefresh() {
@@ -545,11 +567,12 @@ export default function App() {
     }
   }
 
-  // Turn a non-trivial save outcome into user feedback. A plain "written" needs
-  // nothing; a "merged"/"restored"/"conflict" means disk changed under us, so we
-  // reload to show the reconciled state (and, for a hard conflict, point at the
-  // preserved copy). See src/lib/merge.ts for what merges automatically.
-  async function handleSaveOutcome(outcome: SaveOutcome, label: string) {
+  // Turn a non-trivial save/delete outcome into user feedback. A plain "written"
+  // needs nothing; a "merged"/"restored"/"conflict" means disk changed under us,
+  // so we reload to show the reconciled state (and, for a hard conflict, point at
+  // the preserved copy). The reload also refreshes the conflict-review list so a
+  // freshly preserved copy shows up. See src/lib/merge.ts for what auto-merges.
+  async function handleSaveOutcome(outcome: SaveOutcome, label: string, action: "save" | "delete" = "save") {
     if (outcome.status === "written") {
       return;
     }
@@ -559,11 +582,62 @@ export default function App() {
     } else if (outcome.status === "restored") {
       setNotice(`The ${label} was deleted on another device; your version was restored.`);
       setNoticeKind("warning");
+    } else if (action === "delete") {
+      setNotice(`The ${label} changed on another device; not deleted. Your copy is at ${outcome.copyPath}. Review it under Conflicts.`);
+      setNoticeKind("warning");
     } else {
       setNotice(`Couldn't fully merge the ${label}; your version was saved to ${outcome.copyPath}. Reloading disk state.`);
       setNoticeKind("warning");
     }
     await refreshWorkspace(false);
+  }
+
+  // Re-enumerate preserved conflict artifacts and pair each against the current
+  // on-disk entity for the review UI. Called after every workspace load/reload;
+  // failures never break the reload (the app just shows no conflicts).
+  async function reloadConflicts(path: string, entities: WorkspaceEntities) {
+    try {
+      const files = await listConflicts(path);
+      setConflicts(buildConflicts(files, entities));
+    } catch {
+      setConflicts([]);
+    }
+  }
+
+  // Persist a chosen/merged resolution through the normal conflict-aware save
+  // path, stamping a fresh version so it always lands as the newest write.
+  async function saveResolvedEntity(entity: ResolveEntity): Promise<SaveOutcome> {
+    const now = timestamp();
+    if (entity.kind === "card") {
+      return saveCard(workspacePath, { ...entity.card, updatedAt: now }, entity.base);
+    }
+    if (entity.kind === "board") {
+      return saveBoard(workspacePath, { ...entity.board, updatedAt: now }, entity.base);
+    }
+    if (entity.kind === "settings") {
+      return saveSettings(workspacePath, { ...entity.settings, updatedAt: now }, entity.base);
+    }
+    return saveMembers(workspacePath, { ...entity.members, updatedAt: now }, entity.base);
+  }
+
+  // Apply a conflict resolution: optionally write the kept/merged version, always
+  // discard the artifact, then reload so the review list reflects the result.
+  async function resolveConflict(conflict: ReviewConflict, choice: ConflictChoice) {
+    if (!workspacePath) {
+      return;
+    }
+    try {
+      const entity = choice === "mine" ? conflict.mine : choice === "merged" ? conflict.merged : null;
+      if (entity) {
+        await saveResolvedEntity(entity);
+      }
+      await discardConflict(workspacePath, conflict.relativePath);
+      setNotice(`Resolved conflict for ${conflict.title}.`);
+      setNoticeKind("info");
+      await refreshWorkspace(false);
+    } catch (reason) {
+      setError(`Couldn't resolve conflict: ${errorText(reason)}`);
+    }
   }
 
   async function persistBoard(nextBoard: Board) {
@@ -671,8 +745,16 @@ export default function App() {
       destructive: true,
       onConfirm: async () => {
         const boardCards = cards.filter((card) => card.boardId === board.id);
-        await Promise.all(boardCards.map((card) => deleteCard(workspacePath, card)));
-        await deleteBoard(workspacePath, board.id);
+        const cardOutcomes = await Promise.all(boardCards.map((card) => deleteCard(workspacePath, card)));
+        const boardOutcome = await deleteBoard(workspacePath, board);
+        const conflict = [...cardOutcomes, boardOutcome].find((outcome) => outcome.status === "conflict");
+        if (conflict) {
+          // A card or the board itself was edited on another device: its copy was
+          // preserved and the delete refused. Reload to show exactly what
+          // survived on disk instead of optimistically clearing everything.
+          await handleSaveOutcome(conflict, "board", "delete");
+          return;
+        }
         setCards((current) => current.filter((card) => card.boardId !== board.id));
         setBoards((current) => current.filter((item) => item.id !== board.id));
         setActiveBoardId((current) => (current === board.id ? "" : current));
@@ -874,7 +956,16 @@ export default function App() {
       destructive: true,
       onConfirm: async () => {
         try {
-          await deleteCard(workspacePath, card);
+          const outcome = await deleteCard(workspacePath, card);
+          if (outcome.status !== "written") {
+            // Edited elsewhere since we loaded it: the copy was preserved and the
+            // delete refused. Suppress the generic "changed on disk" notice for
+            // this open card so the specific "not deleted" conflict message shows,
+            // then surface it and reload rather than dropping the card.
+            reconciledOpenCardRef.current = card.id;
+            await handleSaveOutcome(outcome, "card", "delete");
+            return;
+          }
           setCards((current) => current.filter((item) => item.id !== card.id));
           setSelectedCardId(null);
         } catch (reason) {
@@ -1913,6 +2004,24 @@ export default function App() {
             </div>
           </div>
         )}
+        {conflicts.length > 0 && (
+          <div
+            aria-live="polite"
+            className="banner banner-warning"
+            data-testid="conflict-banner"
+            role="status"
+          >
+            <span>
+              {countLabel(conflicts.length, "unresolved conflict")} — a copy was preserved when an edit
+              couldn't be reconciled automatically.
+            </span>
+            <div className="banner-actions">
+              <button data-testid="review-conflicts" onClick={() => setConflictReviewOpen(true)}>
+                Review conflicts
+              </button>
+            </div>
+          </div>
+        )}
 
         {view === "board" && activeBoard && (
           <BoardView
@@ -2039,6 +2148,13 @@ export default function App() {
             menu={contextMenu}
             onClose={() => setContextMenu(null)}
             onPick={(item) => void runContextMenuItem(item)}
+          />
+        )}
+        {conflictReviewOpen && (
+          <ConflictReview
+            conflicts={conflicts}
+            onResolve={(conflict, choice) => void resolveConflict(conflict, choice)}
+            onClose={() => setConflictReviewOpen(false)}
           />
         )}
       </div>

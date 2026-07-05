@@ -18,7 +18,9 @@ use attachments::{
     read_attachment_large_preview, read_attachment_preview, read_attachment_thumbnail,
     reveal_attachment,
 };
-use persist::{conditional_write, WriteOutcome, WriteResult};
+use persist::{
+    conditional_delete, conditional_write, ConflictFile, DeleteResult, WriteOutcome, WriteResult,
+};
 
 #[derive(Default)]
 struct WatchState {
@@ -197,35 +199,76 @@ fn finish_write(outcome: WriteOutcome, relative_path: String) -> WriteResult {
     }
 }
 
+// Delete a card, but only if the on-disk version still matches
+// `expected_updated_at`. If another device edited it since, the delete is
+// refused: the current disk copy is preserved in `.workspace/conflicts/` and the
+// conflict is reported so the caller can surface it. Attachments are removed only
+// when the card is actually deleted, so a refused delete never orphans them.
 #[tauri::command]
-fn delete_card_file(path: String, file_name: String) -> Result<(), String> {
+fn delete_card_file(
+    path: String,
+    file_name: String,
+    expected_updated_at: Option<String>,
+) -> Result<DeleteResult, String> {
     let root = workspace_root(&path)?;
     validate_file_name(&file_name, "md")?;
     let target = root.join("cards").join(&file_name);
-    if target.exists() {
-        fs::remove_file(&target).map_err(display_err)?;
-    }
-    // Cards are keyed by id and their attachments live in attachments/<id>/, so
-    // delete that folder alongside the card file to avoid orphaned files.
-    let card_id = file_name.trim_end_matches(".md");
-    if !card_id.is_empty() {
-        let attachments_dir = root.join("attachments").join(card_id);
-        if attachments_dir.exists() {
-            let _ = fs::remove_dir_all(attachments_dir);
+    let result = conditional_delete(
+        &root,
+        &target,
+        ".workspace/conflicts",
+        &file_name,
+        expected_updated_at.as_deref(),
+    )?;
+
+    if !result.conflict {
+        // Cards are keyed by id and their attachments live in attachments/<id>/,
+        // so delete that folder alongside the card file to avoid orphaned files.
+        let card_id = file_name.trim_end_matches(".md");
+        if !card_id.is_empty() {
+            let attachments_dir = root.join("attachments").join(card_id);
+            if attachments_dir.exists() {
+                let _ = fs::remove_dir_all(attachments_dir);
+            }
         }
     }
-    Ok(())
+
+    Ok(result)
 }
 
+// Delete a board, but only if the on-disk version still matches
+// `expected_version`; a concurrent edit is preserved as a conflict copy and
+// reported rather than discarded. See `delete_card_file`.
 #[tauri::command]
-fn delete_board_file(path: String, file_name: String) -> Result<(), String> {
+fn delete_board_file(
+    path: String,
+    file_name: String,
+    expected_version: Option<String>,
+) -> Result<DeleteResult, String> {
     let root = workspace_root(&path)?;
     validate_file_name(&file_name, "json")?;
-    let target = root.join("boards").join(file_name);
-    if target.exists() {
-        fs::remove_file(target).map_err(display_err)?;
-    }
-    Ok(())
+    let target = root.join("boards").join(&file_name);
+    conditional_delete(
+        &root,
+        &target,
+        ".workspace/conflicts",
+        &file_name,
+        expected_version.as_deref(),
+    )
+}
+
+// Enumerate every preserved conflict artifact for the in-app review UI.
+#[tauri::command]
+fn list_conflicts(path: String) -> Result<Vec<ConflictFile>, String> {
+    let root = workspace_root(&path)?;
+    persist::list_conflicts(&root)
+}
+
+// Discard a single conflict artifact once the user has resolved it.
+#[tauri::command]
+fn delete_conflict_file(path: String, relative_path: String) -> Result<(), String> {
+    let root = workspace_root(&path)?;
+    persist::delete_conflict(&root, &relative_path)
 }
 
 #[tauri::command]
@@ -383,6 +426,8 @@ pub fn run() {
             write_conflict_copy,
             delete_card_file,
             delete_board_file,
+            list_conflicts,
+            delete_conflict_file,
             pick_attachment_files,
             add_attachment,
             delete_attachment,

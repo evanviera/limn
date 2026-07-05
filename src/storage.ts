@@ -2,7 +2,7 @@ import { invoke } from "./ipc.js";
 import { EMPTY_FILTER } from "./lib/filter.js";
 import { mergeBoard, mergeCard, mergeMembers, mergeSettings, type EntityMergeResult } from "./lib/merge.js";
 import { resolveConflictWrite, type ConflictWriteAdapter, type SaveOutcome } from "./lib/mergeWrite.js";
-import type { Attachment, Board, BoardGroup, Card, CardFilter, Comment, Member, MembersFile, SavedView, SlackNotificationSettings, Subtask, SubtaskListItem, WorkspaceFiles, WorkspaceSettings, WriteResult } from "./types";
+import type { Attachment, Board, BoardGroup, Card, CardFilter, Comment, ConflictFile, DeleteResult, Member, MembersFile, SavedView, SlackNotificationSettings, Subtask, SubtaskListItem, WorkspaceFiles, WorkspaceSettings, WriteResult } from "./types";
 
 export type { SaveOutcome } from "./lib/mergeWrite.js";
 
@@ -145,11 +145,31 @@ export async function saveBoard(path: string, board: Board, base?: Board): Promi
   });
 }
 
-export async function deleteBoard(path: string, boardId: string): Promise<void> {
-  await invoke("delete_board_file", {
+// Version-checked delete: refuses to remove a board another device has edited
+// since we loaded it, preserving that copy and reporting the conflict through the
+// same SaveOutcome vocabulary as writes (a clean delete reports "written").
+export async function deleteBoard(path: string, board: Board): Promise<SaveOutcome> {
+  const result = await invoke<DeleteResult>("delete_board_file", {
     path,
-    fileName: boardFileName(boardId)
+    fileName: boardFileName(board.id),
+    expectedVersion: board.updatedAt || undefined
   });
+  return deleteOutcome(result);
+}
+
+function deleteOutcome(result: DeleteResult): SaveOutcome {
+  return result.conflict ? { status: "conflict", copyPath: result.copy_path ?? undefined } : { status: "written" };
+}
+
+// List every preserved conflict artifact (card duplicates and .workspace/conflicts
+// copies) for the in-app review surface.
+export async function listConflicts(path: string): Promise<ConflictFile[]> {
+  return invoke<ConflictFile[]>("list_conflicts", { path });
+}
+
+// Discard a single conflict artifact after the user resolves it.
+export async function discardConflict(path: string, relativePath: string): Promise<void> {
+  await invoke("delete_conflict_file", { path, relativePath });
 }
 
 export async function saveCard(path: string, card: Card, base?: Card): Promise<SaveOutcome> {
@@ -167,17 +187,17 @@ export async function saveCard(path: string, card: Card, base?: Card): Promise<S
   });
 }
 
-function parseBoardJson(raw: string): Board | null {
+export function parseBoardJson(raw: string): Board | null {
   const result = safeJson<Board | null>(raw, null);
   return result.ok && result.value?.id ? normalizeBoard(result.value) : null;
 }
 
-function parseSettingsJson(raw: string): WorkspaceSettings | null {
+export function parseSettingsJson(raw: string): WorkspaceSettings | null {
   const result = safeJson<Partial<WorkspaceSettings>>(raw, {});
   return result.ok ? normalizeWorkspaceSettings(result.value) : null;
 }
 
-function parseMembersJson(raw: string): MembersFile | null {
+export function parseMembersJson(raw: string): MembersFile | null {
   const result = safeJson<Partial<MembersFile>>(raw, {});
   return result.ok ? normalizeMembersFile(result.value) : null;
 }
@@ -190,11 +210,16 @@ function normalizeMembersFile(value: Partial<MembersFile>): MembersFile {
   };
 }
 
-export async function deleteCard(path: string, card: Card): Promise<void> {
-  await invoke("delete_card_file", {
+// Version-checked delete: refuses to remove a card another device has edited
+// since we loaded it, preserving that copy and reporting the conflict. See
+// deleteBoard.
+export async function deleteCard(path: string, card: Card): Promise<SaveOutcome> {
+  const result = await invoke<DeleteResult>("delete_card_file", {
     path,
-    fileName: card.fileName
+    fileName: card.fileName,
+    expectedUpdatedAt: card.updatedAt || undefined
   });
+  return deleteOutcome(result);
 }
 
 // Open a native file picker for attachments and return the chosen absolute

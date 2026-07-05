@@ -18,6 +18,7 @@ export interface HarnessSnapshot {
   members: { schemaVersion: number; members: unknown[] };
   boards: HarnessFile[];
   cards: HarnessFile[];
+  conflicts: HarnessFile[];
   attachments: Array<{ path: string; size: number }>;
   exports: Array<{ path: string; content: string }>;
   lastWorkspace: string | null;

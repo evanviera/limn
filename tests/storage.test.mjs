@@ -24,6 +24,7 @@ import {
   threeWayStringSet
 } from "../.tmp/storage-test/src/lib/merge.js";
 import { resolveConflictWrite } from "../.tmp/storage-test/src/lib/mergeWrite.js";
+import { buildConflict, buildConflicts } from "../.tmp/storage-test/src/lib/conflicts.js";
 
 const baseCard = {
   id: "card_one",
@@ -594,6 +595,101 @@ function fakeAdapter({ script, merge }) {
   // The restore write is unconditional.
   assert.equal(adapter.log[1].expectedVersion, undefined);
 }
+
+// --- Conflict review: enumeration + resolution proposals ---
+
+const emptyMembersFile = { schemaVersion: 1, members: [], updatedAt: "" };
+
+// A card conflict copy is classified, paired with the live card, and offers a
+// "keep mine", a lossless "merged" union, and a field-by-field comparison.
+const conflictCard = mkCard({
+  id: "card_c1",
+  title: "Local title",
+  body: "local body",
+  labels: ["mine"],
+  comments: [{ id: "cm_local", authorId: "ada", authorName: "Ada", body: "mine", createdAt: "2026-07-01T00:00:00.000Z" }],
+  updatedAt: "2026-07-01T01:00:00.000Z",
+  fileName: "card_c1.md"
+});
+const liveCard = mkCard({
+  id: "card_c1",
+  title: "Remote title",
+  body: "remote body",
+  labels: ["theirs"],
+  comments: [{ id: "cm_remote", authorId: "grace", authorName: "Grace", body: "theirs", createdAt: "2026-07-01T00:30:00.000Z" }],
+  updatedAt: "2026-07-01T02:00:00.000Z",
+  fileName: "card_c1.md"
+});
+const cardEntities = { cards: [liveCard], boards: [], settings: null, membersFile: emptyMembersFile };
+
+const cardConflict = buildConflict(
+  { relative_path: "cards/card_c1_conflict_20260701.md", file_name: "card_c1_conflict_20260701.md", content: serializeCard(conflictCard) },
+  cardEntities
+);
+assert.equal(cardConflict.kind, "card");
+assert.equal(cardConflict.entityId, "card_c1");
+assert.equal(cardConflict.parsed, true);
+assert.equal(cardConflict.currentMissing, false);
+// "Keep mine" writes the preserved copy to the real card file (not the copy name).
+assert.equal(cardConflict.mine.kind, "card");
+assert.equal(cardConflict.mine.card.title, "Local title");
+assert.equal(cardConflict.mine.card.fileName, "card_c1.md");
+assert.equal(cardConflict.mine.base.id, "card_c1");
+// The proposed merge keeps the current on-disk text but unions both sides'
+// structured data (no comment or label is dropped).
+assert.equal(cardConflict.merged.card.title, "Remote title");
+assert.deepEqual([...cardConflict.merged.card.labels].sort(), ["mine", "theirs"]);
+assert.deepEqual(cardConflict.merged.card.comments.map((comment) => comment.id).sort(), ["cm_local", "cm_remote"]);
+const titleRow = cardConflict.fields.find((field) => field.label === "Title");
+assert.equal(titleRow.mine, "Local title");
+assert.equal(titleRow.theirs, "Remote title");
+assert.equal(titleRow.differs, true);
+
+// A copy whose entity was deleted on disk is flagged as orphaned: it can be
+// restored ("keep mine" with no base) but there is no merge target.
+const orphanConflict = buildConflict(
+  { relative_path: "cards/card_gone_conflict_1.md", file_name: "card_gone_conflict_1.md", content: serializeCard(mkCard({ id: "card_gone", title: "Ghost", fileName: "card_gone.md" })) },
+  cardEntities
+);
+assert.equal(orphanConflict.currentMissing, true);
+assert.equal(orphanConflict.merged, null);
+assert.equal(orphanConflict.mine.base, undefined);
+
+// A board conflict copy in .workspace/conflicts is classified from its stem and
+// merged the same way (disk name wins, columns union).
+const boardCopy = { schemaVersion: 1, id: "board_z", name: "Local board", lists: [{ id: "todo", name: "To Do" }, { id: "extra", name: "Extra" }], createdAt: "2026-07-01T00:00:00.000Z", updatedAt: "2026-07-01T01:00:00.000Z" };
+const liveBoard = { schemaVersion: 1, id: "board_z", name: "Remote board", lists: [{ id: "todo", name: "To Do" }], createdAt: "2026-07-01T00:00:00.000Z", updatedAt: "2026-07-01T02:00:00.000Z" };
+const boardConflict = buildConflict(
+  { relative_path: ".workspace/conflicts/board_z_conflict_9.json", file_name: "board_z_conflict_9.json", content: `${JSON.stringify(boardCopy, null, 2)}\n` },
+  { cards: [], boards: [liveBoard], settings: null, membersFile: emptyMembersFile }
+);
+assert.equal(boardConflict.kind, "board");
+assert.equal(boardConflict.mine.board.name, "Local board");
+assert.equal(boardConflict.merged.board.name, "Remote board");
+assert.deepEqual(boardConflict.merged.board.lists.map((list) => list.id).sort(), ["extra", "todo"]);
+
+// An unreadable copy still surfaces (for discard) but offers no resolution entity.
+const unreadable = buildConflict(
+  { relative_path: "cards/card_bad_conflict_1.md", file_name: "card_bad_conflict_1.md", content: "not frontmatter" },
+  cardEntities
+);
+assert.equal(unreadable.parsed, false);
+assert.equal(unreadable.mine, null);
+assert.equal(unreadable.merged, null);
+
+// Non-conflict file names are ignored by classification.
+assert.equal(
+  buildConflict({ relative_path: "cards/card_live.md", file_name: "card_live.md", content: serializeCard(mkCard()) }, cardEntities),
+  null
+);
+const enumerated = buildConflicts(
+  [
+    { relative_path: "cards/card_c1_conflict_1.md", file_name: "card_c1_conflict_1.md", content: serializeCard(conflictCard) },
+    { relative_path: "cards/plain.md", file_name: "plain.md", content: "x" }
+  ],
+  cardEntities
+);
+assert.equal(enumerated.length, 1, "non-conflict files are dropped from the review list");
 
 const workspaceRoot = await mkdtemp(join(tmpdir(), "limn-storage-e2e-"));
 try {

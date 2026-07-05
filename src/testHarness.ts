@@ -14,6 +14,9 @@ interface HarnessSnapshot {
   members: MembersFile;
   boards: HarnessFile[];
   cards: HarnessFile[];
+  // Preserved conflict artifacts under .workspace/conflicts/ (card copies that
+  // live in cards/ are part of `cards`). Keyed by workspace-relative path.
+  conflicts: HarnessFile[];
   attachments: Array<{ path: string; size: number }>;
   exports: Array<{ path: string; content: string }>;
   lastWorkspace: string | null;
@@ -50,6 +53,10 @@ const settings: WorkspaceSettings = {
 const members: MembersFile = { schemaVersion: 1, members: [], updatedAt: now };
 const boards = new Map<string, string>();
 const cards = new Map<string, string>();
+// Preserved conflict copies under .workspace/conflicts/, keyed by their
+// workspace-relative path. Card-side copies (cards/*_conflict_*.md) live in the
+// `cards` map, mirroring the real filesystem layout.
+const conflictFiles = new Map<string, string>();
 // Attachment files keyed by `${cardId}/${storedName}` → byte size. There is no
 // real filesystem in the harness, so this stands in for attachments/<cardId>/.
 const attachments = new Map<string, number>();
@@ -85,6 +92,10 @@ if (new URLSearchParams(window.location.search).has("resetLimnE2e")) {
     for (const file of restored.cards) {
       cards.set(file.file_name, file.content);
     }
+    conflictFiles.clear();
+    for (const file of restored.conflicts ?? []) {
+      conflictFiles.set(file.file_name, file.content);
+    }
     attachments.clear();
     for (const item of restored.attachments ?? []) {
       attachments.set(item.path, item.size);
@@ -114,6 +125,7 @@ function snapshot(): HarnessSnapshot {
     members: JSON.parse(JSON.stringify(members)) as MembersFile,
     boards: [...boards.entries()].sort().map(([file_name, content]) => ({ file_name, content })),
     cards: [...cards.entries()].sort().map(([file_name, content]) => ({ file_name, content })),
+    conflicts: [...conflictFiles.entries()].sort().map(([file_name, content]) => ({ file_name, content })),
     attachments: [...attachments.entries()].sort().map(([path, size]) => ({ path, size })),
     exports: [...exports.entries()].sort().map(([path, content]) => ({ path, content })),
     lastWorkspace,
@@ -190,6 +202,23 @@ function expectedVersionArg(args: Record<string, unknown> | undefined): string |
   return typeof args?.expectedVersion === "string" ? args.expectedVersion : undefined;
 }
 
+// Mirror the Rust write_conflict_copy naming and placement: card copies land in
+// cards/ (surfacing as a recoverable duplicate); everything else in
+// .workspace/conflicts/. Returns the workspace-relative path.
+function preserveConflictCopy(relativeDir: string, fileName: string, content: string): string {
+  const stem = fileName.replace(/\.[^.]+$/, "");
+  const ext = fileName.split(".").pop() ?? "md";
+  const copyName = `${stem}_conflict_${Date.now()}${Math.random().toString(36).slice(2, 6)}.${ext}`;
+  if (relativeDir === "cards") {
+    cards.set(copyName, content);
+    emit("workspace-changed");
+  } else {
+    conflictFiles.set(copyName, content);
+    updateDebugState();
+  }
+  return `${relativeDir}/${copyName}`;
+}
+
 function attachmentPreview(storedName: string): ArrayBuffer {
   const svg = `<svg xmlns="http://www.w3.org/2000/svg" width="80" height="48" viewBox="0 0 80 48"><rect width="80" height="48" fill="#2f6fed"/><circle cx="58" cy="16" r="8" fill="#ffd166"/><path d="M0 48 24 24l14 12 12-10 30 22z" fill="#f4f7fb"/></svg>`;
   const extension = storedName.split(".").pop()?.toLowerCase();
@@ -250,10 +279,18 @@ window.__LIMN_TEST_IPC__ = {
         emit("workspace-changed");
         return { relative_path: `boards/${fileName}`, conflict: false } satisfies WriteResult as T;
       }
-      case "delete_board_file":
-        boards.delete(fileNameArg(args));
+      case "delete_board_file": {
+        const fileName = fileNameArg(args);
+        const expected = expectedVersionArg(args);
+        const current = boards.get(fileName);
+        if (current !== undefined && expected !== undefined && versionOf(current) !== expected) {
+          const copyPath = preserveConflictCopy(".workspace/conflicts", fileName, current);
+          return { conflict: true, copy_path: copyPath } as T;
+        }
+        boards.delete(fileName);
         emit("workspace-changed");
-        return undefined as T;
+        return { conflict: false, copy_path: null } as T;
+      }
       case "write_card_file": {
         const fileName = fileNameArg(args);
         const content = contentArg(args);
@@ -278,25 +315,47 @@ window.__LIMN_TEST_IPC__ = {
         const relativeDir = String(args?.relativeDir ?? "");
         const fileName = fileNameArg(args);
         const content = contentArg(args);
-        const stem = fileName.replace(/\.[^.]+$/, "");
-        const ext = fileName.split(".").pop() ?? "md";
-        const copyName = `${stem}_conflict_${Date.now()}.${ext}`;
-        // Card copies surface as a recoverable duplicate; other entities would
-        // land in .workspace/conflicts (not modelled by the harness snapshot).
-        if (relativeDir === "cards") {
-          cards.set(copyName, content);
-          emit("workspace-changed");
-        }
-        return `${relativeDir}/${copyName}` as T;
+        return preserveConflictCopy(relativeDir, fileName, content) as T;
       }
       case "delete_card_file": {
         const fileName = fileNameArg(args);
+        const expected = typeof args?.expectedUpdatedAt === "string" ? args.expectedUpdatedAt : undefined;
+        const current = cards.get(fileName);
+        // Mirror the Rust conditional delete: refuse when disk moved on under us,
+        // preserving the current copy instead of discarding another device's edit.
+        if (current !== undefined && expected !== undefined && versionOf(current) !== expected) {
+          const copyPath = preserveConflictCopy(".workspace/conflicts", fileName, current);
+          return { conflict: true, copy_path: copyPath } as T;
+        }
         cards.delete(fileName);
+        // Attachments are cleaned up only when the card is actually removed.
         const cardId = fileName.replace(/\.md$/, "");
         for (const key of [...attachments.keys()]) {
           if (key.startsWith(`${cardId}/`)) {
             attachments.delete(key);
           }
+        }
+        emit("workspace-changed");
+        return { conflict: false, copy_path: null } as T;
+      }
+      case "list_conflicts": {
+        const cardCopies = [...cards.entries()]
+          .filter(([file_name]) => file_name.includes("_conflict_"))
+          .map(([file_name, content]) => ({ relative_path: `cards/${file_name}`, file_name, content }));
+        const workspaceCopies = [...conflictFiles.entries()].map(([file_name, content]) => ({
+          relative_path: `.workspace/conflicts/${file_name}`,
+          file_name,
+          content,
+        }));
+        return [...cardCopies, ...workspaceCopies].sort((a, b) => a.relative_path.localeCompare(b.relative_path)) as T;
+      }
+      case "delete_conflict_file": {
+        const relativePath = String(args?.relativePath ?? "");
+        const fileName = relativePath.split("/").pop() ?? "";
+        if (relativePath.startsWith("cards/")) {
+          cards.delete(fileName);
+        } else if (relativePath.startsWith(".workspace/conflicts/")) {
+          conflictFiles.delete(fileName);
         }
         emit("workspace-changed");
         return undefined as T;
@@ -418,9 +477,15 @@ window.__LIMN_E2E__ = {
     boards.set(fileName, `${JSON.stringify(board, null, 2)}\n`);
     emit("workspace-changed");
   },
-  externalEditCard(fileName: string, content: string) {
+  externalEditCard(fileName: string, content: string, silent = false) {
     cards.set(fileName, content);
-    emit("workspace-changed");
+    if (silent) {
+      // Change disk without waking the watcher, so the app keeps a stale version
+      // — used to exercise version-checked deletes racing a remote edit.
+      updateDebugState();
+    } else {
+      emit("workspace-changed");
+    }
   },
   corruptCard(fileName: string) {
     cards.set(fileName, "not frontmatter");
@@ -517,7 +582,7 @@ declare global {
     __LIMN_E2E__?: {
       snapshot(): HarnessSnapshot;
       externalEditBoard(fileName: string, board: Board): void;
-      externalEditCard(fileName: string, content: string): void;
+      externalEditCard(fileName: string, content: string, silent?: boolean): void;
       corruptCard(fileName: string): void;
       resetSlack(): void;
       setUpdaterMode(mode: UpdaterMode): void;

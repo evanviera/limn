@@ -199,6 +199,181 @@ fn conflict_copies_are_preserved_with_distinct_names() {
 }
 
 #[test]
+fn card_delete_refuses_on_version_mismatch_and_preserves_copy() {
+    let root = test_workspace("delete_conflict_card");
+    let path = root.to_string_lossy().to_string();
+    init_workspace(path.clone()).expect("workspace initializes");
+
+    // The card exists on disk with an attachment; another device has since bumped
+    // its version past what we last loaded.
+    let disk = card_markdown("card_del", "2026-06-27T05:00:00.000Z", "Edited elsewhere");
+    write_card_file(path.clone(), "card_del.md".to_string(), disk, None).expect("card writes");
+    let source = root.join("att.txt");
+    fs::write(&source, b"keep me").expect("source writes");
+    add_attachment(
+        path.clone(),
+        "card_del".to_string(),
+        "att_1-att.txt".to_string(),
+        source.to_string_lossy().to_string(),
+    )
+    .expect("attachment copies");
+
+    // We think the card is still at the old version, so the delete is refused.
+    let result = delete_card_file(
+        path.clone(),
+        "card_del.md".to_string(),
+        Some("2026-06-27T00:00:00.000Z".to_string()),
+    )
+    .expect("delete returns");
+
+    assert!(result.conflict, "stale delete is refused");
+    let copy = result.copy_path.expect("a conflict copy is preserved");
+    assert!(copy.starts_with(".workspace/conflicts/card_del_conflict_"));
+    assert!(root.join(&copy).exists(), "the preserved copy is on disk");
+    assert!(
+        root.join("cards/card_del.md").exists(),
+        "the card is not deleted"
+    );
+    assert!(
+        root.join("attachments/card_del").exists(),
+        "attachments survive a refused delete"
+    );
+    // The preserved copy holds the current (other device's) content.
+    assert!(fs::read_to_string(root.join(&copy))
+        .expect("copy reads")
+        .contains("Edited elsewhere"));
+
+    let _ = fs::remove_dir_all(root);
+}
+
+#[test]
+fn card_delete_succeeds_when_version_matches() {
+    let root = test_workspace("delete_match_card");
+    let path = root.to_string_lossy().to_string();
+    init_workspace(path.clone()).expect("workspace initializes");
+
+    write_card_file(
+        path.clone(),
+        "card_ok.md".to_string(),
+        card_markdown("card_ok", "2026-06-27T00:00:00.000Z", "Body"),
+        None,
+    )
+    .expect("card writes");
+
+    // The expected version still matches disk: the delete lands cleanly.
+    let matched = delete_card_file(
+        path.clone(),
+        "card_ok.md".to_string(),
+        Some("2026-06-27T00:00:00.000Z".to_string()),
+    )
+    .expect("delete returns");
+    assert!(!matched.conflict);
+    assert!(matched.copy_path.is_none());
+    assert!(!root.join("cards/card_ok.md").exists());
+
+    // Deleting an already-missing card is an idempotent success, not a conflict.
+    let again = delete_card_file(
+        path.clone(),
+        "card_ok.md".to_string(),
+        Some("2026-06-27T00:00:00.000Z".to_string()),
+    )
+    .expect("second delete returns");
+    assert!(!again.conflict);
+
+    let _ = fs::remove_dir_all(root);
+}
+
+#[test]
+fn board_delete_refuses_on_version_mismatch() {
+    let root = test_workspace("delete_conflict_board");
+    let path = root.to_string_lossy().to_string();
+    init_workspace(path.clone()).expect("workspace initializes");
+
+    let board = |updated: &str| {
+        format!(
+            "{{\n  \"schemaVersion\": 1,\n  \"id\": \"board_del\",\n  \"name\": \"Launch\",\n  \"lists\": [],\n  \"createdAt\": \"2026-06-27T00:00:00.000Z\",\n  \"updatedAt\": \"{updated}\"\n}}\n"
+        )
+    };
+    write_board_file(
+        path.clone(),
+        "board_del.json".to_string(),
+        board("2026-06-27T05:00:00.000Z"),
+        None,
+    )
+    .expect("board writes");
+
+    let result = delete_board_file(
+        path.clone(),
+        "board_del.json".to_string(),
+        Some("2026-06-27T00:00:00.000Z".to_string()),
+    )
+    .expect("delete returns");
+
+    assert!(result.conflict);
+    let copy = result.copy_path.expect("a conflict copy is preserved");
+    assert!(copy.starts_with(".workspace/conflicts/board_del_conflict_"));
+    assert!(root.join("boards/board_del.json").exists(), "board is not deleted");
+
+    let _ = fs::remove_dir_all(root);
+}
+
+#[test]
+fn list_and_delete_conflicts_round_trip() {
+    let root = test_workspace("list_conflicts");
+    let path = root.to_string_lossy().to_string();
+    init_workspace(path.clone()).expect("workspace initializes");
+
+    // A card-side conflict copy (lives in cards/) and a workspace-side one.
+    let card_copy = write_conflict_copy(
+        path.clone(),
+        "cards".to_string(),
+        "card_x.md".to_string(),
+        card_markdown("card_x", "2026-06-27T02:00:00.000Z", "Local"),
+    )
+    .expect("card copy writes");
+    let board_copy = write_conflict_copy(
+        path.clone(),
+        ".workspace/conflicts".to_string(),
+        "board_y.json".to_string(),
+        "{\"id\":\"board_y\",\"updatedAt\":\"2026-06-27T02:00:00.000Z\"}".to_string(),
+    )
+    .expect("board copy writes");
+
+    let listed = list_conflicts(path.clone()).expect("conflicts list");
+    assert_eq!(listed.len(), 2, "both copies are enumerated");
+    assert!(listed.iter().any(|item| item.relative_path == card_copy));
+    assert!(listed.iter().any(|item| item.relative_path == board_copy));
+    assert!(listed
+        .iter()
+        .find(|item| item.relative_path == board_copy)
+        .is_some_and(|item| item.content.contains("board_y")));
+
+    // A live card is not mistaken for a conflict artifact.
+    write_card_file(
+        path.clone(),
+        "card_live.md".to_string(),
+        card_markdown("card_live", "2026-06-27T00:00:00.000Z", "Body"),
+        None,
+    )
+    .expect("live card writes");
+    assert_eq!(
+        list_conflicts(path.clone()).expect("conflicts list").len(),
+        2,
+        "the live card is not listed as a conflict"
+    );
+
+    // Resolving discards a single artifact; unknown/live paths are rejected.
+    delete_conflict_file(path.clone(), card_copy.clone()).expect("card copy discarded");
+    assert_eq!(list_conflicts(path.clone()).expect("relist").len(), 1);
+    delete_conflict_file(path.clone(), "cards/card_live.md".to_string())
+        .expect_err("a live card cannot be discarded as a conflict");
+    delete_conflict_file(path.clone(), "boards/board_y.json".to_string())
+        .expect_err("unknown conflict directory rejected");
+
+    let _ = fs::remove_dir_all(root);
+}
+
+#[test]
 fn unreadable_text_files_are_reported_without_failing_workspace_load() {
     let root = test_workspace("invalid_utf8");
     let path = root.to_string_lossy().to_string();
@@ -246,7 +421,7 @@ fn attachments_are_copied_and_deleted_with_their_card() {
         None,
     )
     .expect("card writes");
-    delete_card_file(path.clone(), "card_att.md".to_string()).expect("card deletes");
+    delete_card_file(path.clone(), "card_att.md".to_string(), None).expect("card deletes");
     assert!(!root.join("attachments/card_att").exists());
 
     let _ = fs::remove_dir_all(root);

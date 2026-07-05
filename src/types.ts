@@ -180,3 +180,18 @@ export interface WriteResult {
   // when the file was deleted remotely. Absent/null on a clean write.
   current_content?: string | null;
 }
+
+export interface DeleteResult {
+  conflict: boolean;
+  // Present only on a conflict: the workspace-relative path where the current
+  // on-disk version was preserved instead of being deleted.
+  copy_path?: string | null;
+}
+
+// A preserved conflict artifact (a `_conflict_` copy under cards/ or
+// .workspace/conflicts/) as enumerated by the `list_conflicts` command.
+export interface ConflictFile {
+  relative_path: string;
+  file_name: string;
+  content: string;
+}
