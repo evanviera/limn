@@ -34,6 +34,9 @@
   opacity: 0.46;
 }
 
+/* A single insertion line, centered in the gap between lists. Edge cases
+   (before the first list, after the last) sit flush against the column edge
+   so the line stays inside the scroll container instead of being clipped. */
 .column.list-drop-before::before,
 .column.list-drop-after::after {
   content: "";
@@ -41,18 +44,26 @@
   top: 8px;
   bottom: 8px;
   z-index: 2;
-  width: 2px;
+  width: 3px;
   background: var(--accent);
   border-radius: var(--radius-pill);
   box-shadow: 0 0 0 1px var(--accent-border);
 }
 
 .column.list-drop-before::before {
-  left: -13px;
+  left: calc(var(--space-6) / -2 - 1.5px);
 }
 
 .column.list-drop-after::after {
-  right: -13px;
+  right: calc(var(--space-6) / -2 - 1.5px);
+}
+
+.column:first-child.list-drop-before::before {
+  left: 0;
+}
+
+.column:last-child.list-drop-after::after {
+  right: 0;
 }
 
 .column:focus-within,
@@ -83,6 +94,13 @@ body.is-card-dragging .column:hover {
   font-weight: var(--weight-bold);
   text-overflow: ellipsis;
   white-space: nowrap;
+  cursor: grab;
+  user-select: none;
+  -webkit-user-select: none;
+}
+
+.column-header h2:active {
+  cursor: grabbing;
 }
 
 .column-header span {

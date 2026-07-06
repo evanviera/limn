@@ -553,9 +553,16 @@ export function BoardView(props: BoardViewProps) {
                 ? dropTarget.index + 1
                 : dropTarget.index
               : -1;
+          // A single insertion line marks where the dragged list will land.
+          // Interior/leading gaps draw it before the column at that index; the
+          // trailing append case (index past the last column) draws it after the
+          // final column. Never draw both for one gap, or two lines appear.
+          const isLastList = listPosition === props.board.lists.length - 1;
+          const showDropBefore = listIndicatorAt === listPosition;
+          const showDropAfter = isLastList && listIndicatorAt === listPosition + 1;
           return (
             <section
-              className={`column ${draggingListId === list.id ? "list-drag-source" : ""} ${listIndicatorAt === listPosition ? "list-drop-before" : ""} ${listIndicatorAt === listPosition + 1 ? "list-drop-after" : ""}`}
+              className={`column ${draggingListId === list.id ? "list-drag-source" : ""} ${showDropBefore ? "list-drop-before" : ""} ${showDropAfter ? "list-drop-after" : ""}`}
               data-list-id={list.id}
               data-testid={`list-${list.id}`}
               key={list.id}
@@ -576,7 +583,18 @@ export function BoardView(props: BoardViewProps) {
                 >
                   <Icon name="drag-handle" />
                 </button>
-                <h2>{list.name}</h2>
+                <h2
+                  className="list-title"
+                  data-testid={`list-title-${list.id}`}
+                  title="Drag to reorder"
+                  onPointerCancel={cancelListPointerDrag}
+                  onPointerDown={(event) => beginListPointerDrag(event, list.id)}
+                  onPointerMove={updateListPointerDrag}
+                  onPointerUp={finishListPointerDrag}
+                  onMouseDown={(event) => beginListMouseDrag(event, list.id)}
+                >
+                  {list.name}
+                </h2>
                 <span>{listCards.length}</span>
                 <button aria-label={`Rename ${list.name}`} title="Rename list" data-testid={`rename-list-${list.id}`} onClick={() => void props.onRenameList(list)}>
                   <Icon name="edit" />

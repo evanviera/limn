@@ -260,4 +260,69 @@ test.describe("smoke", () => {
       return board.lists.map((list) => list.id);
     }).toEqual(["in-progress", "done", "todo"]);
   });
+
+  test("list drag shows exactly one insertion line, including at the first position", async ({ page }) => {
+    await openApp(page);
+    await openWorkspace(page);
+
+    await page.getByTestId("create-board").click();
+    await page.getByTestId("text-dialog-input").fill("Workflow Board");
+    await page.getByTestId("text-dialog-submit").click();
+
+    const indicators = page.locator(".column.list-drop-before, .column.list-drop-after");
+
+    const doneHandle = page.getByTestId("list-drag-done");
+    const todoList = page.getByTestId("list-todo");
+    const handleBox = await doneHandle.boundingBox();
+    const todoBox = await todoList.boundingBox();
+    if (!handleBox || !todoBox) {
+      throw new Error("list bounding boxes unavailable");
+    }
+
+    // Drag the last list toward the very first position.
+    await page.mouse.move(handleBox.x + handleBox.width / 2, handleBox.y + handleBox.height / 2);
+    await page.mouse.down();
+    await page.mouse.move(handleBox.x + handleBox.width / 2 - 20, handleBox.y + handleBox.height / 2);
+    await page.mouse.move(todoBox.x + 4, todoBox.y + todoBox.height / 2);
+
+    // Never two lines at once, and the leading position must show one.
+    await expect.poll(async () => indicators.count()).toBe(1);
+    await expect(page.locator(".column:first-child.list-drop-before")).toHaveCount(1);
+
+    await page.mouse.up();
+    await expect.poll(async () => {
+      const state = await snapshot(page);
+      const board = JSON.parse(state.boards[0].content) as { lists: Array<{ id: string }> };
+      return board.lists.map((list) => list.id);
+    }).toEqual(["done", "todo", "in-progress"]);
+  });
+
+  test("a list can be dragged by its title, not just the handle", async ({ page }) => {
+    await openApp(page);
+    await openWorkspace(page);
+
+    await page.getByTestId("create-board").click();
+    await page.getByTestId("text-dialog-input").fill("Workflow Board");
+    await page.getByTestId("text-dialog-submit").click();
+
+    const titleHandle = page.getByTestId("list-title-todo");
+    const doneList = page.getByTestId("list-done");
+    const titleBox = await titleHandle.boundingBox();
+    const doneBox = await doneList.boundingBox();
+    if (!titleBox || !doneBox) {
+      throw new Error("list bounding boxes unavailable");
+    }
+
+    await page.mouse.move(titleBox.x + titleBox.width / 2, titleBox.y + titleBox.height / 2);
+    await page.mouse.down();
+    await page.mouse.move(titleBox.x + titleBox.width / 2 + 20, titleBox.y + titleBox.height / 2);
+    await page.mouse.move(doneBox.x + doneBox.width - 4, doneBox.y + doneBox.height / 2);
+    await page.mouse.up();
+
+    await expect.poll(async () => {
+      const state = await snapshot(page);
+      const board = JSON.parse(state.boards[0].content) as { lists: Array<{ id: string }> };
+      return board.lists.map((list) => list.id);
+    }).toEqual(["in-progress", "done", "todo"]);
+  });
 });
