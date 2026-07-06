@@ -178,16 +178,17 @@ export function SettingsView({
               placeholder="https://hooks.slack.com/services/..."
             />
           </label>
+          <label>
+            Notify when a card moves to list
+            <input
+              data-testid="slack-moved-to-list-input"
+              value={draft.slackMovedToListNames}
+              onChange={(event) => setDraft({ ...draft, slackMovedToListNames: event.target.value })}
+              placeholder="Done, Shipped, Archived"
+            />
+            <span className="settings-field-hint">Comma-separated list names. Leave empty to skip move notifications.</span>
+          </label>
           <div className="settings-toggle-grid" aria-label="Slack notification events">
-            <label className="settings-toggle">
-              <input
-                checked={draft.slackNotifications.cardMovedToDone}
-                data-testid="slack-notify-card-moved"
-                type="checkbox"
-                onChange={(event) => setSlackNotification("cardMovedToDone", event.target.checked)}
-              />
-              Card moved to Done
-            </label>
             <label className="settings-toggle">
               <input
                 checked={draft.slackNotifications.cardCompleted}

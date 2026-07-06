@@ -118,6 +118,7 @@ function settingsFields(mine: WorkspaceSettings, theirs: WorkspaceSettings | nul
   return [
     field("Workspace name", mine.workspaceName, theirs?.workspaceName),
     field("Slack webhook", mine.slackWebhookUrl || "—", theirs ? theirs.slackWebhookUrl || "—" : undefined),
+    field("Slack move lists", mine.slackMovedToListNames || "—", theirs ? theirs.slackMovedToListNames || "—" : undefined),
     field("Categories", String(mine.boardGroups.length), theirs ? String(theirs.boardGroups.length) : undefined),
     field("Saved views", String(mine.savedViews.length), theirs ? String(theirs.savedViews.length) : undefined),
     field("Updated", mine.updatedAt, theirs?.updatedAt),

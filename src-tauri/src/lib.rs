@@ -514,8 +514,8 @@ fn default_settings(root: &Path) -> Result<String, String> {
         "schemaVersion": 1,
         "workspaceName": name,
         "slackWebhookUrl": "",
+        "slackMovedToListNames": "Done",
         "slackNotifications": {
-            "cardMovedToDone": true,
             "cardCompleted": true,
             "cardAssigned": true,
             "subtaskCompleted": true

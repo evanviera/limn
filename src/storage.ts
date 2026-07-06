@@ -9,11 +9,14 @@ export type { SaveOutcome } from "./lib/mergeWrite.js";
 const SCHEMA_VERSION = 1;
 
 const DEFAULT_SLACK_NOTIFICATIONS: SlackNotificationSettings = {
-  cardMovedToDone: true,
   cardCompleted: true,
   cardAssigned: true,
   subtaskCompleted: true
 };
+
+// New boards ship with a "Done" list, so defaulting the move-notification
+// targets to "Done" preserves the historical out-of-box behavior.
+const DEFAULT_MOVED_TO_LIST_NAMES = "Done";
 
 export interface WorkspaceData {
   settings: WorkspaceSettings;
@@ -319,6 +322,7 @@ export function createDefaultSettings(workspaceName: string): WorkspaceSettings 
     schemaVersion: SCHEMA_VERSION,
     workspaceName,
     slackWebhookUrl: "",
+    slackMovedToListNames: DEFAULT_MOVED_TO_LIST_NAMES,
     slackNotifications: { ...DEFAULT_SLACK_NOTIFICATIONS },
     boardGroups: [],
     savedViews: [],
@@ -472,6 +476,7 @@ function normalizeWorkspaceSettings(settings: Partial<WorkspaceSettings> & { sla
     schemaVersion: typeof settings.schemaVersion === "number" ? settings.schemaVersion : fallback.schemaVersion,
     workspaceName: typeof settings.workspaceName === "string" ? settings.workspaceName : fallback.workspaceName,
     slackWebhookUrl: typeof settings.slackWebhookUrl === "string" ? settings.slackWebhookUrl : fallback.slackWebhookUrl,
+    slackMovedToListNames: normalizeMovedToListNames(settings),
     slackNotifications: normalizeSlackNotifications(settings.slackNotifications),
     boardGroups: normalizeBoardGroups(settings.boardGroups),
     savedViews: normalizeSavedViews((settings as { savedViews?: unknown }).savedViews),
@@ -524,10 +529,23 @@ function oneOf<T extends string>(value: unknown, allowed: readonly T[], fallback
   return typeof value === "string" && (allowed as readonly string[]).includes(value) ? (value as T) : fallback;
 }
 
+// The move notification used to be a boolean `cardMovedToDone` toggle. When we
+// read a settings file that predates `slackMovedToListNames`, migrate: keep the
+// historical "Done" target unless the old toggle was explicitly disabled.
+function normalizeMovedToListNames(settings: Partial<WorkspaceSettings> & { slackNotifications?: unknown }): string {
+  if (typeof settings.slackMovedToListNames === "string") {
+    return settings.slackMovedToListNames;
+  }
+  const legacy = settings.slackNotifications as unknown;
+  if (legacy && typeof legacy === "object" && (legacy as Record<string, unknown>).cardMovedToDone === false) {
+    return "";
+  }
+  return DEFAULT_MOVED_TO_LIST_NAMES;
+}
+
 function normalizeSlackNotifications(value: unknown): SlackNotificationSettings {
   const settings = value && typeof value === "object" ? value as Partial<Record<keyof SlackNotificationSettings, unknown>> : {};
   return {
-    cardMovedToDone: booleanOrDefault(settings.cardMovedToDone, DEFAULT_SLACK_NOTIFICATIONS.cardMovedToDone),
     cardCompleted: booleanOrDefault(settings.cardCompleted, DEFAULT_SLACK_NOTIFICATIONS.cardCompleted),
     cardAssigned: booleanOrDefault(settings.cardAssigned, DEFAULT_SLACK_NOTIFICATIONS.cardAssigned),
     subtaskCompleted: booleanOrDefault(settings.subtaskCompleted, DEFAULT_SLACK_NOTIFICATIONS.subtaskCompleted)

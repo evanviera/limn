@@ -43,6 +43,44 @@ test.describe("smoke", () => {
     expect(posts[1].message).toContain("Assigned to: <@U024BE7LH>");
   });
 
+  test("board-level completion and moves to a tracked list notify Slack", async ({ page }) => {
+    await openApp(page);
+    await openWorkspace(page);
+
+    await page.getByTestId("create-board").click();
+    await page.getByTestId("text-dialog-input").fill("Ops Board");
+    await page.getByTestId("text-dialog-submit").click();
+
+    await page.getByTestId("nav-settings").click();
+    await page.getByTestId("slack-webhook-input").fill("https://hooks.slack.com/services/FAKE/FAKE/FAKE");
+    await page.getByTestId("save-settings").click();
+    await expect.poll(async () => (await snapshot(page)).settings.slackWebhookUrl).toBe("https://hooks.slack.com/services/FAKE/FAKE/FAKE");
+
+    await page.locator('[data-testid^="board-nav-"]').first().click();
+    await page.getByTestId("add-card-todo").click();
+    await page.getByTestId("text-dialog-input").fill("Ship it");
+    await page.getByTestId("text-dialog-submit").click();
+    // Creating a card opens the editor; close it so the board is interactive.
+    await page.getByTestId("save-card").click();
+
+    // Complete the card straight from the board (context menu) — this path used
+    // to skip the Slack notification entirely.
+    await page.locator("article.task-card").first().click({ button: "right" });
+    await page.getByRole("menuitem", { name: "Mark complete" }).click();
+
+    await expect.poll(async () => (await snapshot(page)).slack.length).toBe(1);
+    let posts = (await snapshot(page)).slack;
+    expect(posts[0].message).toContain("✅ Task completed: Ship it");
+
+    // Moving into the "Done" list (the default tracked list) notifies too.
+    await page.locator("article.task-card").first().click({ button: "right" });
+    await page.getByRole("menuitem", { name: "Move to Done" }).click();
+
+    await expect.poll(async () => (await snapshot(page)).slack.length).toBe(2);
+    posts = (await snapshot(page)).slack;
+    expect(posts[1].message).toContain("➡️ Card moved to Done: Ship it");
+  });
+
   test("manual update check reports when Limn is up to date", async ({ page }) => {
     await openApp(page);
     await openWorkspace(page);

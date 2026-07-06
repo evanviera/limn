@@ -74,6 +74,7 @@ import { THEME_STORAGE_KEY } from "./lib/constants";
 import type { SlackNotificationKey, ThemeMode } from "./lib/constants";
 import { buildCalendar, dueReminderCount, type CalendarEntry } from "./lib/dueDate";
 import { EMPTY_FILTER } from "./lib/filter";
+import { listNameTriggersMoveNotification } from "./lib/notifications";
 import { compareCardsByOrder, nextOrderForList, placeInList } from "./lib/ordering";
 import { countLabel, errorText, initials, readStoredThemeMode, sameJson, selectActiveBoardId, slackTag, upsertById } from "./lib/format";
 import { readActiveMemberId, resolveActiveMember, writeActiveMemberId } from "./lib/identity";
@@ -1048,8 +1049,10 @@ export default function App() {
         : addActivity({ ...card, listId, order: placement.order }, "moved", `Moved from ${previousList?.name ?? "Unknown"} to ${list?.name ?? "Unknown"}`);
       const result = await persistCard(moved, card);
 
-      if (result && result.status !== "conflict" && !sameList && list?.name.trim().toLowerCase() === "done") {
-        await sendSlack("cardMovedToDone", `➡️ Card moved to Done: ${moved.title}\nAssigned to: ${assigneeSlackTags(moved)}\nBoard: ${activeBoard.name}`);
+      const movedListName = list?.name ?? "";
+      const configuredListNames = settingsRef.current?.slackMovedToListNames ?? "";
+      if (result && result.status !== "conflict" && !sameList && listNameTriggersMoveNotification(movedListName, configuredListNames)) {
+        await sendSlack(null, `➡️ Card moved to ${movedListName}: ${moved.title}\nAssigned to: ${assigneeSlackTags(moved)}\nBoard: ${activeBoard.name}`);
       }
     } catch (reason) {
       setError(`Move failed: ${errorText(reason)}`);
@@ -1452,10 +1455,13 @@ export default function App() {
     await persistWorkspaceSettings(nextSettings, "Settings saved.");
   }
 
-  async function sendSlack(notification: SlackNotificationKey, message: string) {
+  // `notification` gates the send on a per-event toggle; pass null when the
+  // caller has already decided the event should fire (e.g. the move-to-list
+  // notification, which is gated by its configured list names instead).
+  async function sendSlack(notification: SlackNotificationKey | null, message: string) {
     const currentSettings = settingsRef.current;
     const webhookUrl = currentSettings?.slackWebhookUrl.trim();
-    if (currentSettings?.slackNotifications?.[notification] === false) {
+    if (notification && currentSettings?.slackNotifications?.[notification] === false) {
       return;
     }
     if (!webhookUrl) {
@@ -1792,7 +1798,12 @@ export default function App() {
       completed ? "completed" : "updated",
       completed ? "Marked complete" : "Marked incomplete"
     );
-    await persistCard(next, card);
+    const result = await persistCard(next, card);
+    // Completing a card from the board (checkbox, context menu, or keyboard
+    // shortcut) must notify Slack just like completing it from the editor does.
+    if (completed && result && result.status !== "conflict") {
+      await sendSlack("cardCompleted", `✅ Task completed: ${next.title}\nAssigned to: ${assigneeSlackTags(next)}\nBoard: ${boardName(next.boardId)}`);
+    }
   }
 
   function showCommandNotice(message: string, kind: "info" | "warning") {

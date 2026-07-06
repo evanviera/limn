@@ -4,6 +4,11 @@ export interface WorkspaceSettings {
   schemaVersion: number;
   workspaceName: string;
   slackWebhookUrl: string;
+  // Comma-separated list names that trigger a "card moved to list" Slack
+  // notification. Matched case-insensitively against the destination list's
+  // name; empty means no move notifications are sent. Lists are user-named, so
+  // this is configurable rather than hard-coded to a "Done" column.
+  slackMovedToListNames: string;
   slackNotifications: SlackNotificationSettings;
   boardGroups: BoardGroup[];
   savedViews: SavedView[];
@@ -51,7 +56,6 @@ export interface SavedView {
 }
 
 export interface SlackNotificationSettings {
-  cardMovedToDone: boolean;
   cardCompleted: boolean;
   cardAssigned: boolean;
   subtaskCompleted: boolean;

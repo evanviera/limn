@@ -25,6 +25,7 @@ import {
 } from "../.tmp/storage-test/src/lib/merge.js";
 import { resolveConflictWrite } from "../.tmp/storage-test/src/lib/mergeWrite.js";
 import { buildConflict, buildConflicts } from "../.tmp/storage-test/src/lib/conflicts.js";
+import { listNameTriggersMoveNotification, parseMovedToListNames } from "../.tmp/storage-test/src/lib/notifications.js";
 
 const baseCard = {
   id: "card_one",
@@ -328,11 +329,11 @@ const workspace = parseWorkspace({
 
 assert.equal(workspace.settings.workspaceName, "Limn Workspace");
 assert.deepEqual(workspace.settings.slackNotifications, {
-  cardMovedToDone: true,
   cardCompleted: true,
   cardAssigned: true,
   subtaskCompleted: true
 });
+assert.equal(workspace.settings.slackMovedToListNames, "Done");
 assert.deepEqual(workspace.settings.boardGroups, []);
 assert.deepEqual(workspace.settings.savedViews, []);
 assert.deepEqual(workspace.membersFile.members, []);
@@ -395,6 +396,37 @@ assert.deepEqual(savedViewWorkspace.settings.savedViews[1].filter, {
   archived: "active",
   sort: "updated"
 });
+
+// Move-notification config migrates from the legacy `cardMovedToDone` boolean:
+// an absent field defaults to "Done", but an explicit legacy `false` disables it.
+const migratedDefault = parseWorkspace({
+  settings: JSON.stringify({ schemaVersion: 1, workspaceName: "Legacy", slackWebhookUrl: "", slackNotifications: { cardMovedToDone: true, cardCompleted: true, cardAssigned: true, subtaskCompleted: true } }),
+  members: JSON.stringify({ schemaVersion: 1, members: [] }),
+  boards: [],
+  cards: [],
+  warnings: []
+});
+assert.equal(migratedDefault.settings.slackMovedToListNames, "Done");
+assert.equal("cardMovedToDone" in migratedDefault.settings.slackNotifications, false);
+
+const migratedDisabled = parseWorkspace({
+  settings: JSON.stringify({ schemaVersion: 1, workspaceName: "Legacy", slackWebhookUrl: "", slackNotifications: { cardMovedToDone: false, cardCompleted: true, cardAssigned: true, subtaskCompleted: true } }),
+  members: JSON.stringify({ schemaVersion: 1, members: [] }),
+  boards: [],
+  cards: [],
+  warnings: []
+});
+assert.equal(migratedDisabled.settings.slackMovedToListNames, "");
+
+// Move-notification list matching: comma-separated, trimmed, case-insensitive,
+// de-duplicated; empty config and blank list names never match.
+assert.deepEqual(parseMovedToListNames("Done, Shipped ,done"), ["done", "shipped"]);
+assert.deepEqual(parseMovedToListNames("  ,  "), []);
+assert.equal(listNameTriggersMoveNotification("Done", "done, shipped"), true);
+assert.equal(listNameTriggersMoveNotification("  done  ", "Done"), true);
+assert.equal(listNameTriggersMoveNotification("In Progress", "Done, Shipped"), false);
+assert.equal(listNameTriggersMoveNotification("Done", ""), false);
+assert.equal(listNameTriggersMoveNotification("", "Done"), false);
 
 // --- Conflict-aware merge engine ---
 
@@ -506,7 +538,7 @@ const boardNameClash = mergeBoard(boardBase, { ...boardBase, name: "Ours" }, { .
 assert.deepEqual(boardNameClash.conflicts, ["name"]);
 
 // Settings merge: never hard-conflicts; different edits union.
-const settingsBase = { schemaVersion: 1, workspaceName: "WS", slackWebhookUrl: "", slackNotifications: { cardMovedToDone: true, cardCompleted: true, cardAssigned: true, subtaskCompleted: true }, boardGroups: [], savedViews: [], createdAt: "2026-07-01T00:00:00.000Z", updatedAt: "2026-07-01T00:00:00.000Z" };
+const settingsBase = { schemaVersion: 1, workspaceName: "WS", slackWebhookUrl: "", slackMovedToListNames: "Done", slackNotifications: { cardCompleted: true, cardAssigned: true, subtaskCompleted: true }, boardGroups: [], savedViews: [], createdAt: "2026-07-01T00:00:00.000Z", updatedAt: "2026-07-01T00:00:00.000Z" };
 const settingsOurs = { ...settingsBase, slackWebhookUrl: "https://hook", updatedAt: "2026-07-01T02:00:00.000Z", savedViews: [{ id: "v1", name: "Mine", filter: EMPTY_FILTER, createdAt: "x", updatedAt: "x" }] };
 const settingsTheirs = { ...settingsBase, slackNotifications: { ...settingsBase.slackNotifications, cardCompleted: false }, updatedAt: "2026-07-01T01:00:00.000Z" };
 const settingsMerged = mergeSettings(settingsBase, settingsOurs, settingsTheirs);
@@ -701,8 +733,8 @@ try {
     schemaVersion: 1,
     workspaceName: "Acceptance Workspace",
     slackWebhookUrl: "http://127.0.0.1:9/slack",
+    slackMovedToListNames: "Shipped, Done",
     slackNotifications: {
-      cardMovedToDone: true,
       cardCompleted: false,
       cardAssigned: true,
       subtaskCompleted: false
@@ -773,6 +805,7 @@ try {
   const reloaded = await readWorkspaceFiles(workspaceRoot);
   assert.equal(reloaded.settings.workspaceName, "Acceptance Workspace");
   assert.deepEqual(reloaded.settings.slackNotifications, settings.slackNotifications);
+  assert.equal(reloaded.settings.slackMovedToListNames, "Shipped, Done");
   assert.deepEqual(reloaded.settings.boardGroups, settings.boardGroups);
   assert.equal(reloaded.membersFile.members.length, 2);
   assert.equal(reloaded.membersFile.members[0].slackHandle, "@ada");
