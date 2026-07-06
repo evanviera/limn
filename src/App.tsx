@@ -888,6 +888,19 @@ export default function App() {
     });
   }
 
+  async function toggleListCollapsed(list: BoardList) {
+    if (!activeBoard) {
+      return;
+    }
+    await persistBoard({
+      ...activeBoard,
+      lists: activeBoard.lists.map((item) =>
+        item.id === list.id ? { ...item, collapsed: !item.collapsed } : item
+      ),
+      updatedAt: timestamp()
+    });
+  }
+
   async function deleteList(list: BoardList) {
     if (!activeBoard) {
       return;
@@ -2060,6 +2073,7 @@ export default function App() {
             onDeleteBoard={removeBoard}
             onRenameList={renameList}
             onDeleteList={deleteList}
+            onToggleListCollapsed={toggleListCollapsed}
             onMoveList={moveList}
             onAddCard={addCard}
             onMoveCard={moveCard}

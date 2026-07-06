@@ -7,9 +7,7 @@
 .columns {
   overflow-x: auto;
   overflow-y: hidden;
-  display: grid;
-  grid-auto-flow: column;
-  grid-auto-columns: minmax(288px, 1fr);
+  display: flex;
   align-items: start;
   gap: var(--space-6);
   min-height: 0;
@@ -18,6 +16,8 @@
 
 .column {
   position: relative;
+  flex: 1 1 288px;
+  min-width: 288px;
   display: grid;
   grid-template-rows: auto minmax(0, 1fr) auto;
   gap: var(--space-4);
@@ -28,6 +28,70 @@
   border: 1px solid var(--border-soft);
   border-radius: var(--radius-lg);
   transition: border-color var(--transition), background var(--transition);
+}
+
+/* Collapsed rail: a narrow vertical strip that reclaims horizontal space while
+   keeping the list reachable (click to expand, drag handle to reorder). */
+.column.collapsed {
+  flex: 0 0 auto;
+  min-width: 0;
+  width: 44px;
+  grid-template-rows: auto minmax(0, 1fr);
+  gap: var(--space-2);
+  padding: 12px 0;
+  justify-items: center;
+}
+
+.column.collapsed .list-drag-handle {
+  width: 28px;
+  min-width: 28px;
+  min-height: 28px;
+  padding: 0;
+  color: var(--text-faint);
+  background: transparent;
+  border-color: transparent;
+  cursor: grab;
+}
+
+.column.collapsed .list-drag-handle:active {
+  cursor: grabbing;
+}
+
+.collapsed-list-body {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: var(--space-3);
+  width: 100%;
+  min-height: 0;
+  padding: var(--space-2) 0;
+  color: var(--text-faint);
+  background: transparent;
+  border: none;
+  cursor: pointer;
+}
+
+.collapsed-list-body:hover {
+  color: var(--text-strong);
+}
+
+.collapsed-list-title {
+  overflow: hidden;
+  max-height: 100%;
+  color: var(--text-strong);
+  font-size: var(--text-base);
+  font-weight: var(--weight-bold);
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  writing-mode: vertical-rl;
+  transform: rotate(180deg);
+}
+
+.collapsed-list-count {
+  color: var(--text-muted);
+  font-size: var(--text-sm);
+  font-variant-numeric: tabular-nums;
+  opacity: 0.7;
 }
 
 .column.list-drag-source {
@@ -79,11 +143,15 @@ body.is-card-dragging .column:hover {
 
 .column-header {
   display: grid;
-  grid-template-columns: auto minmax(0, 1fr) auto auto auto;
+  grid-template-columns: auto auto minmax(0, 1fr) auto auto auto;
   align-items: center;
   gap: var(--space-3);
   min-height: 28px;
   padding: 0 var(--space-1);
+}
+
+.column-header .list-collapse-toggle {
+  cursor: pointer;
 }
 
 .column-header h2 {

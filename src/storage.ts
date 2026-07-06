@@ -583,7 +583,7 @@ function normalizeBoardLists(value: unknown): Board["lists"] {
       return [];
     }
 
-    return [{ id: list.id, name: list.name }];
+    return [{ id: list.id, name: list.name, ...(list.collapsed === true ? { collapsed: true } : {}) }];
   });
 }
 

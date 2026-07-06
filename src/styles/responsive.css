@@ -72,8 +72,9 @@
     width: 100%;
   }
 
-  .columns {
-    grid-auto-columns: minmax(260px, 86vw);
+  .column:not(.collapsed) {
+    flex: 1 1 86vw;
+    min-width: 260px;
   }
 
   .inline-form,

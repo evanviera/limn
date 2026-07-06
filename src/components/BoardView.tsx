@@ -20,6 +20,7 @@ export interface BoardViewProps {
   onDeleteBoard: (board: Board) => Promise<void>;
   onRenameList: (list: BoardList) => Promise<void>;
   onDeleteList: (list: BoardList) => Promise<void>;
+  onToggleListCollapsed: (list: BoardList) => Promise<void>;
   onMoveList: (listId: string, index: number) => Promise<void>;
   onAddCard: (listId: string) => Promise<void>;
   // `index` is where the card should land among the *other* cards already in the
@@ -468,6 +469,11 @@ export function BoardView(props: BoardViewProps) {
   function listContextItems(list: BoardList): ContextMenuItem[] {
     return [
       { label: "Add card", icon: "plus", onSelect: () => void props.onAddCard(list.id) },
+      {
+        label: list.collapsed ? "Expand list" : "Collapse list",
+        icon: list.collapsed ? "chevron-right" : "chevron-down",
+        onSelect: () => void props.onToggleListCollapsed(list)
+      },
       { label: "Rename list", icon: "edit", onSelect: () => void props.onRenameList(list) },
       { label: "Copy list name", icon: "copy", onSelect: () => void props.onCopyText(list.name) },
       { type: "separator" },
@@ -560,9 +566,48 @@ export function BoardView(props: BoardViewProps) {
           const isLastList = listPosition === props.board.lists.length - 1;
           const showDropBefore = listIndicatorAt === listPosition;
           const showDropAfter = isLastList && listIndicatorAt === listPosition + 1;
+          const columnClass = `column ${list.collapsed ? "collapsed" : ""} ${draggingListId === list.id ? "list-drag-source" : ""} ${showDropBefore ? "list-drop-before" : ""} ${showDropAfter ? "list-drop-after" : ""}`;
+          if (list.collapsed) {
+            return (
+              <section
+                className={columnClass}
+                data-list-id={list.id}
+                data-testid={`list-${list.id}`}
+                key={list.id}
+                onContextMenu={(event) => props.onOpenContextMenu(event, listContextItems(list), list.name)}
+              >
+                <button
+                  aria-label={`Drag list ${list.name}`}
+                  className="list-drag-handle"
+                  data-testid={`list-drag-${list.id}`}
+                  title="Drag list"
+                  onContextMenu={(event) => event.stopPropagation()}
+                  onPointerCancel={cancelListPointerDrag}
+                  onPointerDown={(event) => beginListPointerDrag(event, list.id)}
+                  onPointerMove={updateListPointerDrag}
+                  onPointerUp={finishListPointerDrag}
+                  onMouseDown={(event) => beginListMouseDrag(event, list.id)}
+                >
+                  <Icon name="drag-handle" />
+                </button>
+                <button
+                  aria-label={`Expand list ${list.name}`}
+                  aria-expanded={false}
+                  className="collapsed-list-body"
+                  data-testid={`collapse-list-${list.id}`}
+                  title="Expand list"
+                  onClick={() => void props.onToggleListCollapsed(list)}
+                >
+                  <Icon name="chevron-right" />
+                  <span className="collapsed-list-title">{list.name}</span>
+                  <span className="collapsed-list-count">{listCards.length}</span>
+                </button>
+              </section>
+            );
+          }
           return (
             <section
-              className={`column ${draggingListId === list.id ? "list-drag-source" : ""} ${showDropBefore ? "list-drop-before" : ""} ${showDropAfter ? "list-drop-after" : ""}`}
+              className={columnClass}
               data-list-id={list.id}
               data-testid={`list-${list.id}`}
               key={list.id}
@@ -582,6 +627,16 @@ export function BoardView(props: BoardViewProps) {
                   onMouseDown={(event) => beginListMouseDrag(event, list.id)}
                 >
                   <Icon name="drag-handle" />
+                </button>
+                <button
+                  aria-label={`Collapse list ${list.name}`}
+                  aria-expanded={true}
+                  className="list-collapse-toggle"
+                  data-testid={`collapse-list-${list.id}`}
+                  title="Collapse list"
+                  onClick={() => void props.onToggleListCollapsed(list)}
+                >
+                  <Icon name="chevron-down" />
                 </button>
                 <h2
                   className="list-title"

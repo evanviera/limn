@@ -325,4 +325,34 @@ test.describe("smoke", () => {
       return board.lists.map((list) => list.id);
     }).toEqual(["in-progress", "done", "todo"]);
   });
+
+  test("a list can be collapsed to a rail and expanded again", async ({ page }) => {
+    await openApp(page);
+    await openWorkspace(page);
+
+    await page.getByTestId("create-board").click();
+    await page.getByTestId("text-dialog-input").fill("Workflow Board");
+    await page.getByTestId("text-dialog-submit").click();
+
+    const todoList = page.getByTestId("list-todo");
+    await expect(todoList).not.toHaveClass(/collapsed/);
+
+    // Collapse: the header cards/add-card disappear and a vertical rail remains.
+    await page.getByTestId("collapse-list-todo").click();
+    await expect(todoList).toHaveClass(/collapsed/);
+    await expect(todoList.locator(".collapsed-list-title")).toHaveText("To Do");
+    await expect(page.getByTestId("add-card-todo")).toHaveCount(0);
+
+    // The collapsed state persists to the board file.
+    await expect.poll(async () => {
+      const state = await snapshot(page);
+      const board = JSON.parse(state.boards[0].content) as { lists: Array<{ id: string; collapsed?: boolean }> };
+      return board.lists.find((list) => list.id === "todo")?.collapsed;
+    }).toBe(true);
+
+    // Expand from the rail restores the full column.
+    await page.getByTestId("collapse-list-todo").click();
+    await expect(todoList).not.toHaveClass(/collapsed/);
+    await expect(page.getByTestId("add-card-todo")).toHaveCount(1);
+  });
 });

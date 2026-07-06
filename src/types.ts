@@ -82,6 +82,8 @@ export interface MembersFile {
 export interface BoardList {
   id: string;
   name: string;
+  // When true the list is rendered as a narrow rail to save horizontal space.
+  collapsed?: boolean;
 }
 
 export interface Board {
