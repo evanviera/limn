@@ -136,7 +136,7 @@ export function SettingsView({
         <div className="settings-fields">
           <label>
             Workspace name
-            <input value={draft.workspaceName} onChange={(event) => setDraft({ ...draft, workspaceName: event.target.value })} />
+            <input data-testid="workspace-name-input" value={draft.workspaceName} onChange={(event) => setDraft({ ...draft, workspaceName: event.target.value })} />
           </label>
           <label>
             Workspace folder

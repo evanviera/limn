@@ -10,6 +10,9 @@ interface HarnessFile {
 }
 
 interface HarnessSnapshot {
+  // The active workspace's contents. The harness supports several open
+  // workspaces (see `stores`); snapshot always reflects whichever is active so
+  // single-workspace tests read exactly what they wrote.
   settings: WorkspaceSettings;
   members: MembersFile;
   boards: HarnessFile[];
@@ -20,6 +23,9 @@ interface HarnessSnapshot {
   attachments: Array<{ path: string; size: number }>;
   exports: Array<{ path: string; content: string }>;
   lastWorkspace: string | null;
+  // The open workspace tabs and which one is active, mirroring the real
+  // get_open_workspaces command.
+  openWorkspaces: { active: string | null; paths: string[] };
   externalLinks: string[];
   loadWorkspaceCount: number;
   slack: Array<{ webhookUrl: string; message: string }>;
@@ -32,49 +38,91 @@ interface HarnessSnapshot {
 
 type UpdaterMode = "none" | "available" | "install-fail";
 
-const workspacePath = "/mock/limn-e2e-workspace";
+const DEFAULT_WORKSPACE_PATH = "/mock/limn-e2e-workspace";
 const now = "2026-06-27T12:00:00.000Z";
-const settings: WorkspaceSettings = {
-  schemaVersion: 1,
-  workspaceName: "limn-e2e-workspace",
-  slackWebhookUrl: "",
-  slackMovedToListNames: "Done",
-  slackNotifications: {
-    cardCompleted: true,
-    cardAssigned: true,
-    subtaskCompleted: true
-  },
-  boardGroups: [],
-  savedViews: [],
-  createdAt: now,
-  updatedAt: now
-};
 
-const members: MembersFile = { schemaVersion: 1, members: [], updatedAt: now };
-const boards = new Map<string, string>();
-const cards = new Map<string, string>();
-// Preserved conflict copies under .workspace/conflicts/, keyed by their
-// workspace-relative path. Card-side copies (cards/*_conflict_*.md) live in the
-// `cards` map, mirroring the real filesystem layout.
-const conflictFiles = new Map<string, string>();
-// Attachment files keyed by `${cardId}/${storedName}` → byte size. There is no
-// real filesystem in the harness, so this stands in for attachments/<cardId>/.
-const attachments = new Map<string, number>();
-// Files written by exports (e.g. the .ics calendar), keyed by relative path.
-const exports = new Map<string, string>();
-const attachmentPickQueue: string[][] = [];
+// A single mock workspace's mutable contents. There is no real filesystem, so
+// these maps stand in for the on-disk boards/, cards/, attachments/<cardId>/,
+// exports/, and .workspace/conflicts/ folders.
+interface WorkspaceStore {
+  settings: WorkspaceSettings;
+  members: MembersFile;
+  boards: Map<string, string>;
+  cards: Map<string, string>;
+  conflictFiles: Map<string, string>;
+  attachments: Map<string, number>;
+  exports: Map<string, string>;
+  loadWorkspaceCount: number;
+}
+
+function workspaceBaseName(path: string): string {
+  return path.split(/[\\/]/).filter(Boolean).pop() || path;
+}
+
+function makeStore(path: string): WorkspaceStore {
+  return {
+    settings: {
+      schemaVersion: 1,
+      workspaceName: workspaceBaseName(path),
+      slackWebhookUrl: "",
+      slackMovedToListNames: "Done",
+      slackNotifications: {
+        cardCompleted: true,
+        cardAssigned: true,
+        subtaskCompleted: true
+      },
+      boardGroups: [],
+      savedViews: [],
+      createdAt: now,
+      updatedAt: now
+    },
+    members: { schemaVersion: 1, members: [], updatedAt: now },
+    boards: new Map<string, string>(),
+    cards: new Map<string, string>(),
+    conflictFiles: new Map<string, string>(),
+    attachments: new Map<string, number>(),
+    exports: new Map<string, string>(),
+    loadWorkspaceCount: 0
+  };
+}
+
+const stores = new Map<string, WorkspaceStore>();
+stores.set(DEFAULT_WORKSPACE_PATH, makeStore(DEFAULT_WORKSPACE_PATH));
+// The workspace every path-bearing IPC command reads/writes. Set from the
+// command's `path` argument (mirroring the real backend, which is told which
+// workspace each call targets).
+let activePath = DEFAULT_WORKSPACE_PATH;
+
+function storeFor(path: string): WorkspaceStore {
+  let store = stores.get(path);
+  if (!store) {
+    store = makeStore(path);
+    stores.set(path, store);
+  }
+  return store;
+}
+
+function active(): WorkspaceStore {
+  return storeFor(activePath);
+}
+
+// Paths that the next `pick_workspace_folder` calls should return, letting a
+// test open a specific (second, third, …) workspace. Falls back to the default
+// path so existing single-workspace tests need no setup.
+const workspacePickQueue: string[] = [];
 const listeners = new Map<string, Set<Handler<any>>>();
 const externalLinks: string[] = [];
 const slack: Array<{ webhookUrl: string; message: string }> = [];
 const promptQueue: Array<string | null> = [];
 const confirmQueue: boolean[] = [];
+const attachmentPickQueue: string[][] = [];
 const updater = {
   mode: "none" as UpdaterMode,
   installed: false,
   restarted: false
 };
-let lastWorkspace: string | null = null;
-let loadWorkspaceCount = 0;
+// The persisted open-tab state, mirroring get_open_workspaces / save_open_workspaces.
+const openWorkspacesState: { active: string | null; paths: string[] } = { active: null, paths: [] };
 
 if (new URLSearchParams(window.location.search).has("resetLimnE2e")) {
   sessionStorage.removeItem("limn-e2e-state");
@@ -82,33 +130,40 @@ if (new URLSearchParams(window.location.search).has("resetLimnE2e")) {
   const saved = sessionStorage.getItem("limn-e2e-state");
   if (saved) {
     const restored = JSON.parse(saved) as HarnessSnapshot;
-    Object.assign(settings, restored.settings);
-    members.members = restored.members.members;
-    boards.clear();
-    cards.clear();
+    // Only the active workspace's contents are persisted across reloads (a real
+    // filesystem keeps every folder; the harness keeps just the active one). It
+    // rehydrates into the default store, matching a fresh launch reopening it.
+    const store = storeFor(DEFAULT_WORKSPACE_PATH);
+    Object.assign(store.settings, restored.settings);
+    store.members.members = restored.members.members;
+    store.boards.clear();
+    store.cards.clear();
     for (const file of restored.boards) {
-      boards.set(file.file_name, file.content);
+      store.boards.set(file.file_name, file.content);
     }
     for (const file of restored.cards) {
-      cards.set(file.file_name, file.content);
+      store.cards.set(file.file_name, file.content);
     }
-    conflictFiles.clear();
+    store.conflictFiles.clear();
     for (const file of restored.conflicts ?? []) {
-      conflictFiles.set(file.file_name, file.content);
+      store.conflictFiles.set(file.file_name, file.content);
     }
-    attachments.clear();
+    store.attachments.clear();
     for (const item of restored.attachments ?? []) {
-      attachments.set(item.path, item.size);
+      store.attachments.set(item.path, item.size);
     }
-    exports.clear();
+    store.exports.clear();
     for (const item of restored.exports ?? []) {
-      exports.set(item.path, item.content);
+      store.exports.set(item.path, item.content);
     }
+    store.loadWorkspaceCount = restored.loadWorkspaceCount ?? 0;
     externalLinks.splice(0, externalLinks.length, ...(restored.externalLinks ?? []));
     slack.splice(0, slack.length, ...restored.slack);
     Object.assign(updater, restored.updater ?? { mode: "none", installed: false, restarted: false });
-    lastWorkspace = restored.lastWorkspace;
-    loadWorkspaceCount = restored.loadWorkspaceCount ?? 0;
+    if (restored.openWorkspaces) {
+      openWorkspacesState.active = restored.openWorkspaces.active;
+      openWorkspacesState.paths = [...restored.openWorkspaces.paths];
+    }
   }
 }
 
@@ -120,28 +175,30 @@ function emit<T = unknown>(event: string, payload?: T) {
 }
 
 function snapshot(): HarnessSnapshot {
+  const store = active();
   return {
-    settings: JSON.parse(JSON.stringify(settings)) as WorkspaceSettings,
-    members: JSON.parse(JSON.stringify(members)) as MembersFile,
-    boards: [...boards.entries()].sort().map(([file_name, content]) => ({ file_name, content })),
-    cards: [...cards.entries()].sort().map(([file_name, content]) => ({ file_name, content })),
-    conflicts: [...conflictFiles.entries()].sort().map(([file_name, content]) => ({ file_name, content })),
-    attachments: [...attachments.entries()].sort().map(([path, size]) => ({ path, size })),
-    exports: [...exports.entries()].sort().map(([path, content]) => ({ path, content })),
-    lastWorkspace,
+    settings: JSON.parse(JSON.stringify(store.settings)) as WorkspaceSettings,
+    members: JSON.parse(JSON.stringify(store.members)) as MembersFile,
+    boards: [...store.boards.entries()].sort().map(([file_name, content]) => ({ file_name, content })),
+    cards: [...store.cards.entries()].sort().map(([file_name, content]) => ({ file_name, content })),
+    conflicts: [...store.conflictFiles.entries()].sort().map(([file_name, content]) => ({ file_name, content })),
+    attachments: [...store.attachments.entries()].sort().map(([path, size]) => ({ path, size })),
+    exports: [...store.exports.entries()].sort().map(([path, content]) => ({ path, content })),
+    lastWorkspace: openWorkspacesState.active,
+    openWorkspaces: { active: openWorkspacesState.active, paths: [...openWorkspacesState.paths] },
     externalLinks: [...externalLinks],
-    loadWorkspaceCount,
+    loadWorkspaceCount: store.loadWorkspaceCount,
     slack: [...slack],
     updater: { ...updater }
   };
 }
 
-function loadFiles(): WorkspaceFiles {
+function loadFiles(store: WorkspaceStore): WorkspaceFiles {
   return {
-    settings: `${JSON.stringify(settings, null, 2)}\n`,
-    members: `${JSON.stringify(members, null, 2)}\n`,
-    boards: [...boards.entries()].sort().map(([file_name, content]) => ({ file_name, content })),
-    cards: [...cards.entries()].sort().map(([file_name, content]) => ({ file_name, content })),
+    settings: `${JSON.stringify(store.settings, null, 2)}\n`,
+    members: `${JSON.stringify(store.members, null, 2)}\n`,
+    boards: [...store.boards.entries()].sort().map(([file_name, content]) => ({ file_name, content })),
+    cards: [...store.cards.entries()].sort().map(([file_name, content]) => ({ file_name, content })),
     warnings: []
   };
 }
@@ -172,6 +229,15 @@ function contentArg(args: Record<string, unknown> | undefined): string {
     throw new Error("Missing content");
   }
   return content;
+}
+
+// Point the harness at the workspace a path-bearing command targets, mirroring
+// the real backend (each IPC call names its workspace path).
+function useWorkspace(args: Record<string, unknown> | undefined): WorkspaceStore {
+  if (typeof args?.path === "string" && args.path) {
+    activePath = args.path;
+  }
+  return active();
 }
 
 // Mirrors the Rust `file_version` helper: the optimistic-concurrency token is the
@@ -205,15 +271,15 @@ function expectedVersionArg(args: Record<string, unknown> | undefined): string |
 // Mirror the Rust write_conflict_copy naming and placement: card copies land in
 // cards/ (surfacing as a recoverable duplicate); everything else in
 // .workspace/conflicts/. Returns the workspace-relative path.
-function preserveConflictCopy(relativeDir: string, fileName: string, content: string): string {
+function preserveConflictCopy(store: WorkspaceStore, relativeDir: string, fileName: string, content: string): string {
   const stem = fileName.replace(/\.[^.]+$/, "");
   const ext = fileName.split(".").pop() ?? "md";
   const copyName = `${stem}_conflict_${Date.now()}${Math.random().toString(36).slice(2, 6)}.${ext}`;
   if (relativeDir === "cards") {
-    cards.set(copyName, content);
+    store.cards.set(copyName, content);
     emit("workspace-changed");
   } else {
-    conflictFiles.set(copyName, content);
+    store.conflictFiles.set(copyName, content);
     updateDebugState();
   }
   return `${relativeDir}/${copyName}`;
@@ -233,69 +299,88 @@ window.__LIMN_TEST_IPC__ = {
   async invoke<T>(command: string, args?: Record<string, unknown>): Promise<T> {
     switch (command) {
       case "pick_workspace_folder":
-        return workspacePath as T;
-      case "get_last_workspace":
-        return lastWorkspace as T;
-      case "save_last_workspace":
-        lastWorkspace = typeof args?.path === "string" ? args.path : null;
+        return (workspacePickQueue.shift() ?? DEFAULT_WORKSPACE_PATH) as T;
+      case "get_open_workspaces":
+        return { active: openWorkspacesState.active, paths: [...openWorkspacesState.paths] } as T;
+      case "save_open_workspaces": {
+        // Deliberately does not call updateDebugState (matching the historical
+        // save_last_workspace): the open-tab list persists to sessionStorage only
+        // alongside a real workspace mutation, so a reload with no writes returns
+        // to the welcome screen.
+        openWorkspacesState.paths = Array.isArray(args?.paths)
+          ? (args.paths as unknown[]).filter((path): path is string => typeof path === "string")
+          : [];
+        openWorkspacesState.active = typeof args?.active === "string" && args.active ? args.active : null;
+        if (openWorkspacesState.active) {
+          activePath = openWorkspacesState.active;
+        }
         return undefined as T;
+      }
       case "watch_workspace":
+        useWorkspace(args);
         return undefined as T;
-      case "load_workspace":
-        loadWorkspaceCount += 1;
-        return loadFiles() as T;
+      case "load_workspace": {
+        const store = useWorkspace(args);
+        store.loadWorkspaceCount += 1;
+        return loadFiles(store) as T;
+      }
       case "write_workspace_settings": {
+        const store = useWorkspace(args);
         const content = contentArg(args);
-        const conflict = casResult(".workspace/settings.json", `${JSON.stringify(settings, null, 2)}\n`, expectedVersionArg(args));
+        const conflict = casResult(".workspace/settings.json", `${JSON.stringify(store.settings, null, 2)}\n`, expectedVersionArg(args));
         if (conflict) {
           return conflict as T;
         }
-        for (const key of Object.keys(settings)) {
-          delete (settings as unknown as Record<string, unknown>)[key];
+        for (const key of Object.keys(store.settings)) {
+          delete (store.settings as unknown as Record<string, unknown>)[key];
         }
-        Object.assign(settings, JSON.parse(content) as WorkspaceSettings);
+        Object.assign(store.settings, JSON.parse(content) as WorkspaceSettings);
         emit("workspace-changed");
         return { relative_path: ".workspace/settings.json", conflict: false } satisfies WriteResult as T;
       }
       case "write_members": {
+        const store = useWorkspace(args);
         const content = contentArg(args);
-        const conflict = casResult(".workspace/members.json", `${JSON.stringify(members, null, 2)}\n`, expectedVersionArg(args));
+        const conflict = casResult(".workspace/members.json", `${JSON.stringify(store.members, null, 2)}\n`, expectedVersionArg(args));
         if (conflict) {
           return conflict as T;
         }
         const parsed = JSON.parse(content) as MembersFile;
-        members.members = parsed.members;
-        members.updatedAt = parsed.updatedAt;
+        store.members.members = parsed.members;
+        store.members.updatedAt = parsed.updatedAt;
         emit("workspace-changed");
         return { relative_path: ".workspace/members.json", conflict: false } satisfies WriteResult as T;
       }
       case "write_board_file": {
+        const store = useWorkspace(args);
         const fileName = fileNameArg(args);
-        const conflict = casResult(`boards/${fileName}`, boards.get(fileName), expectedVersionArg(args));
+        const conflict = casResult(`boards/${fileName}`, store.boards.get(fileName), expectedVersionArg(args));
         if (conflict) {
           return conflict as T;
         }
-        boards.set(fileName, contentArg(args));
+        store.boards.set(fileName, contentArg(args));
         emit("workspace-changed");
         return { relative_path: `boards/${fileName}`, conflict: false } satisfies WriteResult as T;
       }
       case "delete_board_file": {
+        const store = useWorkspace(args);
         const fileName = fileNameArg(args);
         const expected = expectedVersionArg(args);
-        const current = boards.get(fileName);
+        const current = store.boards.get(fileName);
         if (current !== undefined && expected !== undefined && versionOf(current) !== expected) {
-          const copyPath = preserveConflictCopy(".workspace/conflicts", fileName, current);
+          const copyPath = preserveConflictCopy(store, ".workspace/conflicts", fileName, current);
           return { conflict: true, copy_path: copyPath } as T;
         }
-        boards.delete(fileName);
+        store.boards.delete(fileName);
         emit("workspace-changed");
         return { conflict: false, copy_path: null } as T;
       }
       case "write_card_file": {
+        const store = useWorkspace(args);
         const fileName = fileNameArg(args);
         const content = contentArg(args);
         const expected = typeof args?.expectedUpdatedAt === "string" ? args.expectedUpdatedAt : undefined;
-        const current = cards.get(fileName);
+        const current = store.cards.get(fileName);
         // Match the Rust CAS: on a version mismatch, refuse and return disk
         // content (or null when the card was deleted remotely) for the caller to
         // three-way-merge. No conflict copy is written here.
@@ -307,42 +392,45 @@ window.__LIMN_TEST_IPC__ = {
             return { relative_path: `cards/${fileName}`, conflict: true, current_content: current } satisfies WriteResult as T;
           }
         }
-        cards.set(fileName, content);
+        store.cards.set(fileName, content);
         emit("workspace-changed");
         return { relative_path: `cards/${fileName}`, conflict: false } satisfies WriteResult as T;
       }
       case "write_conflict_copy": {
+        const store = useWorkspace(args);
         const relativeDir = String(args?.relativeDir ?? "");
         const fileName = fileNameArg(args);
         const content = contentArg(args);
-        return preserveConflictCopy(relativeDir, fileName, content) as T;
+        return preserveConflictCopy(store, relativeDir, fileName, content) as T;
       }
       case "delete_card_file": {
+        const store = useWorkspace(args);
         const fileName = fileNameArg(args);
         const expected = typeof args?.expectedUpdatedAt === "string" ? args.expectedUpdatedAt : undefined;
-        const current = cards.get(fileName);
+        const current = store.cards.get(fileName);
         // Mirror the Rust conditional delete: refuse when disk moved on under us,
         // preserving the current copy instead of discarding another device's edit.
         if (current !== undefined && expected !== undefined && versionOf(current) !== expected) {
-          const copyPath = preserveConflictCopy(".workspace/conflicts", fileName, current);
+          const copyPath = preserveConflictCopy(store, ".workspace/conflicts", fileName, current);
           return { conflict: true, copy_path: copyPath } as T;
         }
-        cards.delete(fileName);
+        store.cards.delete(fileName);
         // Attachments are cleaned up only when the card is actually removed.
         const cardId = fileName.replace(/\.md$/, "");
-        for (const key of [...attachments.keys()]) {
+        for (const key of [...store.attachments.keys()]) {
           if (key.startsWith(`${cardId}/`)) {
-            attachments.delete(key);
+            store.attachments.delete(key);
           }
         }
         emit("workspace-changed");
         return { conflict: false, copy_path: null } as T;
       }
       case "list_conflicts": {
-        const cardCopies = [...cards.entries()]
+        const store = useWorkspace(args);
+        const cardCopies = [...store.cards.entries()]
           .filter(([file_name]) => file_name.includes("_conflict_"))
           .map(([file_name, content]) => ({ relative_path: `cards/${file_name}`, file_name, content }));
-        const workspaceCopies = [...conflictFiles.entries()].map(([file_name, content]) => ({
+        const workspaceCopies = [...store.conflictFiles.entries()].map(([file_name, content]) => ({
           relative_path: `.workspace/conflicts/${file_name}`,
           file_name,
           content,
@@ -350,12 +438,13 @@ window.__LIMN_TEST_IPC__ = {
         return [...cardCopies, ...workspaceCopies].sort((a, b) => a.relative_path.localeCompare(b.relative_path)) as T;
       }
       case "delete_conflict_file": {
+        const store = useWorkspace(args);
         const relativePath = String(args?.relativePath ?? "");
         const fileName = relativePath.split("/").pop() ?? "";
         if (relativePath.startsWith("cards/")) {
-          cards.delete(fileName);
+          store.cards.delete(fileName);
         } else if (relativePath.startsWith(".workspace/conflicts/")) {
-          conflictFiles.delete(fileName);
+          store.conflictFiles.delete(fileName);
         }
         emit("workspace-changed");
         return undefined as T;
@@ -363,19 +452,21 @@ window.__LIMN_TEST_IPC__ = {
       case "pick_attachment_files":
         return (attachmentPickQueue.shift() ?? []) as T;
       case "add_attachment": {
+        const store = useWorkspace(args);
         const cardId = String(args?.cardId ?? "");
         const storedName = String(args?.storedName ?? "");
         const source = String(args?.sourcePath ?? "");
         // Deterministic stand-in size so tests can assert against it.
         const size = source.length + 1024;
-        attachments.set(`${cardId}/${storedName}`, size);
+        store.attachments.set(`${cardId}/${storedName}`, size);
         updateDebugState();
         return size as T;
       }
       case "delete_attachment": {
+        const store = useWorkspace(args);
         const cardId = String(args?.cardId ?? "");
         const storedName = String(args?.storedName ?? "");
-        attachments.delete(`${cardId}/${storedName}`);
+        store.attachments.delete(`${cardId}/${storedName}`);
         updateDebugState();
         return undefined as T;
       }
@@ -396,9 +487,10 @@ window.__LIMN_TEST_IPC__ = {
       case "read_attachment_preview":
       case "read_attachment_thumbnail":
       case "read_attachment_large_preview": {
+        const store = useWorkspace(args);
         const cardId = String(args?.cardId ?? "");
         const storedName = String(args?.storedName ?? "");
-        if (!attachments.has(`${cardId}/${storedName}`)) {
+        if (!store.attachments.has(`${cardId}/${storedName}`)) {
           throw new Error("Attachment file does not exist");
         }
         return attachmentPreview(storedName) as T;
@@ -421,11 +513,12 @@ window.__LIMN_TEST_IPC__ = {
         updateDebugState();
         return undefined as T;
       case "open_workspace_folder":
-        externalLinks.push(`file://${workspacePath}`);
+        externalLinks.push(`file://${typeof args?.path === "string" ? args.path : activePath}`);
         updateDebugState();
         return undefined as T;
       case "export_calendar": {
-        exports.set("exports/limn-due-dates.ics", contentArg(args));
+        const store = useWorkspace(args);
+        store.exports.set("exports/limn-due-dates.ics", contentArg(args));
         updateDebugState();
         return "exports/limn-due-dates.ics" as T;
       }
@@ -474,11 +567,11 @@ window.__LIMN_TEST_UPDATER__ = {
 window.__LIMN_E2E__ = {
   snapshot,
   externalEditBoard(fileName: string, board: Board) {
-    boards.set(fileName, `${JSON.stringify(board, null, 2)}\n`);
+    active().boards.set(fileName, `${JSON.stringify(board, null, 2)}\n`);
     emit("workspace-changed");
   },
   externalEditCard(fileName: string, content: string, silent = false) {
-    cards.set(fileName, content);
+    active().cards.set(fileName, content);
     if (silent) {
       // Change disk without waking the watcher, so the app keeps a stale version
       // — used to exercise version-checked deletes racing a remote edit.
@@ -488,8 +581,11 @@ window.__LIMN_E2E__ = {
     }
   },
   corruptCard(fileName: string) {
-    cards.set(fileName, "not frontmatter");
+    active().cards.set(fileName, "not frontmatter");
     emit("workspace-changed");
+  },
+  queueWorkspacePick(path: string) {
+    workspacePickQueue.push(path);
   },
   resetSlack() {
     slack.splice(0, slack.length);
@@ -512,6 +608,7 @@ function applyCommand(
     | { type: "queuePrompt"; value: string | null }
     | { type: "queueConfirm"; value: boolean }
     | { type: "queueAttachmentPick"; paths: string[] }
+    | { type: "queueWorkspacePick"; path: string }
     | { type: "dropFiles"; paths: string[]; x?: number; y?: number }
     | { type: "setUpdaterMode"; mode: UpdaterMode }
     | { type: "resetSlack" }
@@ -539,6 +636,9 @@ function applyCommand(
       break;
     case "queueAttachmentPick":
       attachmentPickQueue.push(detail.paths);
+      break;
+    case "queueWorkspacePick":
+      window.__LIMN_E2E__?.queueWorkspacePick(detail.path);
       break;
     case "dropFiles":
       // Stand in for the OS dropping files onto the window (see listenFileDrop).
@@ -584,6 +684,7 @@ declare global {
       externalEditBoard(fileName: string, board: Board): void;
       externalEditCard(fileName: string, content: string, silent?: boolean): void;
       corruptCard(fileName: string): void;
+      queueWorkspacePick(path: string): void;
       resetSlack(): void;
       setUpdaterMode(mode: UpdaterMode): void;
     };

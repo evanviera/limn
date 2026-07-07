@@ -2,7 +2,7 @@ import { invoke } from "./ipc.js";
 import { EMPTY_FILTER } from "./lib/filter.js";
 import { mergeBoard, mergeCard, mergeMembers, mergeSettings, type EntityMergeResult } from "./lib/merge.js";
 import { resolveConflictWrite, type ConflictWriteAdapter, type SaveOutcome } from "./lib/mergeWrite.js";
-import type { Attachment, Board, BoardGroup, Card, CardFilter, Comment, ConflictFile, DeleteResult, Member, MembersFile, SavedView, SlackNotificationSettings, Subtask, SubtaskListItem, WorkspaceFiles, WorkspaceSettings, WriteResult } from "./types";
+import type { Attachment, Board, BoardGroup, Card, CardFilter, Comment, ConflictFile, DeleteResult, Member, MembersFile, OpenWorkspacesState, SavedView, SlackNotificationSettings, Subtask, SubtaskListItem, WorkspaceFiles, WorkspaceSettings, WriteResult } from "./types";
 
 export type { SaveOutcome } from "./lib/mergeWrite.js";
 
@@ -35,12 +35,14 @@ export async function loadWorkspace(path: string): Promise<WorkspaceData> {
   return parseWorkspace(files);
 }
 
-export async function saveLastWorkspace(path: string): Promise<void> {
-  await invoke("save_last_workspace", { path });
+// Persist the open workspace tabs and which one is active so they reopen on next
+// launch. `active` is the path of the focused tab ("" when none).
+export async function saveOpenWorkspaces(paths: string[], active: string): Promise<void> {
+  await invoke("save_open_workspaces", { paths, active });
 }
 
-export async function getLastWorkspace(): Promise<string | null> {
-  return invoke<string | null>("get_last_workspace");
+export async function getOpenWorkspaces(): Promise<OpenWorkspacesState> {
+  return invoke<OpenWorkspacesState>("get_open_workspaces");
 }
 
 export async function watchWorkspace(path: string): Promise<void> {

@@ -66,6 +66,14 @@ export function countLabel(count: number, label: string) {
   return `${count} ${label}${count === 1 ? "" : "s"}`;
 }
 
+// The trailing folder name of a workspace path, used to label a workspace tab
+// before its settings (with the configured workspace name) have been loaded.
+// Handles both POSIX and Windows separators and any trailing slash.
+export function workspaceBaseName(path: string): string {
+  const segment = path.split(/[\\/]/).filter(Boolean).pop();
+  return segment || path;
+}
+
 // Human-readable file size for attachment rows. Keeps one decimal only when it
 // adds information (e.g. "1.4 MB" but "12 MB" and "512 B").
 export function formatFileSize(bytes: number): string {

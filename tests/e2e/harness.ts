@@ -22,6 +22,7 @@ export interface HarnessSnapshot {
   attachments: Array<{ path: string; size: number }>;
   exports: Array<{ path: string; content: string }>;
   lastWorkspace: string | null;
+  openWorkspaces: { active: string | null; paths: string[] };
   externalLinks: string[];
   loadWorkspaceCount: number;
   slack: Array<{ webhookUrl: string; message: string }>;
@@ -67,6 +68,15 @@ export async function setUpdaterMode(page: Page, mode: HarnessSnapshot["updater"
     }
     api.setUpdaterMode(nextMode);
   }, mode);
+}
+
+/** Queue the folder path the next `pick_workspace_folder` (native picker) returns. */
+export async function queueWorkspacePick(page: Page, path: string): Promise<void> {
+  await page.evaluate((nextPath) => {
+    document.dispatchEvent(new CustomEvent("limn-e2e-command", {
+      detail: { type: "queueWorkspacePick", path: nextPath }
+    }));
+  }, path);
 }
 
 export async function queuePrompt(page: Page, value: string | null): Promise<void> {

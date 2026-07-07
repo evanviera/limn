@@ -53,6 +53,8 @@
 }
 
 .app-frame {
+  display: flex;
+  flex-direction: column;
   width: 100vw;
   height: 100vh;
   overflow: hidden;
@@ -63,9 +65,10 @@
   display: none;
 }
 
-:root[data-platform="windows"] .app-frame {
-  display: grid;
-  grid-template-rows: 40px minmax(0, 1fr);
+/* The Windows titlebar occupies a fixed strip at the top of the flex column;
+   the tab strip and shell flow beneath it. */
+:root[data-platform="windows"] .windows-titlebar {
+  flex: 0 0 40px;
 }
 
 :root[data-platform="windows"] .windows-titlebar {
@@ -128,20 +131,129 @@
 .app-shell {
   display: grid;
   grid-template-columns: clamp(248px, 20vw, 280px) minmax(0, 1fr);
-  width: 100vw;
-  height: 100vh;
+  flex: 1 1 auto;
+  width: 100%;
+  min-height: 0;
   overflow: hidden;
   background: var(--app-bg);
 }
 
-:root[data-platform="windows"] .app-shell {
-  width: 100%;
-  height: 100%;
+/* The tab strip across the top of the window; each open workspace is a tab. */
+.workspace-tabs {
+  display: flex;
+  flex: 0 0 auto;
+  align-items: stretch;
+  gap: 2px;
+  min-width: 0;
+  padding: 6px 8px 0;
+  overflow-x: auto;
+  scrollbar-width: none;
+  background: var(--sidebar-bg);
+  border-bottom: 1px solid var(--border-soft);
+}
+
+.workspace-tabs::-webkit-scrollbar {
+  display: none;
+}
+
+.workspace-tab {
+  display: flex;
+  flex: 0 1 auto;
+  align-items: center;
+  gap: var(--space-2);
+  min-width: 0;
+  max-width: 220px;
+  padding: 7px 8px 7px 12px;
+  color: var(--text-muted);
+  background: transparent;
+  border: 1px solid transparent;
+  border-bottom: 0;
+  border-radius: var(--radius-md) var(--radius-md) 0 0;
+  cursor: default;
+  user-select: none;
+  -webkit-user-select: none;
+}
+
+.workspace-tab:hover {
+  color: var(--text-strong);
+  background: var(--surface-hover);
+}
+
+.workspace-tab.active {
+  color: var(--text-strong);
+  background: var(--editor-bg);
+  border-color: var(--border-soft);
+}
+
+.workspace-tab .icon {
+  flex: 0 0 auto;
+  width: 14px;
+  height: 14px;
+  color: var(--text-faint);
+}
+
+.workspace-tab-name {
+  overflow: hidden;
+  min-width: 0;
+  font-size: var(--text-sm);
+  font-weight: var(--weight-medium);
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.workspace-tab-close {
+  display: grid;
+  flex: 0 0 auto;
+  place-items: center;
+  width: 20px;
+  min-width: 20px;
+  min-height: 20px;
+  height: 20px;
+  padding: 0;
+  color: var(--text-faint);
+  background: transparent;
+  border: 0;
+  border-radius: var(--radius-sm);
+  opacity: 0.65;
+}
+
+.workspace-tab-close:hover:not(:disabled) {
+  color: var(--text-strong);
+  background: var(--surface-raised);
+  border-color: transparent;
+  opacity: 1;
+}
+
+.workspace-tab-close .icon {
+  width: 12px;
+  height: 12px;
+}
+
+.workspace-tab-add {
+  display: grid;
+  flex: 0 0 auto;
+  place-items: center;
+  align-self: center;
+  width: 28px;
+  min-width: 28px;
+  min-height: 28px;
+  height: 28px;
+  margin-bottom: 4px;
+  padding: 0;
+  color: var(--text-faint);
+  background: transparent;
+  border: 0;
+}
+
+.workspace-tab-add:hover:not(:disabled) {
+  color: var(--text-strong);
+  background: var(--surface-hover);
+  border-color: transparent;
 }
 
 .sidebar {
   display: grid;
-  grid-template-rows: auto auto minmax(0, 1fr) auto;
+  grid-template-rows: auto minmax(0, 1fr) auto;
   gap: var(--space-4);
   min-height: 0;
   padding: 18px 14px;
@@ -150,24 +262,6 @@
   border-right: 1px solid var(--border-soft);
 }
 
-.brand {
-  display: grid;
-  gap: var(--space-1);
-  min-width: 0;
-  padding: var(--space-3) var(--space-3) var(--space-5);
-  border-bottom: 1px solid var(--border-soft);
-}
-
-.brand strong {
-  overflow: hidden;
-  color: var(--text-strong);
-  font-size: var(--text-base);
-  font-weight: var(--weight-bold);
-  text-overflow: ellipsis;
-  white-space: nowrap;
-}
-
-.brand span,
 .empty-small {
   overflow: hidden;
   color: var(--text-muted);

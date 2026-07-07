@@ -23,7 +23,7 @@ import {
   deleteCard,
   discardConflict,
   exportCalendar,
-  getLastWorkspace,
+  getOpenWorkspaces,
   listConflicts,
   loadWorkspace,
   makeId,
@@ -37,14 +37,14 @@ import {
   revealAttachmentFile,
   saveBoard,
   saveCard,
-  saveLastWorkspace,
   saveMembers,
+  saveOpenWorkspaces,
   saveSettings,
   timestamp,
   watchWorkspace,
   type SaveOutcome
 } from "./storage";
-import { Attachment, Board, BoardGroup, BoardList, Card, CardFilter, Member, MembersFile, SavedView, Subtask, SubtaskListItem, View, WorkspaceSettings } from "./types";
+import { Attachment, Board, BoardGroup, BoardList, Card, CardFilter, Member, MembersFile, OpenWorkspaceRef, SavedView, Subtask, SubtaskListItem, View, WorkspaceSettings } from "./types";
 import {
   canUseUpdater,
   checkForUpdate,
@@ -70,13 +70,14 @@ import { Icon, Spinner } from "./components/icons";
 import { MembersView } from "./components/MembersView";
 import { SettingsView } from "./components/SettingsView";
 import { WindowsTitlebar } from "./components/WindowsTitlebar";
+import { WorkspaceTabs } from "./components/WorkspaceTabs";
 import { THEME_STORAGE_KEY } from "./lib/constants";
 import type { SlackNotificationKey, ThemeMode } from "./lib/constants";
 import { buildCalendar, dueReminderCount, type CalendarEntry } from "./lib/dueDate";
 import { EMPTY_FILTER } from "./lib/filter";
 import { listNameTriggersMoveNotification } from "./lib/notifications";
 import { compareCardsByOrder, nextOrderForList, placeInList } from "./lib/ordering";
-import { countLabel, errorText, initials, readStoredThemeMode, sameJson, selectActiveBoardId, slackTag, upsertById } from "./lib/format";
+import { countLabel, errorText, initials, readStoredThemeMode, sameJson, selectActiveBoardId, slackTag, upsertById, workspaceBaseName } from "./lib/format";
 import { readActiveMemberId, resolveActiveMember, writeActiveMemberId } from "./lib/identity";
 import { updateBannerMessage } from "./lib/updateMessages";
 import type { UpdateStatus } from "./lib/updateMessages";
@@ -100,6 +101,10 @@ document.documentElement.dataset.platform = platformName();
 
 export default function App() {
   const [workspacePath, setWorkspacePath] = useState("");
+  // The open workspace tabs. Only the active one (workspacePath) is loaded into
+  // the state below; the rest are folders the user can switch to. Persisted so
+  // they reopen on next launch. See openWorkspace / switchWorkspace / closeWorkspace.
+  const [openWorkspaces, setOpenWorkspaces] = useState<OpenWorkspaceRef[]>([]);
   const [settings, setSettings] = useState<WorkspaceSettings | null>(null);
   const settingsRef = useRef<WorkspaceSettings | null>(null);
   const [members, setMembers] = useState<Member[]>([]);
@@ -156,6 +161,10 @@ export default function App() {
   cardsRef.current = cards;
   const boardsRef = useRef(boards);
   boardsRef.current = boards;
+  // Mirrors `openWorkspaces` so the open/switch/close handlers can compute the
+  // next tab list from the current one without racing React's async state.
+  const openWorkspacesRef = useRef<OpenWorkspaceRef[]>(openWorkspaces);
+  openWorkspacesRef.current = openWorkspaces;
   const membersRef = useRef(members);
   membersRef.current = members;
   // The members.json version last seen on disk. Members are held in state as a
@@ -195,11 +204,16 @@ export default function App() {
   }, [boardGroups, boards]);
 
   useEffect(() => {
-    void getLastWorkspace()
-      .then(async (path) => {
-        if (path) {
-          await openWorkspace(path);
+    void getOpenWorkspaces()
+      .then(async (state) => {
+        if (state.paths.length === 0) {
+          return;
         }
+        const list = state.paths.map((path) => ({ path, name: workspaceBaseName(path) }));
+        openWorkspacesRef.current = list;
+        setOpenWorkspaces(list);
+        const active = state.active && state.paths.includes(state.active) ? state.active : state.paths[0];
+        await openWorkspace(active);
       })
       .catch(() => undefined)
       .finally(() => setIsLoading(false));
@@ -209,6 +223,25 @@ export default function App() {
     document.documentElement.dataset.theme = themeMode;
     localStorage.setItem(THEME_STORAGE_KEY, themeMode);
   }, [themeMode]);
+
+  // Keep the active workspace's tab label in sync with its configured name, so a
+  // rename in Settings (or one that arrives via a disk refresh) updates the tab
+  // immediately instead of only after a restart.
+  useEffect(() => {
+    if (!workspacePath || !settings) {
+      return;
+    }
+    const name = settings.workspaceName || workspaceBaseName(workspacePath);
+    const current = openWorkspacesRef.current;
+    const existing = current.find((workspace) => workspace.path === workspacePath);
+    if (!existing || existing.name === name) {
+      return;
+    }
+    commitOpenWorkspaces(
+      current.map((workspace) => (workspace.path === workspacePath ? { ...workspace, name } : workspace)),
+      workspacePath
+    );
+  }, [settings, workspacePath]);
 
   // Attach files dropped from the OS onto a card — either the open card editor or,
   // on the board, the card under the pointer. Subscribed once; current state is
@@ -354,6 +387,76 @@ export default function App() {
     };
   });
 
+  // Load a workspace's content into the active view (settings, members, boards,
+  // cards, conflicts) and reset the transient per-workspace UI so switching tabs
+  // starts clean. Returns the workspace's display name. Throws if it can't load;
+  // callers keep the tab list unchanged in that case. Does not touch the tab list
+  // or persistence — the open/switch/close handlers own that.
+  async function loadWorkspaceData(path: string): Promise<string> {
+    const data = await loadWorkspace(path);
+    setWorkspacePath(path);
+    settingsRef.current = data.settings;
+    setSettings(data.settings);
+    setMembers(data.membersFile.members);
+    membersVersionRef.current = data.membersFile.updatedAt;
+    setActiveMemberId(readActiveMemberId(path));
+    setBoards(data.boards);
+    setCards(data.cards);
+    setActiveBoardId((current) => selectActiveBoardId(current, data.boards));
+    setSelectedCardId(null);
+    setSelectedCardMode("view");
+    setView("board");
+    setFilterRequest(null);
+    setConflictReviewOpen(false);
+    const reminders = dueReminderCount(data.cards);
+    if (data.diagnostics.length > 0) {
+      setNotice(data.diagnostics.join(" "));
+      setNoticeKind("warning");
+    } else if (reminders > 0) {
+      setNotice(`${countLabel(reminders, "card")} overdue or due today. Open Filter to review.`);
+      setNoticeKind("warning");
+    } else {
+      setNotice("");
+      setNoticeKind("info");
+    }
+    await reloadConflicts(path, {
+      cards: data.cards,
+      boards: data.boards,
+      settings: data.settings,
+      membersFile: data.membersFile,
+    });
+    return data.settings.workspaceName || workspaceBaseName(path);
+  }
+
+  // Update state, the ref, and the persisted file together so the open tabs and
+  // active workspace always stay in sync.
+  function commitOpenWorkspaces(list: OpenWorkspaceRef[], active: string) {
+    openWorkspacesRef.current = list;
+    setOpenWorkspaces(list);
+    void saveOpenWorkspaces(list.map((workspace) => workspace.path), active).catch(() => undefined);
+  }
+
+  // Clear every workspace-scoped piece of state, returning to the welcome screen.
+  // Used when the last open workspace tab is closed.
+  function clearWorkspaceState() {
+    setWorkspacePath("");
+    settingsRef.current = null;
+    setSettings(null);
+    setMembers([]);
+    setBoards([]);
+    setCards([]);
+    setActiveBoardId("");
+    setSelectedCardId(null);
+    setView("board");
+    setFilterRequest(null);
+    setConflicts([]);
+    setConflictReviewOpen(false);
+    setError("");
+    setNotice("");
+  }
+
+  // Open a workspace folder into a tab (picking one when no path is given) and
+  // make it active. Adds a new tab or refreshes an existing tab's name.
   async function openWorkspace(path?: string) {
     const selectedPath = path ?? (await pickWorkspaceFolder());
     if (!selectedPath) {
@@ -363,35 +466,71 @@ export default function App() {
     setError("");
     setOpening(true);
     try {
-      const data = await loadWorkspace(selectedPath);
-      setWorkspacePath(selectedPath);
-      settingsRef.current = data.settings;
-      setSettings(data.settings);
-      setMembers(data.membersFile.members);
-      membersVersionRef.current = data.membersFile.updatedAt;
-      setActiveMemberId(readActiveMemberId(selectedPath));
-      setBoards(data.boards);
-      setCards(data.cards);
-      setActiveBoardId((current) => selectActiveBoardId(current, data.boards));
-      setSelectedCardId((current) => (current && data.cards.some((card) => card.id === current) ? current : null));
-      const reminders = dueReminderCount(data.cards);
-      if (data.diagnostics.length > 0) {
-        setNotice(data.diagnostics.join(" "));
-        setNoticeKind("warning");
-      } else if (reminders > 0) {
-        setNotice(`${countLabel(reminders, "card")} overdue or due today. Open Filter to review.`);
-        setNoticeKind("warning");
-      } else {
-        setNotice("");
-        setNoticeKind("info");
-      }
-      await saveLastWorkspace(selectedPath);
-      await reloadConflicts(selectedPath, {
-        cards: data.cards,
-        boards: data.boards,
-        settings: data.settings,
-        membersFile: data.membersFile,
-      });
+      const name = await loadWorkspaceData(selectedPath);
+      const current = openWorkspacesRef.current;
+      const list = current.some((workspace) => workspace.path === selectedPath)
+        ? current.map((workspace) => (workspace.path === selectedPath ? { ...workspace, name } : workspace))
+        : [...current, { path: selectedPath, name }];
+      commitOpenWorkspaces(list, selectedPath);
+    } catch (reason) {
+      setError(errorText(reason));
+    } finally {
+      setOpening(false);
+    }
+  }
+
+  // Switch focus to an already-open workspace tab, loading its content.
+  async function switchWorkspace(path: string) {
+    if (path === workspacePath || opening) {
+      return;
+    }
+    setError("");
+    setOpening(true);
+    try {
+      const name = await loadWorkspaceData(path);
+      const list = openWorkspacesRef.current.map((workspace) =>
+        workspace.path === path ? { ...workspace, name } : workspace
+      );
+      commitOpenWorkspaces(list, path);
+    } catch (reason) {
+      // The folder likely moved or was deleted; stay on the current workspace.
+      setError(errorText(reason));
+    } finally {
+      setOpening(false);
+    }
+  }
+
+  // Close a workspace tab. Closing an inactive tab just drops it; closing the
+  // active tab falls back to a neighbor, or the welcome screen when it was the
+  // last one.
+  async function closeWorkspace(path: string) {
+    const current = openWorkspacesRef.current;
+    const index = current.findIndex((workspace) => workspace.path === path);
+    if (index === -1) {
+      return;
+    }
+    const next = current.filter((workspace) => workspace.path !== path);
+
+    if (path !== workspacePath) {
+      commitOpenWorkspaces(next, workspacePath);
+      return;
+    }
+
+    if (next.length === 0) {
+      clearWorkspaceState();
+      commitOpenWorkspaces([], "");
+      return;
+    }
+
+    const neighbor = next[Math.min(index, next.length - 1)];
+    setOpening(true);
+    try {
+      const name = await loadWorkspaceData(neighbor.path);
+      const list = next.map((workspace) => (workspace.path === neighbor.path ? { ...workspace, name } : workspace));
+      commitOpenWorkspaces(list, neighbor.path);
+    } catch (reason) {
+      setError(errorText(reason));
+      commitOpenWorkspaces(next, neighbor.path);
     } finally {
       setOpening(false);
     }
@@ -1876,12 +2015,16 @@ export default function App() {
   return (
     <div className="app-frame" onContextMenu={handleDefaultContextMenu}>
       <WindowsTitlebar />
+      <WorkspaceTabs
+        workspaces={openWorkspaces}
+        activePath={workspacePath}
+        opening={opening}
+        onSelect={(path) => void switchWorkspace(path)}
+        onClose={(path) => void closeWorkspace(path)}
+        onOpen={() => void openWorkspace()}
+      />
       <div className="app-shell">
         <aside className="sidebar">
-        <div className="brand">
-          <strong>Limn</strong>
-          <span>{settings.workspaceName}</span>
-        </div>
         <button className="sidebar-action" data-testid="open-workspace" disabled={opening} onClick={() => void openWorkspace()}>
           {opening ? (
             <>

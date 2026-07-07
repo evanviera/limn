@@ -189,7 +189,7 @@ test.describe("smoke", () => {
     await page.locator(".attachment-open", { hasText: "design-spec.pdf" }).click();
     await expect.poll(async () => (await snapshot(page)).externalLinks.some((link) => link.startsWith("attachment://"))).toBe(true);
 
-    await page.getByRole("button", { name: "Close" }).click();
+    await page.getByRole("button", { name: "Close", exact: true }).click();
     const cardCover = page.getByTestId(/card-.*-image-cover/);
     await expect(cardCover).toBeVisible();
     await expect(cardCover).toHaveAttribute("alt", "final-cover.jpg");
@@ -292,12 +292,12 @@ test.describe("smoke", () => {
     await page.getByTestId("add-card-todo").click();
     await page.getByTestId("text-dialog-input").fill("First card");
     await page.getByTestId("text-dialog-submit").click();
-    await page.getByRole("button", { name: "Close" }).click();
+    await page.getByRole("button", { name: "Close", exact: true }).click();
 
     await page.getByTestId("add-card-todo").click();
     await page.getByTestId("text-dialog-input").fill("Second card");
     await page.getByTestId("text-dialog-submit").click();
-    await page.getByRole("button", { name: "Close" }).click();
+    await page.getByRole("button", { name: "Close", exact: true }).click();
 
     const secondCard = page.locator(".task-card", { hasText: "Second card" });
     await expect(secondCard).toBeVisible();

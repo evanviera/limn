@@ -164,7 +164,7 @@ test("qa evidence sweep", async ({ page }, testInfo) => {
     await page.getByRole("dialog").getByRole("button", { name: "Cancel" }).first().click();
     await expect(page.getByTestId("confirm-dialog-submit")).toBeHidden();
     // Close the still-open editor modal so it doesn't block the sidebar nav.
-    await page.getByRole("button", { name: "Close" }).click();
+    await page.getByRole("button", { name: "Close", exact: true }).click();
     await expect(page.getByTestId("card-view")).toBeHidden();
   });
 

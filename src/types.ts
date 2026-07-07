@@ -1,5 +1,19 @@
 export type View = "board" | "filter" | "members" | "settings";
 
+// One open workspace tab: its folder path plus a display name (the workspace's
+// configured name once loaded, otherwise the folder's base name).
+export interface OpenWorkspaceRef {
+  path: string;
+  name: string;
+}
+
+// The persisted set of open workspace tabs and which one is active, as returned
+// by the `get_open_workspaces` command.
+export interface OpenWorkspacesState {
+  active: string | null;
+  paths: string[];
+}
+
 export interface WorkspaceSettings {
   schemaVersion: number;
   workspaceName: string;

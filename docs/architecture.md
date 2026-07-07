@@ -9,7 +9,7 @@ focused" section before adding code to an existing large file.**
 | Path | Responsibility |
 | --- | --- |
 | `main.tsx` | Entry point. Mounts `<App>` and imports the stylesheet. |
-| `App.tsx` | **Root component only.** App state, workspace lifecycle, IPC wiring, view routing, and the global context-menu / dialog / banner plumbing. It should host the `App` component and a couple of module-level helpers — nothing else. |
+| `App.tsx` | **Root component only.** App state, workspace lifecycle (including the open-workspace **tabs** — see below), IPC wiring, view routing, and the global context-menu / dialog / banner plumbing. It should host the `App` component and a couple of module-level helpers — nothing else. |
 | `components/` | Presentational & interactive React components, each fully driven by props. |
 | `lib/` | Pure logic, formatting, and hooks (no component JSX). |
 | `storage.ts` | Workspace persistence + serialization: IPC wrappers, model factories, and card/workspace parse/serialize. |
@@ -33,7 +33,24 @@ focused" section before adding code to an existing large file.**
   copies, compares each against the current on-disk entity field by field, and
   offers keep-mine / use-merged / keep-current (discard) resolutions. Pure UI; the
   enumerating/parsing/merging lives in `lib/conflicts.ts` and the IO in `App.tsx`.
+- `WorkspaceTabs.tsx` — the strip of open-workspace tabs across the top of the
+  window. Purely presentational (prop-driven): it renders one tab per open
+  workspace, a close (×) button per tab, and a + button to open another. All
+  state, loading, and persistence live in `App.tsx`.
 - `MembersView.tsx`, `SettingsView.tsx`, `CardEditor.tsx`, `WindowsTitlebar.tsx` — the remaining views.
+
+### Multiple workspaces (tabs)
+
+The user can have several workspaces open at once, shown as tabs. Only the
+**active** workspace (`workspacePath`) is loaded into App state at a time;
+`openWorkspaces` holds the list of open tabs (`{ path, name }`). Switching a tab
+tears down the current file watcher and reloads the target from disk (so a
+background tab picks up external edits when re-activated). `openWorkspace` adds
+or focuses a tab, `switchWorkspace` re-loads an existing tab, and
+`closeWorkspace` drops a tab (falling back to a neighbour, or the welcome screen
+when the last one closes). The open list + active path persist via the
+`save_open_workspaces` / `get_open_workspaces` commands (stored in
+`last-workspace.json`, which migrates forward from the old single-`path` shape).
 
 ### `src/lib/`
 
