@@ -1,0 +1,1 @@
+- [Card deep links](card-deep-links.md) — limn://card/<id> scheme, search-by-id resolution, and the dev-mode testing caveat
