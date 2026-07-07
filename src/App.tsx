@@ -1191,7 +1191,7 @@ export default function App() {
       const movedListName = list?.name ?? "";
       const configuredListNames = settingsRef.current?.slackMovedToListNames ?? "";
       if (result && result.status !== "conflict" && !sameList && listNameTriggersMoveNotification(movedListName, configuredListNames)) {
-        await sendSlack(null, `➡️ Card moved to ${movedListName}: ${moved.title}\nAssigned to: ${assigneeSlackTags(moved)}\nBoard: ${activeBoard.name}`);
+        await sendSlack(null, `➡️ Card moved to ${movedListName}: ${moved.title}\nAssigned to: ${assigneeSlackTags(moved)}\nBoard: ${activeBoard.name}${actorSlackLine()}`);
       }
     } catch (reason) {
       setError(`Move failed: ${errorText(reason)}`);
@@ -1329,7 +1329,7 @@ export default function App() {
     try {
       await persistCard(next, card);
       if (completed && subtask && !subtask.completed) {
-        await sendSlack("subtaskCompleted", `☑️ Step completed: ${subtask.title || "Untitled step"}\nCard: ${card.title}\nAssigned to: ${assigneeSlackTags(card)}\nBoard: ${boardName(card.boardId)}`);
+        await sendSlack("subtaskCompleted", `☑️ Step completed: ${subtask.title || "Untitled step"}\nCard: ${card.title}\nAssigned to: ${assigneeSlackTags(card)}\nBoard: ${boardName(card.boardId)}${actorSlackLine()}`);
       }
     } catch (reason) {
       setError(`Sub-task update failed: ${errorText(reason)}`);
@@ -1501,7 +1501,7 @@ export default function App() {
       withActivity = addActivity(withActivity, "completed", "Marked complete");
       slackMessages.push({
         key: "cardCompleted",
-        message: `✅ Task completed: ${normalized.title}\nAssigned to: ${assigneeSlackTags(normalized)}\nBoard: ${boardName(normalized.boardId)}`
+        message: `✅ Task completed: ${normalized.title}\nAssigned to: ${assigneeSlackTags(normalized)}\nBoard: ${boardName(normalized.boardId)}${actorSlackLine()}`
       });
     }
 
@@ -1509,7 +1509,7 @@ export default function App() {
       withActivity = addActivity(withActivity, "assigned", `Assigned to ${assigneeNames(normalized)}`);
       slackMessages.push({
         key: "cardAssigned",
-        message: `👤 Card assigned: ${normalized.title}\nAssigned to: ${assigneeSlackTags(normalized)}\nBoard: ${boardName(normalized.boardId)}`
+        message: `👤 Card assigned: ${normalized.title}\nAssigned to: ${assigneeSlackTags(normalized)}\nBoard: ${boardName(normalized.boardId)}${actorSlackLine()}`
       });
     }
 
@@ -1519,7 +1519,7 @@ export default function App() {
         if (subtask.completed && previousSubtasks.get(subtask.id)?.completed === false) {
           slackMessages.push({
             key: "subtaskCompleted",
-            message: `☑️ Step completed: ${subtask.title || "Untitled step"}\nCard: ${normalized.title}\nAssigned to: ${assigneeSlackTags(normalized)}\nBoard: ${boardName(normalized.boardId)}`
+            message: `☑️ Step completed: ${subtask.title || "Untitled step"}\nCard: ${normalized.title}\nAssigned to: ${assigneeSlackTags(normalized)}\nBoard: ${boardName(normalized.boardId)}${actorSlackLine()}`
           });
         }
       }
@@ -1628,6 +1628,16 @@ export default function App() {
       const member = members.find((item) => item.id === id);
       return slackTag(member?.slackHandle) || member?.name || id;
     }).join(", ");
+  }
+
+  // Trailing "By: …" line naming who performed the action, drawn from the active
+  // member (who you are). Empty when no identity is set, so the line is omitted
+  // rather than reported as an unknown actor.
+  function actorSlackLine() {
+    if (!activeMember) {
+      return "";
+    }
+    return `\nBy: ${slackTag(activeMember.slackHandle) || activeMember.name}`;
   }
 
   function boardName(boardId: string) {
@@ -1941,7 +1951,7 @@ export default function App() {
     // Completing a card from the board (checkbox, context menu, or keyboard
     // shortcut) must notify Slack just like completing it from the editor does.
     if (completed && result && result.status !== "conflict") {
-      await sendSlack("cardCompleted", `✅ Task completed: ${next.title}\nAssigned to: ${assigneeSlackTags(next)}\nBoard: ${boardName(next.boardId)}`);
+      await sendSlack("cardCompleted", `✅ Task completed: ${next.title}\nAssigned to: ${assigneeSlackTags(next)}\nBoard: ${boardName(next.boardId)}${actorSlackLine()}`);
     }
   }
 
