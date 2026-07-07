@@ -316,6 +316,19 @@ window.__LIMN_TEST_IPC__ = {
         }
         return undefined as T;
       }
+      case "find_card_workspace": {
+        // Mirror the backend: return the first given path whose store holds a
+        // card file named <cardId>.md (cards are keyed by `<id>.md`).
+        const cardId = typeof args?.cardId === "string" ? args.cardId : "";
+        const paths = Array.isArray(args?.paths)
+          ? (args.paths as unknown[]).filter((path): path is string => typeof path === "string")
+          : [];
+        const fileName = `${cardId}.md`;
+        const found = cardId
+          ? paths.find((path) => stores.get(path)?.cards.has(fileName)) ?? null
+          : null;
+        return found as T;
+      }
       case "watch_workspace":
         useWorkspace(args);
         return undefined as T;
@@ -612,6 +625,7 @@ function applyCommand(
     | { type: "dropFiles"; paths: string[]; x?: number; y?: number }
     | { type: "setUpdaterMode"; mode: UpdaterMode }
     | { type: "resetSlack" }
+    | { type: "emitDeepLink"; url: string }
 ) {
 
   if (!detail) {
@@ -652,6 +666,10 @@ function applyCommand(
     case "resetSlack":
       window.__LIMN_E2E__?.resetSlack();
       updateDebugState();
+      break;
+    case "emitDeepLink":
+      // Stand in for the OS handing the app a limn://card/<id> link.
+      emit("deep-link", detail.url);
       break;
   }
 }

@@ -324,6 +324,25 @@ fn get_open_workspaces(app: AppHandle) -> Result<OpenWorkspaces, String> {
     Ok(OpenWorkspaces { active, paths })
 }
 
+// Resolve a shared card link (`limn://card/<cardId>`): return the first of
+// `paths` whose workspace holds that card. Cards are stored as `cards/<id>.md`,
+// so the lookup is a plain file-existence check. The id is rejected if it could
+// escape the `cards/` directory, so a malicious link can't probe the filesystem.
+#[tauri::command]
+fn find_card_workspace(card_id: String, paths: Vec<String>) -> Option<String> {
+    if card_id.is_empty()
+        || card_id.contains('/')
+        || card_id.contains('\\')
+        || card_id.contains("..")
+    {
+        return None;
+    }
+    let file_name = format!("{card_id}.md");
+    paths
+        .into_iter()
+        .find(|path| PathBuf::from(path).join("cards").join(&file_name).is_file())
+}
+
 #[tauri::command]
 fn watch_workspace(path: String, window: Window, state: State<WatchState>) -> Result<(), String> {
     let root = workspace_root(&path)?;
@@ -427,8 +446,29 @@ fn export_calendar(path: String, content: String) -> Result<String, String> {
 }
 
 pub fn run() {
-    tauri::Builder::default()
+    let mut builder = tauri::Builder::default();
+
+    // The single-instance plugin must be registered first so a `limn://` link
+    // routes into the already-running app instead of spawning a second copy. On
+    // Windows/Linux the OS delivers the link as an argument to that second
+    // process; we focus the existing window and forward the URL to the frontend.
+    #[cfg(desktop)]
+    {
+        builder = builder.plugin(tauri_plugin_single_instance::init(|app, argv, _cwd| {
+            if let Some(window) = app.get_webview_window("main") {
+                let _ = window.set_focus();
+            }
+            for arg in argv.iter().skip(1) {
+                if arg.starts_with("limn://") {
+                    let _ = app.emit("deep-link", arg.clone());
+                }
+            }
+        }));
+    }
+
+    builder
         .plugin(tauri_plugin_updater::Builder::new().build())
+        .plugin(tauri_plugin_deep_link::init())
         .manage(WatchState::default())
         .menu(menu::build_app_menu)
         .on_menu_event(|app, event| {
@@ -437,11 +477,27 @@ pub fn run() {
                 let _ = app.emit("menu-command", command);
             }
         })
-        .setup(|_app| {
+        .setup(|app| {
             #[cfg(target_os = "windows")]
-            if let Some(window) = _app.get_webview_window("main") {
+            if let Some(window) = app.get_webview_window("main") {
                 let _ = window.set_decorations(false);
                 let _ = window.set_shadow(true);
+            }
+            // macOS delivers deep links to the running app via Apple events; the
+            // plugin surfaces them here. Focus the window and hand the URL to the
+            // frontend, which resolves the card id against the open workspaces.
+            #[cfg(desktop)]
+            {
+                use tauri_plugin_deep_link::DeepLinkExt;
+                let handle = app.handle().clone();
+                app.deep_link().on_open_url(move |event| {
+                    if let Some(window) = handle.get_webview_window("main") {
+                        let _ = window.set_focus();
+                    }
+                    for url in event.urls() {
+                        let _ = handle.emit("deep-link", url.to_string());
+                    }
+                });
             }
             Ok(())
         })
@@ -468,6 +524,7 @@ pub fn run() {
             read_attachment_large_preview,
             save_open_workspaces,
             get_open_workspaces,
+            find_card_workspace,
             watch_workspace,
             post_slack,
             open_external,

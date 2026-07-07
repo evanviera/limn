@@ -116,3 +116,12 @@ export async function dropFiles(page: Page, paths: string[], target?: Locator): 
     }));
   }, { nextPaths: paths, x: point.x, y: point.y });
 }
+
+/** Simulate the OS handing the app a `limn://card/<id>` deep link. */
+export async function emitDeepLink(page: Page, url: string): Promise<void> {
+  await page.evaluate((nextUrl) => {
+    document.dispatchEvent(new CustomEvent("limn-e2e-command", {
+      detail: { type: "emitDeepLink", url: nextUrl }
+    }));
+  }, url);
+}

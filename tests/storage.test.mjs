@@ -26,6 +26,7 @@ import {
 import { resolveConflictWrite } from "../.tmp/storage-test/src/lib/mergeWrite.js";
 import { buildConflict, buildConflicts } from "../.tmp/storage-test/src/lib/conflicts.js";
 import { listNameTriggersMoveNotification, parseMovedToListNames } from "../.tmp/storage-test/src/lib/notifications.js";
+import { cardDeepLink, parseCardDeepLink } from "../.tmp/storage-test/src/lib/deepLink.js";
 
 const baseCard = {
   id: "card_one",
@@ -837,6 +838,20 @@ try {
 } finally {
   await rm(workspaceRoot, { recursive: true, force: true });
 }
+
+// Card deep links: round-trip and reject anything that isn't a safe card link.
+assert.equal(cardDeepLink("card_abc"), "limn://card/card_abc");
+assert.equal(parseCardDeepLink(cardDeepLink("card_abc")), "card_abc");
+assert.equal(parseCardDeepLink("  limn://card/card_abc  "), "card_abc");
+// A slash in the id survives encoding but must be rejected on parse so it can't
+// escape the cards/ directory; a plain space is harmless and round-trips.
+assert.equal(parseCardDeepLink(cardDeepLink("weird/id")), null);
+assert.equal(parseCardDeepLink(cardDeepLink("has space")), "has space");
+assert.equal(parseCardDeepLink("limn://card/"), null);
+assert.equal(parseCardDeepLink("limn://board/b1"), null);
+assert.equal(parseCardDeepLink("https://example.com/card/x"), null);
+assert.equal(parseCardDeepLink("limn://card/..%2Fetc"), null);
+assert.equal(parseCardDeepLink("limn://card/a%2Fb"), null);
 
 console.log("storage tests passed");
 

@@ -23,6 +23,7 @@ import {
   deleteCard,
   discardConflict,
   exportCalendar,
+  findCardWorkspace,
   getOpenWorkspaces,
   listConflicts,
   loadWorkspace,
@@ -59,6 +60,7 @@ import { CardEditor } from "./components/CardEditor";
 import { ConflictReview } from "./components/ConflictReview";
 import type { ConflictChoice } from "./components/ConflictReview";
 import { buildConflicts } from "./lib/conflicts";
+import { parseCardDeepLink } from "./lib/deepLink";
 import type { ResolveEntity, ReviewConflict, WorkspaceEntities } from "./lib/conflicts";
 import { FilterView } from "./components/FilterView";
 import type { FilterRequest } from "./components/FilterView";
@@ -161,6 +163,10 @@ export default function App() {
   cardsRef.current = cards;
   const boardsRef = useRef(boards);
   boardsRef.current = boards;
+  // Lets the once-subscribed deep-link listener read the active workspace path
+  // without re-subscribing or closing over a stale value.
+  const workspacePathRef = useRef(workspacePath);
+  workspacePathRef.current = workspacePath;
   // Mirrors `openWorkspaces` so the open/switch/close handlers can compute the
   // next tab list from the current one without racing React's async state.
   const openWorkspacesRef = useRef<OpenWorkspaceRef[]>(openWorkspaces);
@@ -387,12 +393,34 @@ export default function App() {
     };
   });
 
+  // A `limn://card/<id>` link clicked in another app arrives here as a
+  // "deep-link" event from the backend; open the referenced card.
+  useEffect(() => {
+    let disposed = false;
+    let unlisten: (() => void) | undefined;
+
+    void listen<string>("deep-link", (event) => {
+      void handleDeepLink(event.payload);
+    }).then((dispose) => {
+      if (disposed) {
+        dispose();
+        return;
+      }
+      unlisten = dispose;
+    });
+
+    return () => {
+      disposed = true;
+      unlisten?.();
+    };
+  });
+
   // Load a workspace's content into the active view (settings, members, boards,
   // cards, conflicts) and reset the transient per-workspace UI so switching tabs
   // starts clean. Returns the workspace's display name. Throws if it can't load;
   // callers keep the tab list unchanged in that case. Does not touch the tab list
   // or persistence — the open/switch/close handlers own that.
-  async function loadWorkspaceData(path: string): Promise<string> {
+  async function loadWorkspaceData(path: string, focusCardId?: string): Promise<string> {
     const data = await loadWorkspace(path);
     setWorkspacePath(path);
     settingsRef.current = data.settings;
@@ -402,8 +430,16 @@ export default function App() {
     setActiveMemberId(readActiveMemberId(path));
     setBoards(data.boards);
     setCards(data.cards);
-    setActiveBoardId((current) => selectActiveBoardId(current, data.boards));
-    setSelectedCardId(null);
+    // A deep link asks to open one specific card: land on its board with the
+    // editor open. Otherwise pick a sensible board and start with no card open.
+    const focusCard = focusCardId ? data.cards.find((card) => card.id === focusCardId) : undefined;
+    if (focusCard) {
+      setActiveBoardId(focusCard.boardId);
+      setSelectedCardId(focusCard.id);
+    } else {
+      setActiveBoardId((current) => selectActiveBoardId(current, data.boards));
+      setSelectedCardId(null);
+    }
     setSelectedCardMode("view");
     setView("board");
     setFilterRequest(null);
@@ -480,14 +516,14 @@ export default function App() {
   }
 
   // Switch focus to an already-open workspace tab, loading its content.
-  async function switchWorkspace(path: string) {
+  async function switchWorkspace(path: string, focusCardId?: string) {
     if (path === workspacePath || opening) {
       return;
     }
     setError("");
     setOpening(true);
     try {
-      const name = await loadWorkspaceData(path);
+      const name = await loadWorkspaceData(path, focusCardId);
       const list = openWorkspacesRef.current.map((workspace) =>
         workspace.path === path ? { ...workspace, name } : workspace
       );
@@ -1209,6 +1245,35 @@ export default function App() {
   function openCardFromBoard(cardId: string) {
     setSelectedCardMode("view");
     setSelectedCardId(cardId);
+  }
+
+  // Resolve a shared card link (`limn://card/<id>`) and open the card. The link
+  // carries only the id, so we look through the workspaces the user has open:
+  // the active one first (already in memory), then the rest via the backend's
+  // file check. Switching a tab reloads it and opens the card in one step.
+  async function handleDeepLink(url: string) {
+    const cardId = parseCardDeepLink(url);
+    if (!cardId) {
+      return;
+    }
+    const activePath = workspacePathRef.current;
+    const inActive = cardsRef.current.find((card) => card.id === cardId);
+    if (inActive) {
+      openCardFromWorkspaceView(inActive);
+      return;
+    }
+    const otherPaths = openWorkspacesRef.current
+      .map((workspace) => workspace.path)
+      .filter((path) => path && path !== activePath);
+    const foundPath = otherPaths.length > 0 ? await findCardWorkspace(cardId, otherPaths) : null;
+    if (!foundPath) {
+      setNotice(
+        "That card link points to a card that isn't in any of your open workspaces. Open the workspace that has it, then click the link again."
+      );
+      setNoticeKind("warning");
+      return;
+    }
+    await switchWorkspace(foundPath, cardId);
   }
 
   function openDueReminderFilter() {

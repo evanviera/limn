@@ -11,6 +11,7 @@ import type { Attachment, Board, Card, Member, Subtask, SubtaskListItem } from "
 import { makeId, normalizeUrl, openExternal } from "../storage";
 import { MAX_NAME_LENGTH } from "../lib/constants";
 import { isImageAttachment } from "../lib/attachments";
+import { cardDeepLink } from "../lib/deepLink";
 import { describeDue, dueInputFromToday } from "../lib/dueDate";
 import { initials } from "../lib/format";
 import { AttachmentLightbox } from "./AttachmentLightbox";
@@ -751,6 +752,7 @@ export function CardEditor({
         }
       },
       { label: "Copy title", icon: "copy", disabled: !draft.title.trim(), onSelect: () => void onCopyText(draft.title) },
+      { label: "Copy card link", icon: "copy", onSelect: () => void onCopyText(cardDeepLink(draft.id)) },
       { label: "Close editor", icon: "x", onSelect: onClose },
       { type: "separator" },
       { label: "Archive card", icon: "archive", disabled: saving, onSelect: () => void onArchive(draft) },
@@ -768,6 +770,7 @@ export function CardEditor({
         onSelect: () => void saveCardPatch({ completed: !card.completed })
       },
       { label: "Copy title", icon: "copy", disabled: !card.title.trim(), onSelect: () => void onCopyText(card.title) },
+      { label: "Copy card link", icon: "copy", onSelect: () => void onCopyText(cardDeepLink(card.id)) },
       { label: "Close card", icon: "x", onSelect: onClose },
       { type: "separator" },
       { label: "Archive card", icon: "archive", disabled: saving, onSelect: () => void onArchive(card) },

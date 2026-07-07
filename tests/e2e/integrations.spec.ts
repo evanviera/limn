@@ -1,5 +1,5 @@
 import { test, expect } from "@playwright/test";
-import { openApp, openWorkspace, setUpdaterMode, snapshot } from "./harness";
+import { emitDeepLink, openApp, openWorkspace, setUpdaterMode, snapshot } from "./harness";
 
 test.describe("smoke", () => {
   test("Slack notifications tag assigned member handles", async ({ page }) => {
@@ -117,5 +117,39 @@ test.describe("smoke", () => {
     await page.getByTestId("settings-install-update").click();
 
     await expect(page.getByTestId("update-status")).toContainText("Update install failed: Test install failed");
+  });
+
+  test("a card deep link opens the referenced card", async ({ page }) => {
+    await openApp(page);
+    await openWorkspace(page);
+
+    await page.getByTestId("create-board").click();
+    await page.getByTestId("text-dialog-input").fill("Link Board");
+    await page.getByTestId("text-dialog-submit").click();
+
+    await page.getByTestId("add-card-todo").click();
+    await page.getByTestId("text-dialog-input").fill("Shareable card");
+    await page.getByTestId("text-dialog-submit").click();
+    await expect(page.getByTestId("card-title-input")).toHaveValue("Shareable card");
+    await page.getByTestId("save-card").click();
+
+    // Creating a card leaves the board without the editor open; a deep link to
+    // the card's id (its file is `<id>.md`) should reopen it in read mode.
+    const cardFile = (await snapshot(page)).cards[0].file_name;
+    const cardId = cardFile.replace(/\.md$/, "");
+    await emitDeepLink(page, `limn://card/${cardId}`);
+
+    await expect(page.getByTestId("card-view")).toBeVisible();
+    await expect(page.getByTestId("card-view-title")).toHaveText("Shareable card");
+  });
+
+  test("a deep link to an unknown card explains it wasn't found", async ({ page }) => {
+    await openApp(page);
+    await openWorkspace(page);
+
+    await emitDeepLink(page, "limn://card/card_missing");
+
+    await expect(page.locator(".banner")).toContainText("isn't in any of your open workspaces");
+    await expect(page.getByTestId("card-view")).toHaveCount(0);
   });
 });

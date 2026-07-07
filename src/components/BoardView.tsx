@@ -2,6 +2,7 @@ import { Fragment, useEffect, useRef, useState } from "react";
 import type { MouseEvent as ReactMouseEvent, PointerEvent as ReactPointerEvent } from "react";
 import type { Board, BoardList, Card, Member } from "../types";
 import { countLabel } from "../lib/format";
+import { cardDeepLink } from "../lib/deepLink";
 import { compareCardsByOrder } from "../lib/ordering";
 import { Icon } from "./icons";
 import { EmptyState } from "./dialogs";
@@ -498,6 +499,7 @@ export function BoardView(props: BoardViewProps) {
         onSelect: () => void props.onToggleCardCompleted(card)
       },
       { label: "Copy title", icon: "copy", onSelect: () => void props.onCopyText(card.title) },
+      { label: "Copy card link", icon: "copy", onSelect: () => void props.onCopyText(cardDeepLink(card.id)) },
       ...(moveItems.length > 0 ? [{ type: "separator" } satisfies ContextMenuItem, ...moveItems] : []),
       { type: "separator" },
       { label: "Archive card", icon: "archive", onSelect: () => void props.onArchiveCard(card) },

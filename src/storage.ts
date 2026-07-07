@@ -45,6 +45,13 @@ export async function getOpenWorkspaces(): Promise<OpenWorkspacesState> {
   return invoke<OpenWorkspacesState>("get_open_workspaces");
 }
 
+// Resolve a shared card link: return the first of `paths` whose workspace
+// contains a card with this id (its file is `cards/<cardId>.md`), or null when
+// none do. Backs the deep-link handler's search across open workspaces.
+export async function findCardWorkspace(cardId: string, paths: string[]): Promise<string | null> {
+  return invoke<string | null>("find_card_workspace", { cardId, paths });
+}
+
 export async function watchWorkspace(path: string): Promise<void> {
   await invoke("watch_workspace", { path });
 }

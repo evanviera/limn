@@ -35,6 +35,11 @@
       "endpoints": [
         "https://github.com/evanviera/limn/releases/latest/download/latest.json"
       ]
+    },
+    "deep-link": {
+      "desktop": {
+        "schemes": ["limn"]
+      }
     }
   }
 }
