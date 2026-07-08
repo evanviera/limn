@@ -4,6 +4,17 @@
   --pane-bg: #16191c;
   --pane-bg-2: #1b1f23;
   --pane-bg-3: #22272b;
+
+  /* Board elevation layers — the canvas recedes, lists sit on it, cards float
+     above lists. Three clearly separated tints so contrast (not outlines) does
+     the visual work. See board.css. */
+  --board-bg: #0d1013;
+  --list-bg: #191d22;
+  --list-hover-bg: #1d2228;
+  --card-bg: #252b31;
+  --card-hover-bg: #2c333a;
+  --card-shadow: 0 1px 2px rgba(0, 0, 0, 0.34), 0 0 0 1px rgba(0, 0, 0, 0.16);
+  --card-shadow-hover: 0 6px 16px rgba(0, 0, 0, 0.42), 0 0 0 1px rgba(0, 0, 0, 0.2);
   --editor-bg: #121416;
   --editor-chrome-bg: rgba(18, 20, 22, 0.94);
   --editor-footer-bg: rgba(18, 20, 22, 0.96);
@@ -103,6 +114,16 @@
   --pane-bg: #ffffff;
   --pane-bg-2: #ffffff;
   --pane-bg-3: #edf2ee;
+
+  /* Board elevation layers (light). Muted sage canvas so the grey list panels
+     read as surfaces and the white cards clearly float above them. */
+  --board-bg: #d7ded9;
+  --list-bg: #eaeee9;
+  --list-hover-bg: #e3e8e3;
+  --card-bg: #ffffff;
+  --card-hover-bg: #ffffff;
+  --card-shadow: 0 1px 1px rgba(31, 44, 39, 0.08), 0 1px 3px rgba(31, 44, 39, 0.07);
+  --card-shadow-hover: 0 6px 16px rgba(31, 44, 39, 0.16), 0 1px 2px rgba(31, 44, 39, 0.1);
   --editor-bg: #fbfcfa;
   --editor-chrome-bg: rgba(251, 252, 250, 0.94);
   --editor-footer-bg: rgba(251, 252, 250, 0.96);

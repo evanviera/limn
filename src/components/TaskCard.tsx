@@ -33,6 +33,13 @@ export function TaskCardBody({
   const due = describeDue(card.due);
   // Completed cards never nag: their due date reads as a neutral chip.
   const dueClass = card.completed ? "due-badge due-complete" : `due-badge due-${due.status}`;
+  // Card footers only carry meaning when there's something to show — an empty
+  // "No due date · Unassigned" row is pure noise, so each meta slot is gated and
+  // the footer collapses entirely when a card has no due date, sub-tasks, or
+  // assignees.
+  const showDue = due.status !== "none";
+  const hasSubtasks = card.subtasks.length > 0;
+  const assignedMembers = members.filter((member) => card.assignees.includes(member.id));
   return (
     <>
       {!compact && coverAttachment && (
@@ -194,17 +201,21 @@ export function TaskCardBody({
           <RichNoteText text={noteText} testIdPrefix={`card-note-link-${card.id}`} onOpenContextMenu={onOpenContextMenu} onCopyText={onCopyText} />
         </p>
       )}
-      <footer>
-        <span className={dueClass} data-testid={`card-due-${card.id}`} title={due.status === "none" ? "No due date" : due.label}>
-          {due.label}
-        </span>
-        {card.subtasks.length > 0 && (
-          <span className="subtask-badge" title="Sub-tasks completed">
-            <Icon name="check" /> {doneCount}/{card.subtasks.length}
-          </span>
-        )}
-        <MemberDots members={members.filter((member) => card.assignees.includes(member.id))} />
-      </footer>
+      {(showDue || hasSubtasks || assignedMembers.length > 0) && (
+        <footer>
+          {showDue && (
+            <span className={dueClass} data-testid={`card-due-${card.id}`} title={due.label}>
+              {due.label}
+            </span>
+          )}
+          {hasSubtasks && (
+            <span className="subtask-badge" title="Sub-tasks completed">
+              <Icon name="check" /> {doneCount}/{card.subtasks.length}
+            </span>
+          )}
+          {assignedMembers.length > 0 && <MemberDots members={assignedMembers} />}
+        </footer>
+      )}
     </>
   );
 }

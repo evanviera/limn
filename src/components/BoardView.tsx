@@ -653,10 +653,10 @@ export function BoardView(props: BoardViewProps) {
                   {list.name}
                 </h2>
                 <span>{listCards.length}</span>
-                <button aria-label={`Rename ${list.name}`} title="Rename list" data-testid={`rename-list-${list.id}`} onClick={() => void props.onRenameList(list)}>
+                <button className="list-action" aria-label={`Rename ${list.name}`} title="Rename list" data-testid={`rename-list-${list.id}`} onClick={() => void props.onRenameList(list)}>
                   <Icon name="edit" />
                 </button>
-                <button aria-label={`Delete ${list.name}`} title="Delete list" data-testid={`delete-list-${list.id}`} onClick={() => void props.onDeleteList(list)}>
+                <button className="list-action" aria-label={`Delete ${list.name}`} title="Delete list" data-testid={`delete-list-${list.id}`} onClick={() => void props.onDeleteList(list)}>
                   <Icon name="trash" />
                 </button>
               </header>

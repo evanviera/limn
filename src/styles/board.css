@@ -23,9 +23,9 @@
   gap: var(--space-4);
   max-height: 100%;
   min-height: 0;
-  padding: 12px;
-  background: var(--column-bg);
-  border: 1px solid var(--border-soft);
+  padding: 10px 8px 8px;
+  background: var(--list-bg);
+  border: 1px solid transparent;
   border-radius: var(--radius-lg);
   transition: border-color var(--transition), background var(--transition);
 }
@@ -130,10 +130,9 @@
   right: 0;
 }
 
-.column:focus-within,
-.column:hover {
-  border-color: var(--column-hover-border);
-}
+/* Lists are a stable surface — they deliberately do not react to hover, so the
+   board stays calm as the pointer moves across it. Only the drag drop-target
+   below lights up. */
 
 /* Drop-target highlight while a card is being dragged */
 body.is-card-dragging .column:hover {
@@ -194,6 +193,35 @@ body.is-card-dragging .column:hover {
   color: var(--text-strong);
 }
 
+/* Rename / delete are rare, destructive-ish actions — keep them out of the way
+   until the list is hovered or focused so the header reads as just title + count
+   (their grid slots stay reserved, so revealing them causes no layout shift). */
+.column-header .list-action {
+  opacity: 0;
+  transition: opacity var(--transition), color var(--transition);
+}
+
+.column:hover .column-header .list-action,
+.column:focus-within .column-header .list-action,
+.column-header .list-action:focus-visible {
+  opacity: 1;
+}
+
+/* The drag handle and collapse chevron are wayfinding, not primary controls —
+   render them muted so the list title leads, then lift them on hover. */
+.column-header .list-drag-handle,
+.column-header .list-collapse-toggle {
+  opacity: 0.45;
+  transition: opacity var(--transition), color var(--transition);
+}
+
+.column:hover .column-header .list-drag-handle,
+.column:hover .column-header .list-collapse-toggle,
+.column:focus-within .column-header .list-drag-handle,
+.column:focus-within .column-header .list-collapse-toggle {
+  opacity: 1;
+}
+
 .column-header .list-drag-handle {
   cursor: grab;
 }
@@ -225,16 +253,17 @@ body.is-card-dragging .column:hover {
   display: grid;
   gap: 9px;
   min-width: 0;
-  padding: 14px 12px;
+  padding: 12px 12px;
   color: var(--text);
-  background: var(--pane-bg-2);
-  border: 1px solid var(--border-soft);
-  border-radius: var(--radius-lg);
+  background: var(--card-bg);
+  border: 1px solid transparent;
+  border-radius: var(--radius-md);
+  box-shadow: var(--card-shadow);
   cursor: grab;
   user-select: none;
   -webkit-user-select: none;
   transition: background var(--transition), border-color var(--transition),
-    box-shadow var(--transition), opacity var(--transition);
+    box-shadow var(--transition), transform var(--transition), opacity var(--transition);
 }
 
 .task-card.compact {
@@ -243,8 +272,9 @@ body.is-card-dragging .column:hover {
 }
 
 .task-card:hover {
-  background: var(--surface-hover);
-  border-color: var(--card-hover-border);
+  background: var(--card-hover-bg);
+  box-shadow: var(--card-shadow-hover);
+  transform: translateY(-1px);
 }
 
 .task-card:focus-visible {
@@ -290,19 +320,25 @@ body.is-list-dragging * {
 }
 
 .task-card.completed {
-  background: linear-gradient(90deg, var(--success-soft), var(--pane-bg-2) 38%);
-  border-color: var(--success-border);
-  box-shadow: inset 2px 0 0 var(--success);
+  background: linear-gradient(90deg, var(--success-soft), var(--card-bg) 38%);
+  box-shadow: var(--card-shadow), inset 3px 0 0 var(--success);
 }
 
+.task-card.completed:hover {
+  box-shadow: var(--card-shadow-hover), inset 3px 0 0 var(--success);
+}
+
+/* Cover art bleeds to the card edges (Trello-style) instead of sitting in a
+   bordered inset — the negative margins cancel the card's padding and the top
+   corners follow the card radius. */
 .task-card-cover {
   display: block;
-  width: 100%;
+  width: calc(100% + 24px);
+  margin: -12px -12px 0;
   aspect-ratio: 16 / 9;
   object-fit: cover;
   background: var(--surface);
-  border: 1px solid var(--border-soft);
-  border-radius: var(--radius-md);
+  border-radius: var(--radius-md) var(--radius-md) 0 0;
 }
 
 .task-card h3 {
@@ -378,10 +414,9 @@ body.is-list-dragging * {
 .label-row span {
   max-width: 100%;
   overflow: hidden;
-  padding: 2px 8px;
-  color: var(--text);
-  background: var(--chip-bg);
-  border: 1px solid var(--border-soft);
+  padding: 2px 9px;
+  color: var(--text-muted);
+  background: var(--subtle-bg);
   border-radius: var(--radius-pill);
   font-size: var(--text-sm);
   font-weight: var(--weight-medium);
@@ -389,18 +424,22 @@ body.is-list-dragging * {
   white-space: nowrap;
 }
 
+/* Ghost affordance — reads as part of the list rather than a heavy button, and
+   materialises into a card-like surface on hover. */
 .add-card {
-  margin-top: auto;
-  min-height: 36px;
-  color: var(--text);
-  background: var(--surface);
-  border-color: var(--border-soft);
-  font-weight: var(--weight-bold);
+  margin-top: var(--space-1);
+  min-height: 34px;
+  justify-content: flex-start;
+  color: var(--text-muted);
+  background: transparent;
+  border-color: transparent;
+  font-weight: var(--weight-medium);
 }
 
 .add-card:hover:not(:disabled) {
-  background: var(--surface-hover);
-  border-color: var(--border);
+  color: var(--text-strong);
+  background: var(--list-hover-bg);
+  border-color: transparent;
 }
 
 .empty-list {

@@ -167,7 +167,8 @@ test.describe("smoke", () => {
     await expect(card).toHaveClass(/compact/);
     await expect(card.locator("h3")).toContainText("Compact candidate");
     await expect(card.locator("footer")).toContainText("0/1");
-    await expect(card.locator("footer")).toContainText("Unassigned");
+    // Empty meta is suppressed: an unassigned card shows no "Unassigned" filler.
+    await expect(card.locator("footer")).not.toContainText("Unassigned");
     await expect(card.locator(".due-badge")).toBeVisible();
     await expect(card.locator(".label-row")).toHaveCount(0);
     await expect(card.locator(".card-subtasks")).toHaveCount(0);
