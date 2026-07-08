@@ -32,6 +32,43 @@ test.describe("smoke", () => {
     await expect(page.getByTestId("theme-toggle")).toContainText("Dark mode");
   });
 
+  test("list width preferences apply to the board and persist per computer", async ({ page }) => {
+    await openApp(page);
+    await openWorkspace(page);
+
+    const html = page.locator("html");
+    // Fixed width at the 320px default is the out-of-the-box behavior.
+    await expect(html).toHaveAttribute("data-list-width-mode", "fixed");
+    await expect
+      .poll(() => page.evaluate(() => document.documentElement.style.getPropertyValue("--list-width")))
+      .toBe("320px");
+
+    await page.getByTestId("nav-settings").click();
+
+    // Change the fixed width; it applies immediately.
+    await page.getByTestId("list-width-input").fill("420");
+    await page.getByTestId("list-width-input").blur();
+    await expect
+      .poll(() => page.evaluate(() => document.documentElement.style.getPropertyValue("--list-width")))
+      .toBe("420px");
+
+    // Out-of-range values are clamped to the supported bounds.
+    await page.getByTestId("list-width-input").fill("9999");
+    await page.getByTestId("list-width-input").blur();
+    await expect(page.getByTestId("list-width-input")).toHaveValue("640");
+
+    // Toggling flexible mode flips the layout attribute.
+    await page.getByTestId("list-width-flexible-toggle").check();
+    await expect(html).toHaveAttribute("data-list-width-mode", "flexible");
+
+    // Both settings are per-computer, so they survive a reload without a workspace.
+    await openApp(page, { reset: false });
+    await expect(html).toHaveAttribute("data-list-width-mode", "flexible");
+    await expect
+      .poll(() => page.evaluate(() => document.documentElement.style.getPropertyValue("--list-width")))
+      .toBe("640px");
+  });
+
   test("creating a board persists to the harness snapshot", async ({ page }) => {
     await openApp(page);
     await openWorkspace(page);

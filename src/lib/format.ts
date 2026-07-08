@@ -1,11 +1,48 @@
 import type { Board } from "../types";
-import { THEME_STORAGE_KEY, type ThemeMode } from "./constants";
+import {
+  DEFAULT_LIST_WIDTH,
+  LIST_WIDTH_MODE_STORAGE_KEY,
+  LIST_WIDTH_STORAGE_KEY,
+  MAX_LIST_WIDTH,
+  MIN_LIST_WIDTH,
+  THEME_STORAGE_KEY,
+  type ListWidthMode,
+  type ThemeMode
+} from "./constants";
+
+function isE2eReset(): boolean {
+  return import.meta.env.DEV && new URLSearchParams(window.location.search).has("resetLimnE2e");
+}
 
 export function readStoredThemeMode(): ThemeMode {
-  if (import.meta.env.DEV && new URLSearchParams(window.location.search).has("resetLimnE2e")) {
+  if (isE2eReset()) {
     localStorage.removeItem(THEME_STORAGE_KEY);
   }
   return localStorage.getItem(THEME_STORAGE_KEY) === "light" ? "light" : "dark";
+}
+
+// Clamp a list-width value to the supported range, falling back to the default
+// for anything non-numeric so a corrupt localStorage entry can't break layout.
+export function clampListWidth(value: number): number {
+  if (!Number.isFinite(value)) {
+    return DEFAULT_LIST_WIDTH;
+  }
+  return Math.min(MAX_LIST_WIDTH, Math.max(MIN_LIST_WIDTH, Math.round(value)));
+}
+
+export function readStoredListWidth(): number {
+  if (isE2eReset()) {
+    localStorage.removeItem(LIST_WIDTH_STORAGE_KEY);
+  }
+  const raw = localStorage.getItem(LIST_WIDTH_STORAGE_KEY);
+  return raw === null ? DEFAULT_LIST_WIDTH : clampListWidth(Number(raw));
+}
+
+export function readStoredListWidthMode(): ListWidthMode {
+  if (isE2eReset()) {
+    localStorage.removeItem(LIST_WIDTH_MODE_STORAGE_KEY);
+  }
+  return localStorage.getItem(LIST_WIDTH_MODE_STORAGE_KEY) === "flexible" ? "flexible" : "fixed";
 }
 
 // Extract a clean message for user-facing error banners so we don't surface the

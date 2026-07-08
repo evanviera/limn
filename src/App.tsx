@@ -73,13 +73,13 @@ import { MembersView } from "./components/MembersView";
 import { SettingsView } from "./components/SettingsView";
 import { WindowsTitlebar } from "./components/WindowsTitlebar";
 import { WorkspaceTabs } from "./components/WorkspaceTabs";
-import { THEME_STORAGE_KEY } from "./lib/constants";
-import type { SlackNotificationKey, ThemeMode } from "./lib/constants";
+import { LIST_WIDTH_MODE_STORAGE_KEY, LIST_WIDTH_STORAGE_KEY, THEME_STORAGE_KEY } from "./lib/constants";
+import type { ListWidthMode, SlackNotificationKey, ThemeMode } from "./lib/constants";
 import { buildCalendar, dueReminderCount, type CalendarEntry } from "./lib/dueDate";
 import { EMPTY_FILTER } from "./lib/filter";
 import { listNameTriggersMoveNotification } from "./lib/notifications";
 import { compareCardsByOrder, nextOrderForList, placeInList } from "./lib/ordering";
-import { countLabel, errorText, initials, readStoredThemeMode, sameJson, selectActiveBoardId, slackTag, upsertById, workspaceBaseName } from "./lib/format";
+import { clampListWidth, countLabel, errorText, initials, readStoredListWidth, readStoredListWidthMode, readStoredThemeMode, sameJson, selectActiveBoardId, slackTag, upsertById, workspaceBaseName } from "./lib/format";
 import { readActiveMemberId, resolveActiveMember, writeActiveMemberId } from "./lib/identity";
 import { updateBannerMessage } from "./lib/updateMessages";
 import type { UpdateStatus } from "./lib/updateMessages";
@@ -130,6 +130,10 @@ export default function App() {
   const [updateMessage, setUpdateMessage] = useState("");
   const [updateProgress, setUpdateProgress] = useState<DownloadProgress | null>(null);
   const [themeMode, setThemeMode] = useState<ThemeMode>(() => readStoredThemeMode());
+  // Board list width is a per-computer preference (persisted to localStorage, not
+  // the synced workspace) so each machine keeps its own layout.
+  const [listWidth, setListWidth] = useState<number>(() => readStoredListWidth());
+  const [listWidthMode, setListWidthMode] = useState<ListWidthMode>(() => readStoredListWidthMode());
   const [contextMenu, setContextMenu] = useState<ContextMenuState | null>(null);
   // Preserved conflict artifacts awaiting in-app review, and whether the review
   // surface is open. Refreshed on every workspace load/reload.
@@ -229,6 +233,13 @@ export default function App() {
     document.documentElement.dataset.theme = themeMode;
     localStorage.setItem(THEME_STORAGE_KEY, themeMode);
   }, [themeMode]);
+
+  useLayoutEffect(() => {
+    document.documentElement.style.setProperty("--list-width", `${listWidth}px`);
+    document.documentElement.dataset.listWidthMode = listWidthMode;
+    localStorage.setItem(LIST_WIDTH_STORAGE_KEY, String(listWidth));
+    localStorage.setItem(LIST_WIDTH_MODE_STORAGE_KEY, listWidthMode);
+  }, [listWidth, listWidthMode]);
 
   // Keep the active workspace's tab label in sync with its configured name, so a
   // rename in Settings (or one that arrives via a disk refresh) updates the tab
@@ -2342,6 +2353,10 @@ export default function App() {
           <SettingsView
             settings={settings}
             workspacePath={workspacePath}
+            listWidth={listWidth}
+            listWidthMode={listWidthMode}
+            onChangeListWidth={(value) => setListWidth(clampListWidth(value))}
+            onChangeListWidthMode={setListWidthMode}
             onSave={saveWorkspaceSettings}
             onReload={refreshWorkspace}
             updaterAvailable={updaterAvailable}

@@ -2,13 +2,18 @@ import { useEffect, useState } from "react";
 import type { WorkspaceSettings } from "../types";
 import type { AppUpdate, DownloadProgress } from "../updater";
 import { settingsUpdateMessage, type UpdateStatus } from "../lib/updateMessages";
-import type { SlackNotificationKey } from "../lib/constants";
+import { MAX_LIST_WIDTH, MIN_LIST_WIDTH, type ListWidthMode, type SlackNotificationKey } from "../lib/constants";
+import { clampListWidth } from "../lib/format";
 import { Icon, Spinner } from "./icons";
 import { isEditableTextControl, textControlContextItems, type OpenContextMenu } from "./contextMenu";
 
 export function SettingsView({
   settings,
   workspacePath,
+  listWidth,
+  listWidthMode,
+  onChangeListWidth,
+  onChangeListWidthMode,
   onSave,
   onReload,
   updaterAvailable,
@@ -24,6 +29,10 @@ export function SettingsView({
 }: {
   settings: WorkspaceSettings;
   workspacePath: string;
+  listWidth: number;
+  listWidthMode: ListWidthMode;
+  onChangeListWidth: (value: number) => void;
+  onChangeListWidthMode: (mode: ListWidthMode) => void;
   onSave: (settings: WorkspaceSettings) => Promise<void>;
   onReload: () => Promise<void>;
   updaterAvailable: boolean;
@@ -40,8 +49,20 @@ export function SettingsView({
   const [draft, setDraft] = useState(settings);
   const [reloading, setReloading] = useState(false);
   const [saving, setSaving] = useState(false);
+  // Free-text draft for the width input so the field can be cleared/retyped;
+  // committed (clamped) on blur or Enter, and re-synced whenever the applied
+  // value changes elsewhere.
+  const [listWidthDraft, setListWidthDraft] = useState(String(listWidth));
 
   useEffect(() => setDraft(settings), [settings]);
+  useEffect(() => setListWidthDraft(String(listWidth)), [listWidth]);
+
+  function commitListWidth() {
+    const parsed = Number(listWidthDraft);
+    const next = Number.isFinite(parsed) ? clampListWidth(parsed) : listWidth;
+    onChangeListWidth(next);
+    setListWidthDraft(String(next));
+  }
 
   function setSlackNotification(key: SlackNotificationKey, enabled: boolean) {
     setDraft((current) => ({
@@ -141,6 +162,61 @@ export function SettingsView({
           <label>
             Workspace folder
             <input className="settings-readonly-path" title={workspacePath} value={workspacePath} readOnly />
+          </label>
+        </div>
+      </section>
+
+      <section
+        className="settings-section"
+        aria-labelledby="board-layout-heading"
+        onContextMenu={(event) => {
+          if (isEditableTextControl(event.target)) {
+            onOpenContextMenu(event, textControlContextItems(event.target));
+          }
+        }}
+      >
+        <div className="settings-section-header">
+          <p className="eyebrow">This computer</p>
+          <h2 id="board-layout-heading">Board layout</h2>
+          <p className="muted">Applies to this computer only — not saved to the workspace.</p>
+        </div>
+        <div className="settings-fields">
+          <div>
+            <label className="settings-toggle">
+              <input
+                checked={listWidthMode === "flexible"}
+                data-testid="list-width-flexible-toggle"
+                type="checkbox"
+                onChange={(event) => onChangeListWidthMode(event.target.checked ? "flexible" : "fixed")}
+              />
+              Flexible list width
+            </label>
+            <span className="settings-field-hint">
+              When on, lists stretch to fill the board. When off, every list stays a fixed width.
+            </span>
+          </div>
+          <label>
+            List width (px)
+            <input
+              data-testid="list-width-input"
+              type="number"
+              min={MIN_LIST_WIDTH}
+              max={MAX_LIST_WIDTH}
+              step={10}
+              value={listWidthDraft}
+              onChange={(event) => setListWidthDraft(event.target.value)}
+              onBlur={commitListWidth}
+              onKeyDown={(event) => {
+                if (event.key === "Enter") {
+                  event.currentTarget.blur();
+                }
+              }}
+            />
+            <span className="settings-field-hint">
+              {listWidthMode === "flexible"
+                ? `Minimum list width before lists stretch (${MIN_LIST_WIDTH}–${MAX_LIST_WIDTH}).`
+                : `Fixed width for every list (${MIN_LIST_WIDTH}–${MAX_LIST_WIDTH}).`}
+            </span>
           </label>
         </div>
       </section>

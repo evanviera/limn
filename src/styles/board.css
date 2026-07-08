@@ -16,8 +16,12 @@
 
 .column {
   position: relative;
-  flex: 1 1 288px;
-  min-width: 288px;
+  /* Fixed width by default (per-computer preference; --list-width is set on the
+     document root in App.tsx). Flexible mode below lets lists stretch instead. */
+  flex: 0 0 var(--list-width, 320px);
+  width: var(--list-width, 320px);
+  min-width: var(--list-width, 320px);
+  max-width: var(--list-width, 320px);
   display: grid;
   grid-template-rows: auto minmax(0, 1fr) auto;
   gap: var(--space-4);
@@ -28,6 +32,14 @@
   border: 1px solid transparent;
   border-radius: var(--radius-lg);
   transition: border-color var(--transition), background var(--transition);
+}
+
+/* Flexible mode: lists grow to fill the board, with --list-width as the minimum
+   before they stretch. :not(.collapsed) keeps the narrow collapsed rail intact. */
+:root[data-list-width-mode="flexible"] .column:not(.collapsed) {
+  flex: 1 1 var(--list-width, 320px);
+  width: auto;
+  max-width: none;
 }
 
 /* Collapsed rail: a narrow vertical strip that reclaims horizontal space while
