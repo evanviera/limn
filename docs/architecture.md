@@ -85,7 +85,17 @@ order and add new partials to the barrel at the right position.
 ## Backend (`src-tauri/src/`)
 
 - `lib.rs` — Tauri bootstrap `run()`, the `#[tauri::command]` IPC handlers, and
-  the workspace/filesystem helpers + data structs. Attachments are copied into
+  the workspace/filesystem helpers + data structs. **Loading is progressive and
+  cloud-aware:** `load_workspace_meta` returns the small files (settings, members,
+  board columns) plus the card count and a `cloud_storage_hint` so the UI paints
+  the board shell instantly, then `load_workspace_cards` streams the card files —
+  read in parallel with a per-file timeout (`read_files_parallel`) and emitting
+  `workspace-load-progress` — so a cloud-synced vault of "online-only" placeholders
+  hydrates concurrently instead of blocking on one slow download. `load_workspace`
+  (the combined form) backs the watch-driven refresh; `read_workspace_files` backs
+  the incremental refresh. The `watch_workspace` event now carries the changed
+  workspace-relative `paths` so the frontend can reload just what changed. See
+  [cloud-sync.md](cloud-sync.md). Attachments are copied into
   `attachments/<cardId>/` in the workspace and referenced from each card's
   frontmatter; the folder is removed only when its card is actually deleted. The
   `delete_card_file` / `delete_board_file` commands are version-checked (they take

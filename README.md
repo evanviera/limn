@@ -2,6 +2,8 @@
 
 Limn is a local-first Trello-style task board for small trusted teams. Workspaces are normal folders, so they can be synced with iCloud Drive, Dropbox, Google Drive, Syncthing, or any other folder sync tool.
 
+> **Syncing a workspace via the cloud?** Keep the folder **available offline** so Limn never has to download "online-only" files just to open. See [docs/cloud-sync.md](docs/cloud-sync.md).
+
 ## Storage Layout
 
 Each workspace folder contains:

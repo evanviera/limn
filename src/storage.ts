@@ -2,7 +2,7 @@ import { invoke } from "./ipc.js";
 import { EMPTY_FILTER } from "./lib/filter.js";
 import { mergeBoard, mergeCard, mergeMembers, mergeSettings, type EntityMergeResult } from "./lib/merge.js";
 import { resolveConflictWrite, type ConflictWriteAdapter, type SaveOutcome } from "./lib/mergeWrite.js";
-import type { Attachment, Board, BoardGroup, Card, CardFilter, Comment, ConflictFile, DeleteResult, Member, MembersFile, OpenWorkspacesState, SavedView, SlackNotificationSettings, Subtask, SubtaskListItem, WorkspaceFiles, WorkspaceSettings, WriteResult } from "./types";
+import type { Attachment, Board, BoardGroup, Card, CardFilter, Comment, ConflictFile, DeleteResult, Member, MembersFile, OpenWorkspacesState, SavedView, SlackNotificationSettings, Subtask, SubtaskListItem, WorkspaceCards, WorkspaceFileResult, WorkspaceFiles, WorkspaceMeta, WorkspaceSettings, WriteResult } from "./types";
 
 export type { SaveOutcome } from "./lib/mergeWrite.js";
 
@@ -26,6 +26,32 @@ export interface WorkspaceData {
   diagnostics: string[];
 }
 
+// Phase-one result of a progressive open: everything needed to paint the board
+// shell, plus the card count and cloud hint that drive the loading UI.
+export interface WorkspaceMetaData {
+  settings: WorkspaceSettings;
+  membersFile: MembersFile;
+  boards: Board[];
+  cardCount: number;
+  cloudHint: string | null;
+  diagnostics: string[];
+}
+
+// Phase-two result of a progressive open: the parsed card files.
+export interface WorkspaceCardsData {
+  cards: Card[];
+  diagnostics: string[];
+}
+
+// A workspace file targeted by an incremental refresh: its parsed card (when it
+// is a readable `cards/*.md`) or null when the file was deleted on disk.
+export interface WorkspaceFileUpdate {
+  dir: string;
+  fileName: string;
+  card: Card | null;
+  deleted: boolean;
+}
+
 export async function pickWorkspaceFolder(): Promise<string | null> {
   return invoke<string | null>("pick_workspace_folder");
 }
@@ -33,6 +59,39 @@ export async function pickWorkspaceFolder(): Promise<string | null> {
 export async function loadWorkspace(path: string): Promise<WorkspaceData> {
   const files = await invoke<WorkspaceFiles>("load_workspace", { path });
   return parseWorkspace(files);
+}
+
+// Phase one of a progressive open: settings, members, boards, the card count and
+// a cloud-storage hint. Fast even on a cloud vault because it never reads card
+// contents — only counts the files — so the UI can paint the board shell first.
+export async function loadWorkspaceMeta(path: string): Promise<WorkspaceMetaData> {
+  const meta = await invoke<WorkspaceMeta>("load_workspace_meta", { path });
+  return parseWorkspaceMeta(meta);
+}
+
+// Phase two of a progressive open: the card files, read in parallel with a
+// per-file timeout on the Rust side (emitting `workspace-load-progress`).
+export async function loadWorkspaceCards(path: string): Promise<WorkspaceCardsData> {
+  const files = await invoke<WorkspaceCards>("load_workspace_cards", { path });
+  const diagnostics = [...(files.warnings ?? [])];
+  const cards = parseCardFiles(files.cards, diagnostics);
+  return { cards, diagnostics };
+}
+
+// Targeted read of specific card files for an incremental watch-refresh. Each
+// result is a parsed card, or a deletion marker when the file is gone on disk.
+export async function readWorkspaceFiles(
+  path: string,
+  files: Array<{ dir: "cards" | "boards"; name: string }>
+): Promise<WorkspaceFileUpdate[]> {
+  const results = await invoke<WorkspaceFileResult[]>("read_workspace_files", { path, files });
+  return results.map((result) => {
+    if (result.content === null) {
+      return { dir: result.dir, fileName: result.file_name, card: null, deleted: true };
+    }
+    const card = result.dir === "cards" ? parseCard(result.content, result.file_name) : null;
+    return { dir: result.dir, fileName: result.file_name, card, deleted: false };
+  });
 }
 
 // Persist the open workspace tabs and which one is active so they reopen on next
@@ -452,23 +511,8 @@ export function parseWorkspace(files: WorkspaceFiles): WorkspaceData {
     diagnostics.push(".workspace/members.json is invalid JSON; members are being shown as empty until the file is fixed or saved.");
   }
 
-  for (const file of files.boards) {
-    const result = safeJson<Board | null>(file.content, null);
-    if (result.ok && result.value?.id) {
-      boards.push(normalizeBoard(result.value));
-    } else {
-      diagnostics.push(`boards/${file.file_name} could not be loaded.`);
-    }
-  }
-
-  for (const file of files.cards) {
-    const card = parseCard(file.content, file.file_name);
-    if (card?.id) {
-      cards.push(card);
-    } else {
-      diagnostics.push(`cards/${file.file_name} could not be loaded.`);
-    }
-  }
+  boards.push(...parseBoardFiles(files.boards, diagnostics));
+  cards.push(...parseCardFiles(files.cards, diagnostics));
 
   return {
     settings,
@@ -477,6 +521,59 @@ export function parseWorkspace(files: WorkspaceFiles): WorkspaceData {
     cards,
     diagnostics
   };
+}
+
+// Parse the phase-one meta payload into the same shapes as `parseWorkspace`, but
+// without cards (they arrive separately in phase two).
+export function parseWorkspaceMeta(meta: WorkspaceMeta): WorkspaceMetaData {
+  const diagnostics = [...(meta.warnings ?? [])];
+  const settingsResult = safeJson<Partial<WorkspaceSettings> & { slackNotifications?: unknown }>(meta.settings, createDefaultSettings("Limn Workspace"));
+  const membersResult = safeJson<Partial<MembersFile>>(meta.members, { schemaVersion: SCHEMA_VERSION, members: [], updatedAt: "" });
+
+  if (!settingsResult.ok) {
+    diagnostics.push(".workspace/settings.json is invalid JSON; defaults are being shown until the file is fixed or saved.");
+  }
+  if (!membersResult.ok) {
+    diagnostics.push(".workspace/members.json is invalid JSON; members are being shown as empty until the file is fixed or saved.");
+  }
+
+  return {
+    settings: normalizeWorkspaceSettings(settingsResult.value),
+    membersFile: normalizeMembersFile(membersResult.value),
+    boards: parseBoardFiles(meta.boards, diagnostics),
+    cardCount: meta.card_count,
+    cloudHint: meta.cloud_hint ?? null,
+    diagnostics
+  };
+}
+
+// Parse board JSON files, pushing a diagnostic for any that don't load. Shared by
+// the full load and the phase-one meta load.
+function parseBoardFiles(files: Array<{ file_name: string; content: string }>, diagnostics: string[]): Board[] {
+  const boards: Board[] = [];
+  for (const file of files) {
+    const result = safeJson<Board | null>(file.content, null);
+    if (result.ok && result.value?.id) {
+      boards.push(normalizeBoard(result.value));
+    } else {
+      diagnostics.push(`boards/${file.file_name} could not be loaded.`);
+    }
+  }
+  return boards;
+}
+
+// Parse card Markdown files, pushing a diagnostic for any that don't load.
+function parseCardFiles(files: Array<{ file_name: string; content: string }>, diagnostics: string[]): Card[] {
+  const cards: Card[] = [];
+  for (const file of files) {
+    const card = parseCard(file.content, file.file_name);
+    if (card?.id) {
+      cards.push(card);
+    } else {
+      diagnostics.push(`cards/${file.file_name} could not be loaded.`);
+    }
+  }
+  return cards;
 }
 
 function normalizeWorkspaceSettings(settings: Partial<WorkspaceSettings> & { slackNotifications?: unknown }): WorkspaceSettings {

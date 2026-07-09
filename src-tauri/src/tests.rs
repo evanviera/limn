@@ -6,13 +6,13 @@ use std::{
     thread,
 };
 
-#[test]
-fn workspace_init_and_load_creates_expected_layout() {
+#[tokio::test]
+async fn workspace_init_and_load_creates_expected_layout() {
     let root = test_workspace("init_and_load");
     let path = root.to_string_lossy().to_string();
 
     init_workspace(path.clone()).expect("workspace initializes");
-    let files = load_workspace(path).expect("workspace loads");
+    let files = load_workspace(path).await.expect("workspace loads");
 
     assert!(root.join(".workspace/settings.json").exists());
     assert!(root.join(".workspace/members.json").exists());
@@ -373,14 +373,14 @@ fn list_and_delete_conflicts_round_trip() {
     let _ = fs::remove_dir_all(root);
 }
 
-#[test]
-fn unreadable_text_files_are_reported_without_failing_workspace_load() {
+#[tokio::test]
+async fn unreadable_text_files_are_reported_without_failing_workspace_load() {
     let root = test_workspace("invalid_utf8");
     let path = root.to_string_lossy().to_string();
     init_workspace(path.clone()).expect("workspace initializes");
     fs::write(root.join("cards/bad.md"), [0xff, 0xfe]).expect("invalid card writes");
 
-    let files = load_workspace(path).expect("workspace loads");
+    let files = load_workspace(path).await.expect("workspace loads");
 
     assert!(files.cards.is_empty());
     assert_eq!(files.warnings.len(), 1);
@@ -667,6 +667,88 @@ async fn post_slack_reports_non_success_status() {
     assert!(server
         .request()
         .contains(r#""text":"Task completed: Demo""#));
+}
+
+#[test]
+fn cloud_storage_hint_recognizes_known_providers() {
+    assert_eq!(
+        cloud_storage_hint("/Users/me/Library/CloudStorage/GoogleDrive-me/limn"),
+        Some("Google Drive".to_string())
+    );
+    assert_eq!(
+        cloud_storage_hint("C:\\Users\\me\\Dropbox\\limn"),
+        Some("Dropbox".to_string())
+    );
+    assert_eq!(
+        cloud_storage_hint("/Users/me/Library/Mobile Documents/com~apple~CloudDocs/limn"),
+        Some("iCloud Drive".to_string())
+    );
+    assert_eq!(
+        cloud_storage_hint("/Users/me/OneDrive/limn"),
+        Some("OneDrive".to_string())
+    );
+    // A generic CloudStorage mount we don't have a specific label for.
+    assert_eq!(
+        cloud_storage_hint("/Users/me/Library/CloudStorage/Something-else/limn"),
+        Some("a cloud storage folder".to_string())
+    );
+    // An ordinary local path is not flagged.
+    assert_eq!(cloud_storage_hint("/Users/me/Documents/limn"), None);
+}
+
+#[tokio::test]
+async fn load_workspace_meta_returns_boards_card_count_and_cloud_hint() {
+    let root = test_workspace("meta_load");
+    let path = root.to_string_lossy().to_string();
+    init_workspace(path.clone()).expect("workspace initializes");
+
+    for (id, updated) in [("card_a", "2026-06-27T00:00:00.000Z"), ("card_b", "2026-06-27T00:00:00.000Z")] {
+        let markdown = card_markdown(id, updated, "Body");
+        write_card_file(path.clone(), format!("{id}.md"), markdown, None).expect("card writes");
+    }
+
+    let meta = load_workspace_meta(path.clone()).await.expect("meta loads");
+    assert_eq!(meta.card_count, 2, "card count reflects files without reading them");
+    assert!(meta.settings.contains("schemaVersion"));
+    // A plain temp path is not a cloud folder.
+    assert_eq!(meta.cloud_hint, None);
+
+    let _ = fs::remove_dir_all(root);
+}
+
+#[tokio::test]
+async fn read_workspace_files_returns_content_and_flags_missing() {
+    let root = test_workspace("read_files");
+    let path = root.to_string_lossy().to_string();
+    init_workspace(path.clone()).expect("workspace initializes");
+
+    let markdown = card_markdown("card_here", "2026-06-27T00:00:00.000Z", "Present");
+    write_card_file(path.clone(), "card_here.md".to_string(), markdown, None).expect("card writes");
+
+    let results = read_workspace_files(
+        path.clone(),
+        vec![
+            FileRef { dir: "cards".to_string(), name: "card_here.md".to_string() },
+            FileRef { dir: "cards".to_string(), name: "card_missing.md".to_string() },
+        ],
+    )
+    .await
+    .expect("targeted read succeeds");
+
+    let present = results.iter().find(|r| r.file_name == "card_here.md").expect("present result");
+    assert!(present.content.as_deref().unwrap_or_default().contains("Present"));
+    let missing = results.iter().find(|r| r.file_name == "card_missing.md").expect("missing result");
+    assert!(missing.content.is_none(), "a deleted file reports no content");
+
+    // A directory outside the allow-list is rejected outright.
+    assert!(read_workspace_files(
+        path.clone(),
+        vec![FileRef { dir: "..".to_string(), name: "secret.md".to_string() }],
+    )
+    .await
+    .is_err());
+
+    let _ = fs::remove_dir_all(root);
 }
 
 fn test_workspace(name: &str) -> PathBuf {

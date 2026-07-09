@@ -1,13 +1,26 @@
 use notify::{RecommendedWatcher, RecursiveMode, Watcher};
-use serde::Serialize;
+use serde::{Deserialize, Serialize};
 use std::{
     collections::HashMap,
     fs,
     path::{Path, PathBuf},
-    sync::Mutex,
+    sync::{Arc, Mutex},
     time::{Duration, Instant},
 };
 use tauri::{AppHandle, Emitter, Manager, State, Window};
+use tokio::sync::Semaphore;
+
+// How many card/board files to read concurrently. Bounded so a huge workspace
+// can't spawn thousands of blocking OS reads at once, but high enough that a
+// cloud-synced vault of "online-only" placeholders hydrates in parallel instead
+// of one slow download at a time.
+const FILE_READ_CONCURRENCY: usize = 24;
+
+// A single file read that blocks this long is treated as "not locally
+// available" (typically a cloud placeholder still downloading) and skipped with
+// a warning, so one stuck file can't hold the whole workspace load hostage. The
+// orphaned read is left to finish in the background.
+const FILE_READ_TIMEOUT: Duration = Duration::from_secs(20);
 
 mod attachments;
 mod menu;
@@ -34,6 +47,60 @@ struct WorkspaceFiles {
     boards: Vec<TextFile>,
     cards: Vec<TextFile>,
     warnings: Vec<String>,
+}
+
+// The cheap first phase of a progressive load: everything needed to paint the
+// board shell (settings, members, board columns) plus the card count so the UI
+// can show real "N of M" progress while the — potentially slow, cloud-hydrated —
+// card files stream in via `load_workspace_cards`.
+#[derive(Serialize)]
+struct WorkspaceMeta {
+    settings: String,
+    members: String,
+    boards: Vec<TextFile>,
+    card_count: usize,
+    warnings: Vec<String>,
+    // A human-readable provider label (e.g. "Google Drive") when the workspace
+    // path looks like it lives inside a cloud-sync folder, else null. The
+    // frontend turns this into a one-time "pin this folder offline" hint.
+    cloud_hint: Option<String>,
+}
+
+#[derive(Serialize)]
+struct WorkspaceCards {
+    cards: Vec<TextFile>,
+    warnings: Vec<String>,
+}
+
+// Progress ticked out over the `workspace-load-progress` event as cards are read,
+// so the loading UI can advance instead of showing an indeterminate spinner.
+#[derive(Clone, Serialize)]
+struct LoadProgress {
+    loaded: usize,
+    total: usize,
+}
+
+// One targeted file result for the incremental watch-refresh path. `content` is
+// None when the file no longer exists on disk (it was deleted remotely), letting
+// the frontend drop it without a full workspace reload.
+#[derive(Serialize)]
+struct WorkspaceFileResult {
+    dir: String,
+    file_name: String,
+    content: Option<String>,
+}
+
+#[derive(Deserialize)]
+struct FileRef {
+    dir: String,
+    name: String,
+}
+
+// Payload for the `workspace-changed` event: the workspace-relative paths of the
+// data files that changed, so the frontend can reload incrementally.
+#[derive(Clone, Serialize)]
+struct WorkspaceChanged {
+    paths: Vec<String>,
 }
 
 #[derive(Serialize)]
@@ -73,13 +140,21 @@ fn init_workspace(path: String) -> Result<(), String> {
     Ok(())
 }
 
+// Full workspace load (settings, members, boards, cards) in one call. Used by
+// the watch-driven background refresh, where there is no spinner to feed with
+// progress. Card and board files are read in parallel with a per-file timeout so
+// a cloud-synced vault of placeholders hydrates concurrently rather than one
+// slow download at a time. Progressive foreground opens use
+// `load_workspace_meta` + `load_workspace_cards` instead.
 #[tauri::command]
-fn load_workspace(path: String) -> Result<WorkspaceFiles, String> {
+async fn load_workspace(path: String) -> Result<WorkspaceFiles, String> {
     init_workspace(path.clone())?;
     let root = workspace_root(&path)?;
 
-    let (boards, board_warnings) = read_text_dir(&root.join("boards"), "json")?;
-    let (cards, card_warnings) = read_text_dir(&root.join("cards"), "md")?;
+    let board_paths = list_data_files(&root.join("boards"), "json");
+    let card_paths = list_data_files(&root.join("cards"), "md");
+    let (boards, board_warnings) = read_files_parallel(board_paths, None).await;
+    let (cards, card_warnings) = read_files_parallel(card_paths, None).await;
     let warnings = board_warnings.into_iter().chain(card_warnings).collect();
 
     Ok(WorkspaceFiles {
@@ -89,6 +164,224 @@ fn load_workspace(path: String) -> Result<WorkspaceFiles, String> {
         cards,
         warnings,
     })
+}
+
+// Phase one of a progressive open: the small, essential files (settings,
+// members, board columns) plus the card count and a cloud-storage hint. Returns
+// fast so the UI can paint the board shell immediately, then stream cards in.
+#[tauri::command]
+async fn load_workspace_meta(path: String) -> Result<WorkspaceMeta, String> {
+    init_workspace(path.clone())?;
+    let root = workspace_root(&path)?;
+
+    let board_paths = list_data_files(&root.join("boards"), "json");
+    let card_count = list_data_files(&root.join("cards"), "md").len();
+    let (boards, warnings) = read_files_parallel(board_paths, None).await;
+
+    Ok(WorkspaceMeta {
+        settings: read_to_string(root.join(".workspace/settings.json"))?,
+        members: read_to_string(root.join(".workspace/members.json"))?,
+        boards,
+        card_count,
+        warnings,
+        cloud_hint: cloud_storage_hint(&path),
+    })
+}
+
+// Phase two of a progressive open: the card files, read in parallel with a
+// per-file timeout. Emits `workspace-load-progress` after each file so the UI can
+// show "N of M" and the user isn't left staring at an indeterminate spinner.
+#[tauri::command]
+async fn load_workspace_cards(path: String, window: Window) -> Result<WorkspaceCards, String> {
+    let root = workspace_root(&path)?;
+    let card_paths = list_data_files(&root.join("cards"), "md");
+    let (cards, warnings) = read_files_parallel(card_paths, Some(window)).await;
+    Ok(WorkspaceCards { cards, warnings })
+}
+
+// Targeted read of specific workspace files (cards or boards) for the
+// incremental watch-refresh path, so a one-card external edit re-reads one file
+// instead of the whole vault. A file that no longer exists comes back with
+// `content: None` so the caller can drop it.
+#[tauri::command]
+async fn read_workspace_files(
+    path: String,
+    files: Vec<FileRef>,
+) -> Result<Vec<WorkspaceFileResult>, String> {
+    let root = workspace_root(&path)?;
+    let mut targets: Vec<(String, String, PathBuf)> = Vec::new();
+    for file in files {
+        let extension = match file.dir.as_str() {
+            "cards" => "md",
+            "boards" => "json",
+            _ => return Err("Unsupported directory".to_string()),
+        };
+        validate_file_name(&file.name, extension)?;
+        let full = root.join(&file.dir).join(&file.name);
+        targets.push((file.dir, file.name, full));
+    }
+
+    let semaphore = Arc::new(Semaphore::new(FILE_READ_CONCURRENCY));
+    let mut handles = Vec::with_capacity(targets.len());
+    for (dir, file_name, full) in targets {
+        let permit_source = semaphore.clone();
+        handles.push(tokio::spawn(async move {
+            let _permit = permit_source.acquire_owned().await.ok();
+            let content = read_optional_with_timeout(full).await;
+            WorkspaceFileResult {
+                dir,
+                file_name,
+                content,
+            }
+        }));
+    }
+
+    let mut results = Vec::with_capacity(handles.len());
+    for handle in handles {
+        if let Ok(result) = handle.await {
+            results.push(result);
+        }
+    }
+    Ok(results)
+}
+
+// Read a file that may legitimately be absent (deleted since the watch event).
+// A timeout or read error is treated the same as "not readable right now" and
+// reported as None, which the incremental refresh handles as a removal.
+async fn read_optional_with_timeout(path: PathBuf) -> Option<String> {
+    let read_path = path.clone();
+    match tokio::time::timeout(
+        FILE_READ_TIMEOUT,
+        tokio::task::spawn_blocking(move || fs::read_to_string(&read_path)),
+    )
+    .await
+    {
+        Ok(Ok(Ok(content))) => Some(content),
+        _ => None,
+    }
+}
+
+// Filter out watcher noise: hidden/temp files (dotfiles, editor swap files, and
+// the `.<name>.tmp` staging files that `atomic_write` renames into place). A
+// real board/card is never a dotfile, so this drops churn without missing edits.
+fn is_ignored_watch_path(path: &Path) -> bool {
+    path.file_name()
+        .and_then(|name| name.to_str())
+        .map(|name| name.starts_with('.'))
+        .unwrap_or(true)
+}
+
+// List the data files (by extension) in a directory. This is a cheap metadata
+// scan even on cloud-synced folders — only reading a file's *contents* forces a
+// placeholder to hydrate — so it is safe to do up front to learn the file set.
+fn list_data_files(dir: &Path, extension: &str) -> Vec<PathBuf> {
+    let mut paths = Vec::new();
+    let Ok(entries) = fs::read_dir(dir) else {
+        return paths;
+    };
+    for entry in entries.flatten() {
+        let entry_path = entry.path();
+        if entry_path
+            .extension()
+            .and_then(|value| value.to_str())
+            .is_some_and(|value| value == extension)
+        {
+            paths.push(entry_path);
+        }
+    }
+    paths.sort();
+    paths
+}
+
+// Read many files concurrently with a bounded worker count and a per-file
+// timeout. On a local disk this is roughly as fast as a serial read; on a
+// cloud-synced vault of "online-only" placeholders it turns N sequential
+// on-demand downloads into N parallel ones. A file that doesn't arrive within
+// the timeout is skipped with a warning that names it as still downloading, so
+// the load always finishes instead of spinning forever. When `window` is set,
+// a `workspace-load-progress` event is emitted after each file completes.
+async fn read_files_parallel(
+    paths: Vec<PathBuf>,
+    window: Option<Window>,
+) -> (Vec<TextFile>, Vec<String>) {
+    let total = paths.len();
+    let semaphore = Arc::new(Semaphore::new(FILE_READ_CONCURRENCY));
+    let mut handles = Vec::with_capacity(total);
+
+    for path in paths {
+        let permit_source = semaphore.clone();
+        handles.push(tokio::spawn(async move {
+            let _permit = permit_source.acquire_owned().await.ok();
+            let file_name = path
+                .file_name()
+                .map(|name| name.to_string_lossy().to_string())
+                .unwrap_or_default();
+            let read_path = path.clone();
+            let outcome = tokio::time::timeout(
+                FILE_READ_TIMEOUT,
+                tokio::task::spawn_blocking(move || fs::read_to_string(&read_path)),
+            )
+            .await;
+            match outcome {
+                Ok(Ok(Ok(content))) => Ok(TextFile { file_name, content }),
+                Ok(Ok(Err(error))) => Err(format!("{file_name} could not be read: {error}")),
+                Ok(Err(_)) => Err(format!("{file_name} could not be read: task failed")),
+                Err(_) => Err(format!(
+                    "{file_name} is taking too long to download from cloud storage and was skipped. Set your sync app to keep this folder available offline."
+                )),
+            }
+        }));
+    }
+
+    let mut files = Vec::new();
+    let mut warnings = Vec::new();
+    let mut done = 0usize;
+    for handle in handles {
+        match handle.await {
+            Ok(Ok(file)) => files.push(file),
+            Ok(Err(warning)) => warnings.push(warning),
+            Err(_) => warnings.push("A file read task failed unexpectedly.".to_string()),
+        }
+        done += 1;
+        if let Some(window) = &window {
+            let _ = window.emit(
+                "workspace-load-progress",
+                LoadProgress { loaded: done, total },
+            );
+        }
+    }
+
+    files.sort_by(|a, b| a.file_name.cmp(&b.file_name));
+    warnings.sort();
+    (files, warnings)
+}
+
+// Recognize when a workspace path lives inside a known cloud-sync folder so the
+// UI can warn that "online-only" files may load slowly. This is a pure,
+// filesystem-free heuristic on the path string (matched case-insensitively);
+// modern macOS mounts Dropbox/Drive/OneDrive/Box under ~/Library/CloudStorage,
+// which the first pattern catches generically.
+fn cloud_storage_hint(path: &str) -> Option<String> {
+    let lower = path.replace('\\', "/").to_lowercase();
+    let providers: [(&str, &str); 11] = [
+        ("com~apple~clouddocs", "iCloud Drive"),
+        ("/mobile documents/", "iCloud Drive"),
+        ("dropbox", "Dropbox"),
+        ("google drive", "Google Drive"),
+        ("googledrive", "Google Drive"),
+        ("google_drive", "Google Drive"),
+        ("onedrive", "OneDrive"),
+        ("/box/", "Box"),
+        ("boxdrive", "Box"),
+        ("pcloud", "pCloud"),
+        ("/library/cloudstorage/", "a cloud storage folder"),
+    ];
+    for (needle, label) in providers {
+        if lower.contains(needle) {
+            return Some(label.to_string());
+        }
+    }
+    None
 }
 
 #[tauri::command]
@@ -356,34 +649,47 @@ fn watch_workspace(path: String, window: Window, state: State<WatchState>) -> Re
 
     let mut last_emit_by_path: HashMap<PathBuf, Instant> = HashMap::new();
     let watcher_window = window.clone();
+    let emit_root = root.clone();
 
     let mut watcher = notify::recommended_watcher(move |result: notify::Result<notify::Event>| {
         let Ok(event) = result else {
             return;
         };
 
+        // Collect the workspace-relative paths of every data file this event
+        // touched, deduplicating rapid repeats per path (cloud clients rewrite a
+        // file several times as it syncs). Naming the changed paths lets the
+        // frontend reload just those files instead of the whole vault.
         let now = Instant::now();
-        let should_emit = event.paths.iter().any(|path| {
+        let mut changed: Vec<String> = Vec::new();
+        for path in &event.paths {
             let is_data = path
                 .extension()
                 .and_then(|extension| extension.to_str())
                 .is_some_and(|extension| matches!(extension, "json" | "md"));
             if !is_data {
-                return false;
+                continue;
+            }
+            if is_ignored_watch_path(path) {
+                continue;
             }
 
             let last_emit = last_emit_by_path.get(path).copied();
             let fresh = last_emit
                 .map(|last| now.duration_since(last) > Duration::from_millis(250))
                 .unwrap_or(true);
-            if fresh {
-                last_emit_by_path.insert(path.clone(), now);
+            if !fresh {
+                continue;
             }
-            fresh
-        });
+            last_emit_by_path.insert(path.clone(), now);
 
-        if should_emit {
-            let _ = watcher_window.emit("workspace-changed", ());
+            if let Ok(relative) = path.strip_prefix(&emit_root) {
+                changed.push(relative.to_string_lossy().replace('\\', "/"));
+            }
+        }
+
+        if !changed.is_empty() {
+            let _ = watcher_window.emit("workspace-changed", WorkspaceChanged { paths: changed });
         }
     })
     .map_err(display_err)?;
@@ -505,6 +811,9 @@ pub fn run() {
             pick_workspace_folder,
             init_workspace,
             load_workspace,
+            load_workspace_meta,
+            load_workspace_cards,
+            read_workspace_files,
             write_workspace_settings,
             write_members,
             write_board_file,
@@ -544,6 +853,7 @@ fn workspace_root(path: &str) -> Result<PathBuf, String> {
     Ok(root)
 }
 
+#[cfg(test)]
 fn read_text_dir(path: &Path, extension: &str) -> Result<(Vec<TextFile>, Vec<String>), String> {
     let mut files = Vec::new();
     let mut warnings = Vec::new();

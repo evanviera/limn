@@ -203,6 +203,43 @@ function loadFiles(store: WorkspaceStore): WorkspaceFiles {
   };
 }
 
+function boardFiles(store: WorkspaceStore): HarnessFile[] {
+  return [...store.boards.entries()].sort().map(([file_name, content]) => ({ file_name, content }));
+}
+
+function cardFiles(store: WorkspaceStore): HarnessFile[] {
+  return [...store.cards.entries()].sort().map(([file_name, content]) => ({ file_name, content }));
+}
+
+// Mirror the Rust cloud_storage_hint heuristic so tests can exercise the cloud
+// advisory by opening a workspace whose path looks like a sync folder.
+function cloudHintFor(path: string): string | null {
+  const lower = path.replace(/\\/g, "/").toLowerCase();
+  const providers: Array<[string, string]> = [
+    ["com~apple~clouddocs", "iCloud Drive"],
+    ["/mobile documents/", "iCloud Drive"],
+    ["dropbox", "Dropbox"],
+    ["google drive", "Google Drive"],
+    ["googledrive", "Google Drive"],
+    ["onedrive", "OneDrive"],
+    ["/box/", "Box"],
+    ["pcloud", "pCloud"],
+    ["/library/cloudstorage/", "a cloud storage folder"]
+  ];
+  for (const [needle, label] of providers) {
+    if (lower.includes(needle)) {
+      return label;
+    }
+  }
+  return null;
+}
+
+// Emit a `workspace-changed` event carrying the changed workspace-relative paths,
+// mirroring the real watcher so the app can reload incrementally in e2e too.
+function emitChanged(paths: string[]) {
+  emit("workspace-changed", { paths });
+}
+
 function updateDebugState() {
   sessionStorage.setItem("limn-e2e-state", JSON.stringify(snapshot()));
   let element = document.getElementById("limn-e2e-snapshot");
@@ -277,7 +314,7 @@ function preserveConflictCopy(store: WorkspaceStore, relativeDir: string, fileNa
   const copyName = `${stem}_conflict_${Date.now()}${Math.random().toString(36).slice(2, 6)}.${ext}`;
   if (relativeDir === "cards") {
     store.cards.set(copyName, content);
-    emit("workspace-changed");
+    emitChanged([`cards/${copyName}`]);
   } else {
     store.conflictFiles.set(copyName, content);
     updateDebugState();
@@ -337,6 +374,35 @@ window.__LIMN_TEST_IPC__ = {
         store.loadWorkspaceCount += 1;
         return loadFiles(store) as T;
       }
+      case "load_workspace_meta": {
+        const store = useWorkspace(args);
+        return {
+          settings: `${JSON.stringify(store.settings, null, 2)}\n`,
+          members: `${JSON.stringify(store.members, null, 2)}\n`,
+          boards: boardFiles(store),
+          card_count: store.cards.size,
+          warnings: [],
+          cloud_hint: cloudHintFor(activePath)
+        } as T;
+      }
+      case "load_workspace_cards": {
+        const store = useWorkspace(args);
+        const cards = cardFiles(store);
+        cards.forEach((_, index) => emit("workspace-load-progress", { loaded: index + 1, total: cards.length }));
+        return { cards, warnings: [] } as T;
+      }
+      case "read_workspace_files": {
+        const store = useWorkspace(args);
+        const requested = Array.isArray(args?.files) ? (args.files as Array<{ dir?: unknown; name?: unknown }>) : [];
+        const results = requested.map((file) => {
+          const dir = String(file?.dir ?? "");
+          const name = String(file?.name ?? "");
+          const map = dir === "cards" ? store.cards : store.boards;
+          const content = map.get(name);
+          return { dir, file_name: name, content: content ?? null };
+        });
+        return results as T;
+      }
       case "write_workspace_settings": {
         const store = useWorkspace(args);
         const content = contentArg(args);
@@ -348,7 +414,7 @@ window.__LIMN_TEST_IPC__ = {
           delete (store.settings as unknown as Record<string, unknown>)[key];
         }
         Object.assign(store.settings, JSON.parse(content) as WorkspaceSettings);
-        emit("workspace-changed");
+        emitChanged([".workspace/settings.json"]);
         return { relative_path: ".workspace/settings.json", conflict: false } satisfies WriteResult as T;
       }
       case "write_members": {
@@ -361,7 +427,7 @@ window.__LIMN_TEST_IPC__ = {
         const parsed = JSON.parse(content) as MembersFile;
         store.members.members = parsed.members;
         store.members.updatedAt = parsed.updatedAt;
-        emit("workspace-changed");
+        emitChanged([".workspace/members.json"]);
         return { relative_path: ".workspace/members.json", conflict: false } satisfies WriteResult as T;
       }
       case "write_board_file": {
@@ -372,7 +438,7 @@ window.__LIMN_TEST_IPC__ = {
           return conflict as T;
         }
         store.boards.set(fileName, contentArg(args));
-        emit("workspace-changed");
+        emitChanged([`boards/${fileName}`]);
         return { relative_path: `boards/${fileName}`, conflict: false } satisfies WriteResult as T;
       }
       case "delete_board_file": {
@@ -385,7 +451,7 @@ window.__LIMN_TEST_IPC__ = {
           return { conflict: true, copy_path: copyPath } as T;
         }
         store.boards.delete(fileName);
-        emit("workspace-changed");
+        emitChanged([`boards/${fileName}`]);
         return { conflict: false, copy_path: null } as T;
       }
       case "write_card_file": {
@@ -406,7 +472,7 @@ window.__LIMN_TEST_IPC__ = {
           }
         }
         store.cards.set(fileName, content);
-        emit("workspace-changed");
+        emitChanged([`cards/${fileName}`]);
         return { relative_path: `cards/${fileName}`, conflict: false } satisfies WriteResult as T;
       }
       case "write_conflict_copy": {
@@ -435,7 +501,7 @@ window.__LIMN_TEST_IPC__ = {
             store.attachments.delete(key);
           }
         }
-        emit("workspace-changed");
+        emitChanged([`cards/${fileName}`]);
         return { conflict: false, copy_path: null } as T;
       }
       case "list_conflicts": {
@@ -459,7 +525,7 @@ window.__LIMN_TEST_IPC__ = {
         } else if (relativePath.startsWith(".workspace/conflicts/")) {
           store.conflictFiles.delete(fileName);
         }
-        emit("workspace-changed");
+        emitChanged([relativePath]);
         return undefined as T;
       }
       case "pick_attachment_files":
@@ -581,7 +647,7 @@ window.__LIMN_E2E__ = {
   snapshot,
   externalEditBoard(fileName: string, board: Board) {
     active().boards.set(fileName, `${JSON.stringify(board, null, 2)}\n`);
-    emit("workspace-changed");
+    emitChanged([`boards/${fileName}`]);
   },
   externalEditCard(fileName: string, content: string, silent = false) {
     active().cards.set(fileName, content);
@@ -590,12 +656,12 @@ window.__LIMN_E2E__ = {
       // — used to exercise version-checked deletes racing a remote edit.
       updateDebugState();
     } else {
-      emit("workspace-changed");
+      emitChanged([`cards/${fileName}`]);
     }
   },
   corruptCard(fileName: string) {
     active().cards.set(fileName, "not frontmatter");
-    emit("workspace-changed");
+    emitChanged([`cards/${fileName}`]);
   },
   queueWorkspacePick(path: string) {
     workspacePickQueue.push(path);

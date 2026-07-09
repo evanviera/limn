@@ -71,6 +71,36 @@
   border-color: var(--danger-border);
 }
 
+/* The progressive card-loading indicator: a neutral/accent banner with a live
+   "N of M" count, a slim determinate progress bar, and a Cancel action. */
+.banner-loading {
+  color: var(--text);
+  background: var(--accent-soft);
+  border-color: var(--accent-border);
+}
+
+.card-loading-status {
+  display: flex;
+  align-items: center;
+  gap: var(--space-3);
+}
+
+.card-loading-track {
+  width: 140px;
+  max-width: 34vw;
+  height: 6px;
+  overflow: hidden;
+  background: var(--border);
+  border-radius: 999px;
+}
+
+.card-loading-fill {
+  height: 100%;
+  background: var(--accent);
+  border-radius: inherit;
+  transition: width 120ms ease-out;
+}
+
 .error {
   color: var(--danger);
 }

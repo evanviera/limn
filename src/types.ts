@@ -193,6 +193,44 @@ export interface WorkspaceFiles {
   warnings: string[];
 }
 
+// Phase one of a progressive workspace open: the small files needed to paint the
+// board shell, the card count (for "N of M" progress), and a cloud-storage hint.
+export interface WorkspaceMeta {
+  settings: string;
+  members: string;
+  boards: Array<{ file_name: string; content: string }>;
+  card_count: number;
+  warnings: string[];
+  cloud_hint: string | null;
+}
+
+// Phase two of a progressive open: the card files (read in parallel, streaming
+// `workspace-load-progress` events as they arrive).
+export interface WorkspaceCards {
+  cards: Array<{ file_name: string; content: string }>;
+  warnings: string[];
+}
+
+// Progress payload emitted over `workspace-load-progress` while cards load.
+export interface WorkspaceLoadProgress {
+  loaded: number;
+  total: number;
+}
+
+// Payload of the `workspace-changed` watch event: the workspace-relative paths
+// of the data files that changed, enabling an incremental reload.
+export interface WorkspaceChanged {
+  paths: string[];
+}
+
+// One file's contents from a targeted `read_workspace_files` call. `content` is
+// null when the file no longer exists on disk (deleted since the watch event).
+export interface WorkspaceFileResult {
+  dir: string;
+  file_name: string;
+  content: string | null;
+}
+
 export interface WriteResult {
   relative_path: string;
   conflict: boolean;

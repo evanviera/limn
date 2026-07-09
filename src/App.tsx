@@ -18,6 +18,7 @@ import {
   createBoard,
   createCard,
   createComment,
+  createDefaultSettings,
   deleteAttachmentFile,
   deleteBoard,
   deleteCard,
@@ -27,6 +28,8 @@ import {
   getOpenWorkspaces,
   listConflicts,
   loadWorkspace,
+  loadWorkspaceCards,
+  loadWorkspaceMeta,
   makeId,
   normalizeUrl,
   openAttachmentFile,
@@ -41,11 +44,12 @@ import {
   saveMembers,
   saveOpenWorkspaces,
   saveSettings,
+  readWorkspaceFiles,
   timestamp,
   watchWorkspace,
   type SaveOutcome
 } from "./storage";
-import { Attachment, Board, BoardGroup, BoardList, Card, CardFilter, Member, MembersFile, OpenWorkspaceRef, SavedView, Subtask, SubtaskListItem, View, WorkspaceSettings } from "./types";
+import { Attachment, Board, BoardGroup, BoardList, Card, CardFilter, Member, MembersFile, OpenWorkspaceRef, SavedView, Subtask, SubtaskListItem, View, WorkspaceChanged, WorkspaceLoadProgress, WorkspaceSettings } from "./types";
 import {
   canUseUpdater,
   checkForUpdate,
@@ -85,6 +89,39 @@ import { updateBannerMessage } from "./lib/updateMessages";
 import type { UpdateStatus } from "./lib/updateMessages";
 
 const WORKSPACE_WATCH_REFRESH_DELAY_MS = 75;
+// Above this many changed card files in one watch burst, a single full reload
+// (now parallel) is cheaper than many targeted reads, so skip the incremental path.
+const INCREMENTAL_REFRESH_MAX_FILES = 40;
+const CLOUD_HINT_DISMISS_PREFIX = "limn-cloud-hint-dismissed:";
+
+// Whether the user has dismissed the cloud-storage advisory for this workspace.
+function storageHintDismissed(path: string): boolean {
+  try {
+    return localStorage.getItem(`${CLOUD_HINT_DISMISS_PREFIX}${path}`) === "1";
+  } catch {
+    return false;
+  }
+}
+
+function rememberStorageHintDismissed(path: string): void {
+  try {
+    localStorage.setItem(`${CLOUD_HINT_DISMISS_PREFIX}${path}`, "1");
+  } catch {
+    // Ignore storage failures — the hint just reappears next open.
+  }
+}
+
+// Classify a workspace-relative changed path from the watcher. A plain card file
+// can be reloaded incrementally; anything else (boards, settings, members, or a
+// card conflict copy) needs a full reload to stay correct.
+function classifyChangedPath(relativePath: string): { kind: "card"; name: string } | { kind: "full" } {
+  const normalized = relativePath.replace(/\\/g, "/");
+  const cardMatch = /^cards\/([^/]+\.md)$/.exec(normalized);
+  if (cardMatch && !cardMatch[1].includes("_conflict_")) {
+    return { kind: "card", name: cardMatch[1] };
+  }
+  return { kind: "full" };
+}
 
 type CardOpenMode = "view" | "edit";
 
@@ -123,6 +160,12 @@ export default function App() {
   const [noticeKind, setNoticeKind] = useState<"info" | "warning">("info");
   const [isLoading, setIsLoading] = useState(true);
   const [opening, setOpening] = useState(false);
+  // Progress of the card-loading phase of a progressive open (null when idle).
+  // Feeds the "Loading cards… N of M" indicator and its Cancel button.
+  const [cardsLoading, setCardsLoading] = useState<{ loaded: number; total: number } | null>(null);
+  // A dismissible hint shown when the workspace lives in a cloud-sync folder
+  // (or card files timed out downloading), advising the user to keep it offline.
+  const [storageHint, setStorageHint] = useState<string | null>(null);
   const [textDialog, setTextDialog] = useState<TextDialogState | null>(null);
   const [confirmDialog, setConfirmDialog] = useState<ConfirmDialogState | null>(null);
   const [updateStatus, setUpdateStatus] = useState<UpdateStatus>("idle");
@@ -198,6 +241,18 @@ export default function App() {
   const watchRefreshTimerRef = useRef<number | null>(null);
   const watchRefreshInFlightRef = useRef(false);
   const watchRefreshPendingRef = useRef(false);
+  // Monotonic token identifying the in-flight progressive load. Bumped on every
+  // new load and on Cancel, so a slow card-load phase whose workspace/tab has
+  // since changed (or was cancelled) discards its results instead of clobbering.
+  const loadTokenRef = useRef(0);
+  // Workspace-relative paths reported changed by the watcher since the last
+  // refresh ran. Drives the incremental reload; a non-card path (or a payload
+  // without paths, e.g. the e2e harness) sets fullReloadNeededRef instead.
+  const changedCardPathsRef = useRef<Set<string>>(new Set());
+  const fullReloadNeededRef = useRef(false);
+  // True while a progressive open's card phase is still streaming in, so a
+  // watch-driven refresh defers rather than racing the card apply.
+  const progressiveLoadInFlightRef = useRef(false);
   const visibleCards = useMemo(
     () => cards.filter((card) => !card.archived && card.boardId === activeBoard?.id),
     [activeBoard?.id, cards]
@@ -362,15 +417,28 @@ export default function App() {
     }
 
     let unlisten: (() => void) | undefined;
+    let unlistenProgress: (() => void) | undefined;
     void watchWorkspace(workspacePath).catch((reason) => setError(errorText(reason)));
-    void listen("workspace-changed", () => {
+    void listen<WorkspaceChanged | undefined>("workspace-changed", (event) => {
+      recordWatchChange(event.payload);
       scheduleWatchRefresh();
     }).then((dispose) => {
       unlisten = dispose;
     });
+    // Advance the "Loading cards… N of M" indicator as the backend streams cards.
+    void listen<WorkspaceLoadProgress>("workspace-load-progress", (event) => {
+      const payload = event.payload;
+      if (!payload || typeof payload.total !== "number") {
+        return;
+      }
+      setCardsLoading((current) => (current ? { loaded: payload.loaded, total: payload.total } : current));
+    }).then((dispose) => {
+      unlistenProgress = dispose;
+    });
 
     return () => {
       unlisten?.();
+      unlistenProgress?.();
       clearScheduledWatchRefresh();
     };
   }, [workspacePath]);
@@ -431,48 +499,127 @@ export default function App() {
   // starts clean. Returns the workspace's display name. Throws if it can't load;
   // callers keep the tab list unchanged in that case. Does not touch the tab list
   // or persistence — the open/switch/close handlers own that.
+  // Open a workspace progressively: phase one loads the small meta payload
+  // (settings, members, board columns) and paints the board shell immediately;
+  // phase two streams the card files in the background with live progress, so a
+  // large or cloud-synced vault never leaves the user staring at a blank
+  // spinner. Returns the workspace name once the shell is ready (phase one);
+  // callers commit the tab from that without waiting on the cards.
   async function loadWorkspaceData(path: string, focusCardId?: string): Promise<string> {
-    const data = await loadWorkspace(path);
-    setWorkspacePath(path);
-    settingsRef.current = data.settings;
-    setSettings(data.settings);
-    setMembers(data.membersFile.members);
-    membersVersionRef.current = data.membersFile.updatedAt;
-    setActiveMemberId(readActiveMemberId(path));
-    setBoards(data.boards);
-    setCards(data.cards);
-    // A deep link asks to open one specific card: land on its board with the
-    // editor open. Otherwise pick a sensible board and start with no card open.
-    const focusCard = focusCardId ? data.cards.find((card) => card.id === focusCardId) : undefined;
-    if (focusCard) {
-      setActiveBoardId(focusCard.boardId);
-      setSelectedCardId(focusCard.id);
-    } else {
-      setActiveBoardId((current) => selectActiveBoardId(current, data.boards));
-      setSelectedCardId(null);
+    const token = ++loadTokenRef.current;
+    progressiveLoadInFlightRef.current = true;
+    // A fresh load supersedes any pending incremental watch changes.
+    changedCardPathsRef.current.clear();
+    fullReloadNeededRef.current = false;
+
+    const meta = await loadWorkspaceMeta(path);
+    const name = meta.settings.workspaceName || workspaceBaseName(path);
+    if (loadTokenRef.current !== token) {
+      // Superseded by a newer open while meta was loading; abandon quietly.
+      return name;
     }
+
+    setWorkspacePath(path);
+    settingsRef.current = meta.settings;
+    setSettings(meta.settings);
+    setMembers(meta.membersFile.members);
+    membersVersionRef.current = meta.membersFile.updatedAt;
+    setActiveMemberId(readActiveMemberId(path));
+    setBoards(meta.boards);
+    setCards([]);
+    setActiveBoardId((current) => selectActiveBoardId(current, meta.boards));
+    setSelectedCardId(null);
     setSelectedCardMode("view");
     setView("board");
     setFilterRequest(null);
     setConflictReviewOpen(false);
-    const reminders = dueReminderCount(data.cards);
-    if (data.diagnostics.length > 0) {
-      setNotice(data.diagnostics.join(" "));
-      setNoticeKind("warning");
-    } else if (reminders > 0) {
-      setNotice(`${countLabel(reminders, "card")} overdue or due today. Open Filter to review.`);
-      setNoticeKind("warning");
-    } else {
-      setNotice("");
-      setNoticeKind("info");
+    setIsLoading(false);
+    setCardsLoading(meta.cardCount > 0 ? { loaded: 0, total: meta.cardCount } : null);
+    applyStorageHint(path, meta.cloudHint, meta.diagnostics);
+
+    // Phase two runs detached so a slow/stuck card read never blocks the caller
+    // (or the Cancel button). Its results are gated on the load token.
+    void loadCardsPhase(path, token, focusCardId, meta);
+    return name;
+  }
+
+  // Phase two of a progressive open: read the card files (with live progress) and
+  // apply them, unless a newer load or a Cancel has since bumped the token.
+  async function loadCardsPhase(
+    path: string,
+    token: number,
+    focusCardId: string | undefined,
+    meta: { boards: Board[]; settings: WorkspaceSettings; membersFile: MembersFile; diagnostics: string[]; cloudHint: string | null }
+  ) {
+    try {
+      const cardData = await loadWorkspaceCards(path);
+      if (loadTokenRef.current !== token) {
+        return;
+      }
+      setCardsLoading(null);
+      setCards(cardData.cards);
+      // A deep link asks to open one specific card: land on its board with the
+      // editor open once the card has arrived.
+      const focusCard = focusCardId ? cardData.cards.find((card) => card.id === focusCardId) : undefined;
+      if (focusCard) {
+        setActiveBoardId(focusCard.boardId);
+        setSelectedCardId(focusCard.id);
+      }
+      const diagnostics = [...meta.diagnostics, ...cardData.diagnostics];
+      const reminders = dueReminderCount(cardData.cards);
+      if (diagnostics.length > 0) {
+        setNotice(diagnostics.join(" "));
+        setNoticeKind("warning");
+      } else if (reminders > 0) {
+        setNotice(`${countLabel(reminders, "card")} overdue or due today. Open Filter to review.`);
+        setNoticeKind("warning");
+      } else {
+        setNotice("");
+        setNoticeKind("info");
+      }
+      applyStorageHint(path, meta.cloudHint, cardData.diagnostics);
+      await reloadConflicts(path, {
+        cards: cardData.cards,
+        boards: meta.boards,
+        settings: meta.settings,
+        membersFile: meta.membersFile,
+      });
+    } catch (reason) {
+      if (loadTokenRef.current === token) {
+        setCardsLoading(null);
+        setError(errorText(reason));
+      }
+    } finally {
+      if (loadTokenRef.current === token) {
+        progressiveLoadInFlightRef.current = false;
+      }
     }
-    await reloadConflicts(path, {
-      cards: data.cards,
-      boards: data.boards,
-      settings: data.settings,
-      membersFile: data.membersFile,
-    });
-    return data.settings.workspaceName || workspaceBaseName(path);
+  }
+
+  // Cancel the in-flight card-loading phase: bump the token so its result is
+  // discarded, drop the progress indicator, and let the user reload to retry.
+  // The board shell stays open and usable (cards simply aren't populated yet).
+  function cancelCardLoad() {
+    loadTokenRef.current += 1;
+    progressiveLoadInFlightRef.current = false;
+    setCardsLoading(null);
+    setNotice("Card loading was cancelled. Use Reload to load the cards.");
+    setNoticeKind("warning");
+  }
+
+  // Show the cloud-storage advisory when the workspace lives in a sync folder, or
+  // when card reads actually timed out downloading. A passive path-based hint can
+  // be dismissed per workspace; an active timeout always re-warns.
+  function applyStorageHint(path: string, cloudHint: string | null, diagnostics: string[]) {
+    const timedOut = diagnostics.some((message) => message.includes("cloud storage"));
+    const label = timedOut ? cloudHint ?? "a cloud storage folder" : cloudHint;
+    if (!label) {
+      return;
+    }
+    if (!timedOut && storageHintDismissed(path)) {
+      return;
+    }
+    setStorageHint(label);
   }
 
   // Update state, the ref, and the persisted file together so the open tabs and
@@ -658,6 +805,25 @@ export default function App() {
     });
   }
 
+  // Accumulate the changed paths from a `workspace-changed` event so the next
+  // refresh can reload only what changed. A payload without paths (the e2e
+  // harness, or any unexpected shape) conservatively forces a full reload.
+  function recordWatchChange(payload: WorkspaceChanged | undefined) {
+    const paths = payload?.paths;
+    if (!Array.isArray(paths) || paths.length === 0) {
+      fullReloadNeededRef.current = true;
+      return;
+    }
+    for (const relativePath of paths) {
+      const classified = classifyChangedPath(relativePath);
+      if (classified.kind === "card") {
+        changedCardPathsRef.current.add(classified.name);
+      } else {
+        fullReloadNeededRef.current = true;
+      }
+    }
+  }
+
   function clearScheduledWatchRefresh() {
     watchRefreshPendingRef.current = false;
     if (watchRefreshTimerRef.current !== null) {
@@ -682,11 +848,33 @@ export default function App() {
     if (watchRefreshInFlightRef.current) {
       return;
     }
+    // Don't race the card-apply of an in-flight progressive open; retry shortly.
+    if (progressiveLoadInFlightRef.current) {
+      watchRefreshTimerRef.current = window.setTimeout(() => {
+        watchRefreshTimerRef.current = null;
+        void runScheduledWatchRefresh();
+      }, WORKSPACE_WATCH_REFRESH_DELAY_MS);
+      return;
+    }
 
     watchRefreshPendingRef.current = false;
     watchRefreshInFlightRef.current = true;
+    // Reload incrementally when every change was a plain card file and there
+    // aren't too many; otherwise a single (parallel) full reload is simpler and
+    // keeps board/settings/members/conflict changes correct.
+    const changedCards = [...changedCardPathsRef.current];
+    const useFull =
+      fullReloadNeededRef.current ||
+      changedCards.length === 0 ||
+      changedCards.length > INCREMENTAL_REFRESH_MAX_FILES;
+    changedCardPathsRef.current.clear();
+    fullReloadNeededRef.current = false;
     try {
-      await refreshWorkspace(false);
+      if (useFull) {
+        await refreshWorkspace(false);
+      } else {
+        await refreshChangedCards(changedCards);
+      }
     } catch (reason) {
       setError(errorText(reason));
     } finally {
@@ -695,6 +883,69 @@ export default function App() {
         scheduleWatchRefresh();
       }
     }
+  }
+
+  // Incremental watch refresh: re-read only the changed card files and splice
+  // them into state (add / update / remove), instead of re-reading the whole
+  // vault. Preserves the open card's local draft on a self-write and warns when
+  // the open card changed under us, mirroring the full refresh's reconciliation.
+  // Falls back to a full reload if a changed card is present but unparseable, so
+  // the corruption diagnostic surfaces exactly as it otherwise would.
+  async function refreshChangedCards(names: string[]) {
+    const path = workspacePathRef.current;
+    if (!path) {
+      return;
+    }
+    const updates = await readWorkspaceFiles(path, names.map((name) => ({ dir: "cards" as const, name })));
+    if (updates.some((update) => !update.deleted && update.card === null)) {
+      await refreshWorkspace(false);
+      return;
+    }
+
+    const byFile = new Map(cardsRef.current.map((card) => [card.fileName, card]));
+    const openId = selectedCardIdRef.current;
+    let openCardChangedOnDisk = false;
+
+    for (const update of updates) {
+      if (update.deleted) {
+        byFile.delete(update.fileName);
+        continue;
+      }
+      const after = update.card as Card;
+      const before = byFile.get(update.fileName);
+      const isOpenCard = openId !== null && before?.id === openId;
+
+      if (isOpenCard) {
+        const expectedSelfWrite = pendingCardWriteRef.current[openId];
+        if (expectedSelfWrite && after.updatedAt === expectedSelfWrite) {
+          // Our own just-written change echoed back: keep the local object so the
+          // editor draft isn't reset mid-edit.
+          delete pendingCardWriteRef.current[openId];
+          continue;
+        }
+        if (reconciledOpenCardRef.current === openId) {
+          // We just auto-merged this open card; apply the disk copy silently.
+          reconciledOpenCardRef.current = null;
+        } else if (before && before.updatedAt !== after.updatedAt) {
+          openCardChangedOnDisk = true;
+        }
+      }
+      byFile.set(update.fileName, after);
+    }
+
+    const nextCards = [...byFile.values()];
+    setCards(nextCards);
+    setSelectedCardId((current) => (current && nextCards.some((card) => card.id === current) ? current : null));
+    if (openCardChangedOnDisk) {
+      setNotice("This card changed on disk. Reopen it to see the latest version.");
+      setNoticeKind("warning");
+    }
+    await reloadConflicts(path, {
+      cards: nextCards,
+      boards: boardsRef.current,
+      settings: settingsRef.current ?? createDefaultSettings(workspaceBaseName(path)),
+      membersFile: { schemaVersion: 1, members: membersRef.current, updatedAt: membersVersionRef.current },
+    });
   }
 
   async function checkForUpdates(showNoUpdate = true): Promise<AppUpdate | null> {
@@ -2246,6 +2497,59 @@ export default function App() {
             >
               <Icon name="x" />
             </button>
+          </div>
+        )}
+        {cardsLoading && (
+          <div
+            aria-live="polite"
+            className="banner banner-loading"
+            data-testid="card-loading-banner"
+            role="status"
+          >
+            <span className="card-loading-status">
+              <Spinner />
+              {cardsLoading.total > 0
+                ? `Loading cards… ${Math.min(cardsLoading.loaded, cardsLoading.total)} of ${cardsLoading.total}`
+                : "Loading cards…"}
+            </span>
+            <div className="banner-actions">
+              {cardsLoading.total > 0 && (
+                <div className="card-loading-track" aria-hidden="true">
+                  <div
+                    className="card-loading-fill"
+                    style={{ width: `${Math.min(100, Math.round((cardsLoading.loaded / cardsLoading.total) * 100))}%` }}
+                  />
+                </div>
+              )}
+              <button data-testid="cancel-card-load" onClick={() => cancelCardLoad()}>
+                Cancel
+              </button>
+            </div>
+          </div>
+        )}
+        {storageHint && (
+          <div
+            aria-live="polite"
+            className="banner banner-warning"
+            data-testid="cloud-storage-banner"
+            role="status"
+          >
+            <span>
+              This workspace is stored in {storageHint}. Files set to “online-only” download on first
+              open, which can make Limn slow to load. For the best experience, set your sync app to keep
+              this folder available offline.
+            </span>
+            <div className="banner-actions">
+              <button
+                data-testid="dismiss-cloud-banner"
+                onClick={() => {
+                  rememberStorageHintDismissed(workspacePath);
+                  setStorageHint(null);
+                }}
+              >
+                Got it
+              </button>
+            </div>
           </div>
         )}
         {updateBannerVisible && (
