@@ -109,6 +109,10 @@ export interface Board {
   id: string;
   name: string;
   groupId?: string;
+  // Manual sort position within its category (or the flat list when no
+  // categories exist). 0 means "unordered": such boards fall back to creation
+  // order until one is dragged, mirroring how cards treat `order`.
+  order: number;
   lists: BoardList[];
   createdAt: string;
   updatedAt: string;

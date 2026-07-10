@@ -266,6 +266,52 @@ test.describe("smoke", () => {
     }).toBeGreaterThan(0);
   });
 
+  test("boards can be reordered by dragging in the sidebar", async ({ page }) => {
+    await openApp(page);
+    await openWorkspace(page);
+
+    async function createBoard(name: string) {
+      await page.getByTestId("create-board").click();
+      await page.getByTestId("text-dialog-input").fill(name);
+      await page.getByTestId("text-dialog-submit").click();
+      await expect(page.locator(".board-nav-item", { hasText: name })).toBeVisible();
+    }
+
+    // No manual order yet, so boards read in creation order.
+    await createBoard("Alpha");
+    await createBoard("Beta");
+    await createBoard("Gamma");
+
+    const boardNames = () => page.locator(".board-nav-item").allTextContents();
+    expect(await boardNames()).toEqual(["Alpha", "Beta", "Gamma"]);
+
+    // Drag Alpha below Gamma.
+    const alpha = page.locator(".board-nav-item", { hasText: "Alpha" });
+    const gamma = page.locator(".board-nav-item", { hasText: "Gamma" });
+    const alphaBox = await alpha.boundingBox();
+    const gammaBox = await gamma.boundingBox();
+    if (!alphaBox || !gammaBox) {
+      throw new Error("board bounding boxes unavailable");
+    }
+
+    await page.mouse.move(alphaBox.x + alphaBox.width / 2, alphaBox.y + alphaBox.height / 2);
+    await page.mouse.down();
+    await page.mouse.move(alphaBox.x + alphaBox.width / 2, alphaBox.y + alphaBox.height / 2 + 20);
+    await page.mouse.move(gammaBox.x + gammaBox.width / 2, gammaBox.y + gammaBox.height - 2);
+    await page.mouse.up();
+
+    await expect.poll(async () => boardNames()).toEqual(["Beta", "Gamma", "Alpha"]);
+
+    // The moved board carries an explicit order that survives a reload.
+    await expect.poll(async () => {
+      const state = await snapshot(page);
+      const alphaBoard = state.boards
+        .map((file) => JSON.parse(file.content) as { name: string; order: number })
+        .find((board) => board.name === "Alpha");
+      return alphaBoard?.order ?? 0;
+    }).toBeGreaterThan(0);
+  });
+
   test("lists can be reordered by dragging", async ({ page }) => {
     await openApp(page);
     await openWorkspace(page);

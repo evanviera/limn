@@ -1,4 +1,4 @@
-import type { Card } from "../types";
+import type { Board, Card } from "../types";
 import { compareCardsByDueDate } from "./dueDate.js";
 
 // Spacing between adjacent card orders. Large enough that many cards can be
@@ -16,6 +16,19 @@ export function compareCardsByOrder(left: Card, right: Card): number {
     return leftOrder - rightOrder;
   }
   return compareCardsByDueDate(left, right);
+}
+
+// Sort comparator for boards within a category (or the flat list). Manual
+// `order` wins; boards that share an order — notably legacy boards that all
+// default to 0 — fall back to creation order so an un-curated sidebar keeps its
+// familiar sequence until a board is dragged.
+export function compareBoardsByOrder(left: Board, right: Board): number {
+  const leftOrder = Number.isFinite(left.order) ? left.order : 0;
+  const rightOrder = Number.isFinite(right.order) ? right.order : 0;
+  if (leftOrder !== rightOrder) {
+    return leftOrder - rightOrder;
+  }
+  return left.createdAt.localeCompare(right.createdAt);
 }
 
 // The order to give a card appended to the bottom of a list. When every card in

@@ -79,6 +79,35 @@ test.describe("workspace tabs", () => {
     await expect(page.getByTestId(`workspace-tab-${WORKSPACE_A}`)).toContainText("Two Embers");
   });
 
+  test("tabs can be dragged to reorder and the order persists", async ({ page }) => {
+    await openApp(page);
+    await openWorkspace(page);
+    await queueWorkspacePick(page, WORKSPACE_B);
+    await page.getByTestId("workspace-tab-add").click();
+    await expect.poll(async () => (await snapshot(page)).openWorkspaces.paths).toEqual([WORKSPACE_A, WORKSPACE_B]);
+
+    const tabA = page.getByTestId(`workspace-tab-${WORKSPACE_A}`);
+    const tabB = page.getByTestId(`workspace-tab-${WORKSPACE_B}`);
+    const aBox = await tabA.boundingBox();
+    const bBox = await tabB.boundingBox();
+    if (!aBox || !bBox) {
+      throw new Error("tab bounding boxes unavailable");
+    }
+
+    // Drag the second tab past the midpoint of the first so it lands ahead of it.
+    await page.mouse.move(bBox.x + bBox.width / 2, bBox.y + bBox.height / 2);
+    await page.mouse.down();
+    await page.mouse.move(bBox.x + bBox.width / 2 - 10, bBox.y + bBox.height / 2);
+    await page.mouse.move(aBox.x + 4, aBox.y + aBox.height / 2);
+    await page.mouse.up();
+
+    // Order flips and persists; the active workspace is unchanged.
+    await expect.poll(async () => (await snapshot(page)).openWorkspaces).toEqual({
+      active: WORKSPACE_B,
+      paths: [WORKSPACE_B, WORKSPACE_A]
+    });
+  });
+
   test("re-opening an already-open workspace focuses its tab instead of duplicating it", async ({ page }) => {
     await openApp(page);
     await openWorkspace(page);

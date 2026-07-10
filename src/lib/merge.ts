@@ -308,6 +308,7 @@ export function mergeBoard(base: Board, ours: Board, theirs: Board): EntityMerge
     id: ours.id,
     name: name.value,
     groupId: threeWayScalar(base.groupId, ours.groupId, theirs.groupId).value,
+    order: threeWayScalar(base.order, ours.order, theirs.order).value,
     // Lists merge by id: renames reconcile per-list, adds union, deletes are
     // honoured, and our column order is preserved (a remote-only reorder yields
     // to ours until the next reload — no columns are ever lost).

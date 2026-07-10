@@ -77,12 +77,13 @@ import { MembersView } from "./components/MembersView";
 import { SettingsView } from "./components/SettingsView";
 import { WindowsTitlebar } from "./components/WindowsTitlebar";
 import { WorkspaceTabs } from "./components/WorkspaceTabs";
+import { BoardNav } from "./components/BoardNav";
 import { LIST_WIDTH_MODE_STORAGE_KEY, LIST_WIDTH_STORAGE_KEY, THEME_STORAGE_KEY } from "./lib/constants";
 import type { ListWidthMode, SlackNotificationKey, ThemeMode } from "./lib/constants";
 import { buildCalendar, dueReminderCount, type CalendarEntry } from "./lib/dueDate";
 import { EMPTY_FILTER } from "./lib/filter";
 import { listNameTriggersMoveNotification } from "./lib/notifications";
-import { compareCardsByOrder, nextOrderForList, placeInList } from "./lib/ordering";
+import { compareBoardsByOrder, compareCardsByOrder, nextOrderForList, placeInList } from "./lib/ordering";
 import { clampListWidth, countLabel, errorText, initials, readStoredListWidth, readStoredListWidthMode, readStoredThemeMode, sameJson, selectActiveBoardId, slackTag, upsertById, workspaceBaseName } from "./lib/format";
 import { readActiveMemberId, resolveActiveMember, writeActiveMemberId } from "./lib/identity";
 import { updateBannerMessage } from "./lib/updateMessages";
@@ -260,11 +261,12 @@ export default function App() {
   const boardGroups = settings?.boardGroups ?? [];
   const boardNavSections = useMemo(() => {
     const validGroupIds = new Set(boardGroups.map((group) => group.id));
+    const sorted = [...boards].sort(compareBoardsByOrder);
     const grouped = boardGroups.map((group) => ({
       group,
-      boards: boards.filter((board) => board.groupId === group.id)
+      boards: sorted.filter((board) => board.groupId === group.id)
     }));
-    const ungrouped = boards.filter((board) => !board.groupId || !validGroupIds.has(board.groupId));
+    const ungrouped = sorted.filter((board) => !board.groupId || !validGroupIds.has(board.groupId));
     return { grouped, ungrouped };
   }, [boardGroups, boards]);
 
@@ -628,6 +630,25 @@ export default function App() {
     openWorkspacesRef.current = list;
     setOpenWorkspaces(list);
     void saveOpenWorkspaces(list.map((workspace) => workspace.path), active).catch(() => undefined);
+  }
+
+  // Reorder the open-workspace tabs when one is dragged. `toIndex` is measured
+  // in the list with the dragged tab removed, matching the drop math in
+  // WorkspaceTabs. The active workspace is unchanged.
+  function reorderWorkspace(path: string, toIndex: number) {
+    const current = openWorkspacesRef.current;
+    const from = current.findIndex((workspace) => workspace.path === path);
+    if (from === -1) {
+      return;
+    }
+    const moved = current[from];
+    const without = current.filter((workspace) => workspace.path !== path);
+    const clamped = Math.max(0, Math.min(toIndex, without.length));
+    const next = [...without.slice(0, clamped), moved, ...without.slice(clamped)];
+    if (next.every((workspace, index) => workspace.path === current[index].path)) {
+      return;
+    }
+    commitOpenWorkspaces(next, workspacePath);
   }
 
   // Clear every workspace-scoped piece of state, returning to the welcome screen.
@@ -1148,7 +1169,10 @@ export default function App() {
           ? "A board with this name already exists."
           : null,
       onSubmit: async (name) => {
-        const board = { ...createBoard(name), groupId };
+        // Append below the boards already in the target category so a new board
+        // lands at the bottom of a manually-curated list instead of the top.
+        const scope = boardsRef.current.filter((item) => effectiveGroupId(item) === groupId);
+        const board = { ...createBoard(name), groupId, order: nextOrderForList(scope) };
         await persistBoard(board);
         setActiveBoardId(board.id);
         setView("board");
@@ -1281,6 +1305,48 @@ export default function App() {
       return;
     }
     await persistBoard({ ...board, groupId, updatedAt: timestamp() });
+  }
+
+  // The category a board actually renders under: its `groupId`, or undefined when
+  // that group no longer exists (such boards fall into the "Ungrouped" section).
+  // Mirrors the split in `boardNavSections`.
+  function effectiveGroupId(board: Board): string | undefined {
+    return board.groupId && boardGroups.some((group) => group.id === board.groupId) ? board.groupId : undefined;
+  }
+
+  // Reorder a board within the sidebar when it's dragged, optionally moving it
+  // into a different category. `index` is the drop position among the target
+  // category's other boards (sorted by order). Reuses the card ordering scheme:
+  // the moved board gets a fractional/appended order and any siblings that must
+  // shift to stay distinct are rewritten first.
+  async function moveBoard(boardId: string, groupId: string | undefined, index: number) {
+    const board = boardsRef.current.find((item) => item.id === boardId);
+    if (!board) {
+      return;
+    }
+    const targetGroupId = groupId && boardGroups.some((group) => group.id === groupId) ? groupId : undefined;
+    const sameGroup = effectiveGroupId(board) === targetGroupId;
+
+    const siblings = boardsRef.current
+      .filter((item) => item.id !== boardId && effectiveGroupId(item) === targetGroupId)
+      .sort(compareBoardsByOrder);
+    const placement = placeInList(siblings, index);
+
+    if (sameGroup && placement.rebalance.length === 0 && board.order === placement.order) {
+      return;
+    }
+
+    try {
+      for (const change of placement.rebalance) {
+        const sibling = boardsRef.current.find((item) => item.id === change.id);
+        if (sibling) {
+          await persistBoard({ ...sibling, order: change.order, updatedAt: timestamp() });
+        }
+      }
+      await persistBoard({ ...board, groupId: targetGroupId, order: placement.order, updatedAt: timestamp() });
+    } catch (reason) {
+      setError(`Move failed: ${errorText(reason)}`);
+    }
   }
 
   async function addList() {
@@ -2332,23 +2398,6 @@ export default function App() {
     );
   }
 
-  function renderBoardNavButton(board: Board) {
-    return (
-      <button
-        className={board.id === activeBoard?.id && view === "board" ? "active" : ""}
-        data-testid={`board-nav-${board.id}`}
-        key={board.id}
-        onContextMenu={(event) => openContextMenu(event, boardNavContextItems(board), board.name)}
-        onClick={() => {
-          setActiveBoardId(board.id);
-          setView("board");
-        }}
-      >
-        {board.name}
-      </button>
-    );
-  }
-
   return (
     <div className="app-frame" onContextMenu={handleDefaultContextMenu}>
       <WindowsTitlebar />
@@ -2359,6 +2408,7 @@ export default function App() {
         onSelect={(path) => void switchWorkspace(path)}
         onClose={(path) => void closeWorkspace(path)}
         onOpen={() => void openWorkspace()}
+        onReorder={reorderWorkspace}
       />
       <div className="app-shell">
         <aside className="sidebar">
@@ -2373,48 +2423,22 @@ export default function App() {
             </>
           )}
         </button>
-        <nav className="board-nav">
-          <div className="nav-heading">
-            <span>Boards</span>
-            <div className="nav-heading-actions">
-              <button aria-label="Create category" title="Create category" data-testid="create-board-category" onClick={() => void createBoardGroup()}>
-                <Icon name="tag" />
-              </button>
-              <button aria-label="Create board" title="Create board" data-testid="create-board" onClick={() => void addBoard()}>
-                <Icon name="plus" />
-              </button>
-            </div>
-          </div>
-          {boards.length === 0 && <p className="empty-small">No boards yet.</p>}
-          {boardGroups.length === 0 && boards.map((board) => renderBoardNavButton(board))}
-          {boardGroups.length > 0 && boardNavSections.grouped.map(({ group, boards: groupBoards }) => (
-            <div className="board-group" key={group.id}>
-              <div
-                className="board-group-heading"
-                data-testid={`board-group-${group.id}`}
-                title="Category options"
-                onContextMenu={(event) => openContextMenu(event, boardGroupContextItems(group), group.name)}
-              >
-                <span>{group.name}</span>
-                <span>{countLabel(groupBoards.length, "board")}</span>
-              </div>
-              {groupBoards.length === 0 ? (
-                <p className="empty-small board-group-empty">No boards in this category.</p>
-              ) : (
-                groupBoards.map((board) => renderBoardNavButton(board))
-              )}
-            </div>
-          ))}
-          {boardGroups.length > 0 && boardNavSections.ungrouped.length > 0 && (
-            <div className="board-group">
-              <div className="board-group-heading">
-                <span>Ungrouped</span>
-                <span>{countLabel(boardNavSections.ungrouped.length, "board")}</span>
-              </div>
-              {boardNavSections.ungrouped.map((board) => renderBoardNavButton(board))}
-            </div>
-          )}
-        </nav>
+        <BoardNav
+          sections={boardNavSections}
+          hasGroups={boardGroups.length > 0}
+          totalBoards={boards.length}
+          activeBoardId={activeBoard?.id ?? ""}
+          isBoardView={view === "board"}
+          onSelectBoard={(boardId) => {
+            setActiveBoardId(boardId);
+            setView("board");
+          }}
+          onMoveBoard={(boardId, groupId, index) => void moveBoard(boardId, groupId, index)}
+          onBoardContextMenu={(event, board) => openContextMenu(event, boardNavContextItems(board), board.name)}
+          onGroupContextMenu={(event, group) => openContextMenu(event, boardGroupContextItems(group), group.name)}
+          onCreateBoard={() => void addBoard()}
+          onCreateGroup={() => void createBoardGroup()}
+        />
         <div className="sidebar-bottom">
           <button
             className="identity-select"

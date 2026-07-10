@@ -406,6 +406,7 @@ export function createBoard(name: string): Board {
     schemaVersion: SCHEMA_VERSION,
     id,
     name,
+    order: 0,
     lists: [
       { id: "todo", name: "To Do" },
       { id: "in-progress", name: "In Progress" },
@@ -687,6 +688,7 @@ function normalizeBoard(board: Partial<Board> & { lists?: unknown }): Board {
     id: typeof board.id === "string" ? board.id : makeId("board"),
     name: typeof board.name === "string" ? board.name : "Untitled board",
     groupId: typeof board.groupId === "string" && board.groupId.trim() ? board.groupId : undefined,
+    order: numberValue(board.order),
     lists: normalizeBoardLists(board.lists),
     createdAt: typeof board.createdAt === "string" ? board.createdAt : timestamp(),
     updatedAt: typeof board.updatedAt === "string" ? board.updatedAt : timestamp()
