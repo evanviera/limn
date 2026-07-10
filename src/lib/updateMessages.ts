@@ -45,7 +45,7 @@ export function settingsUpdateMessage(
   if (status === "error") {
     return message || "Update failed.";
   }
-  return "Limn checks GitHub Releases for signed updates.";
+  return "Check for signed releases.";
 }
 
 export function formatDownloadProgress(progress: DownloadProgress | null): string {
