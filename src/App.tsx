@@ -68,6 +68,7 @@ import { parseCardDeepLink } from "./lib/deepLink";
 import type { ResolveEntity, ReviewConflict, WorkspaceEntities } from "./lib/conflicts";
 import { FilterView } from "./components/FilterView";
 import type { FilterRequest } from "./components/FilterView";
+import { InboxView } from "./components/InboxView";
 import { ConfirmDialog, EmptyState, TextDialog } from "./components/dialogs";
 import type { ConfirmDialogState, TextDialogState } from "./components/dialogs";
 import { ContextMenu, isEditableTextControl, textControlContextItems } from "./components/contextMenu";
@@ -83,6 +84,7 @@ import type { ListWidthMode, SlackNotificationKey, ThemeMode } from "./lib/const
 import { useResizableSidebar } from "./lib/useResizableSidebar";
 import { buildCalendar, dueReminderCount, type CalendarEntry } from "./lib/dueDate";
 import { EMPTY_FILTER } from "./lib/filter";
+import { buildInboxItems, inboxSeenAtKey, inboxUnreadCount } from "./lib/inbox";
 import { listNameTriggersMoveNotification } from "./lib/notifications";
 import { compareBoardsByOrder, compareCardsByOrder, nextOrderForList, placeInList } from "./lib/ordering";
 import { clampListWidth, countLabel, errorText, initials, readStoredListWidth, readStoredListWidthMode, readStoredThemeMode, sameJson, selectActiveBoardId, slackTag, upsertById, workspaceBaseName } from "./lib/format";
@@ -150,6 +152,7 @@ export default function App() {
   const settingsRef = useRef<WorkspaceSettings | null>(null);
   const [members, setMembers] = useState<Member[]>([]);
   const [activeMemberId, setActiveMemberId] = useState("");
+  const [inboxSeenAt, setInboxSeenAt] = useState("");
   const [boards, setBoards] = useState<Board[]>([]);
   const [cards, setCards] = useState<Card[]>([]);
   const [activeBoardId, setActiveBoardId] = useState("");
@@ -200,6 +203,20 @@ export default function App() {
   // Overdue + due-today count across every board — the reminder nudge shown on
   // the Filter nav item.
   const dueReminders = dueReminderCount(cards);
+  const inboxItems = useMemo(() => buildInboxItems(cards, activeMemberId, members), [cards, activeMemberId, members]);
+  const inboxUnread = inboxUnreadCount(inboxItems, inboxSeenAt);
+
+  useEffect(() => {
+    if (!workspacePath || !activeMemberId) {
+      setInboxSeenAt("");
+      return;
+    }
+    try {
+      setInboxSeenAt(localStorage.getItem(inboxSeenAtKey(workspacePath, activeMemberId)) ?? "");
+    } catch {
+      setInboxSeenAt("");
+    }
+  }, [workspacePath, activeMemberId]);
 
   useLayoutEffect(() => {
     document.documentElement.dataset.platform = platformName();
@@ -2430,6 +2447,7 @@ export default function App() {
           boardNavSections={boardNavSections}
           boards={boards}
           dueReminders={dueReminders}
+          inboxUnread={inboxUnread}
           opening={opening}
           themeMode={themeMode}
           view={view}
@@ -2539,6 +2557,25 @@ export default function App() {
             onDeleteView={deleteFilterView}
             onOpenContextMenu={openContextMenu}
             onCopyText={copyText}
+          />
+        )}
+        {view === "inbox" && (
+          <InboxView
+            activeMemberId={activeMemberId}
+            boards={boards}
+            items={inboxItems}
+            seenAt={inboxSeenAt}
+            onChooseIdentity={() => document.querySelector<HTMLElement>("[data-testid='identity-select']")?.click()}
+            onMarkAllRead={() => {
+              const seenAt = new Date().toISOString();
+              setInboxSeenAt(seenAt);
+              try {
+                localStorage.setItem(inboxSeenAtKey(workspacePath, activeMemberId), seenAt);
+              } catch {
+                // Read state is best-effort device-local UI state.
+              }
+            }}
+            onOpenCard={openCardFromWorkspaceView}
           />
         )}
         {view === "members" && (

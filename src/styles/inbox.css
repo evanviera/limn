@@ -1,0 +1,18 @@
+.inbox-view { overflow: auto; height: 100%; padding: var(--space-6); }
+.inbox-header { display: flex; align-items: center; justify-content: space-between; max-width: 900px; margin: 0 auto var(--space-6); }
+.inbox-header h1 { margin: 0; }
+.inbox-header .eyebrow { margin-bottom: var(--space-1); }
+.inbox-groups { display: grid; gap: var(--space-6); max-width: 900px; margin: 0 auto; }
+.inbox-group h2 { margin: 0 0 var(--space-2); color: var(--text-muted); font-size: var(--text-sm); }
+.inbox-list { overflow: hidden; border: 1px solid var(--border); border-radius: var(--radius-lg); }
+.inbox-row { display: grid; grid-template-columns: 10px minmax(0, 1fr) auto; gap: var(--space-3); width: 100%; padding: var(--space-4); color: var(--text); text-align: left; background: var(--surface); border: 0; border-radius: 0; }
+.inbox-row + .inbox-row { border-top: 1px solid var(--border); }
+.inbox-row:hover { background: var(--surface-hover); }
+.inbox-unread-dot { width: 8px; height: 8px; margin-top: 6px; background: transparent; border-radius: 50%; }
+.inbox-unread-dot.unread { background: var(--accent); }
+.inbox-row-copy { display: grid; min-width: 0; gap: 3px; }
+.inbox-event-label { color: var(--text-strong); font-weight: var(--weight-semibold); }
+.inbox-card-context, .inbox-snippet, .inbox-row time { color: var(--text-muted); font-size: var(--text-sm); }
+.inbox-snippet { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.inbox-row time { white-space: nowrap; }
+.inbox-empty { display: grid; place-items: center; align-content: center; gap: var(--space-4); min-height: 50%; color: var(--text-muted); text-align: center; }

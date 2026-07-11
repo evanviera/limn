@@ -27,6 +27,7 @@ import { resolveConflictWrite } from "../.tmp/storage-test/src/lib/mergeWrite.js
 import { buildConflict, buildConflicts } from "../.tmp/storage-test/src/lib/conflicts.js";
 import { listNameTriggersMoveNotification, parseMovedToListNames } from "../.tmp/storage-test/src/lib/notifications.js";
 import { cardDeepLink, parseCardDeepLink } from "../.tmp/storage-test/src/lib/deepLink.js";
+import { buildInboxItems, inboxSeenAtKey, inboxUnreadCount, isInboxItemUnread } from "../.tmp/storage-test/src/lib/inbox.js";
 
 const baseCard = {
   id: "card_one",
@@ -73,6 +74,39 @@ const baseCard = {
   body: "Notes with --- inside the body stay intact.\nSecond line.\n",
   fileName: "card_one.md"
 };
+
+// --- Inbox projection + device-local unread high-water mark ---
+const inboxMembers = [
+  { id: "ada", name: "Ada Lovelace", color: "#000" },
+  { id: "grace", name: "Grace Hopper", color: "#111" }
+];
+const inboxItems = buildInboxItems([
+  baseCard,
+  {
+    ...baseCard,
+    id: "card_two",
+    archived: false,
+    assignees: ["grace"],
+    comments: [
+      { id: "other", authorId: "ada", authorName: "Ada Lovelace", body: "A regular follow-up.", createdAt: "2026-06-27T00:38:00.000Z" },
+      { id: "self", authorId: "grace", authorName: "Grace Hopper", body: "note to @Grace", createdAt: "2026-06-27T00:50:00.000Z" }
+    ],
+    activity: [
+      { id: "assigned", type: "assigned", message: "Assigned", createdAt: "2026-06-27T00:30:00.000Z" },
+      { id: "moved", type: "moved", message: "Moved", createdAt: "2026-06-27T00:35:00.000Z" },
+      { id: "completed", type: "completed", message: "Complete", createdAt: "2026-06-27T00:36:00.000Z" },
+      { id: "updated", type: "updated", message: "Updated", createdAt: "2026-06-27T00:37:00.000Z" }
+    ]
+  },
+  { ...baseCard, id: "archived", archived: true }
+], "grace", inboxMembers);
+assert.deepEqual(inboxItems.map((item) => item.kind), ["mention", "comment", "completed", "moved", "assigned"]);
+assert.equal(inboxItems[0].label, "Ada Lovelace mentioned you");
+assert.equal(inboxItems[1].label, "Ada Lovelace commented");
+assert.equal(inboxItems.filter((item) => item.kind === "mention").length, 1);
+assert.equal(inboxUnreadCount(inboxItems, "2026-06-27T00:34:00.000Z"), 4);
+assert.equal(isInboxItemUnread(inboxItems.at(-1), "2026-06-27T00:30:00.000Z"), false);
+assert.equal(inboxSeenAtKey("/work:space", "grace"), "limn:inbox:seenAt:/work:space:grace");
 
 const roundTripped = parseCard(serializeCard(baseCard), baseCard.fileName);
 assert.deepEqual(roundTripped, baseCard);

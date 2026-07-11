@@ -75,6 +75,7 @@ interface WorkspaceSidebarProps {
   boardNavSections: BoardNavSections;
   boards: Board[];
   dueReminders: number;
+  inboxUnread: number;
   opening: boolean;
   themeMode: ThemeMode;
   view: View;
@@ -98,6 +99,7 @@ export function WorkspaceSidebar({
   boardNavSections,
   boards,
   dueReminders,
+  inboxUnread,
   opening,
   themeMode,
   view,
@@ -168,6 +170,14 @@ export function WorkspaceSidebar({
           onClick={onToggleTheme}
         >
           <Icon name={themeMode === "dark" ? "sun" : "moon"} /> {themeMode === "dark" ? "Light mode" : "Dark mode"}
+        </button>
+        <button
+          className={view === "inbox" ? "active" : ""}
+          data-testid="nav-inbox"
+          onClick={() => onSetView("inbox")}
+        >
+          <Icon name="chat" /> Inbox
+          {inboxUnread > 0 && <span className="nav-badge" data-testid="inbox-unread-count">{inboxUnread}</span>}
         </button>
         <button
           className={view === "filter" ? "active" : ""}

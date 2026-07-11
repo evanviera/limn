@@ -1,4 +1,4 @@
-export type View = "board" | "filter" | "members" | "settings";
+export type View = "board" | "inbox" | "filter" | "members" | "settings";
 
 // One open workspace tab: its folder path plus a display name (the workspace's
 // configured name once loaded, otherwise the folder's base name).

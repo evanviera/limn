@@ -8,5 +8,5 @@
     "rootDir": ".",
     "jsx": "react-jsx"
   },
-  "include": ["src/storage.ts", "src/types.ts", "src/lib/ordering.ts", "src/lib/dueDate.ts", "src/lib/filter.ts", "src/lib/merge.ts", "src/lib/mergeWrite.ts", "src/lib/conflicts.ts", "src/lib/notifications.ts", "src/lib/deepLink.ts"]
+  "include": ["src/storage.ts", "src/types.ts", "src/lib/ordering.ts", "src/lib/dueDate.ts", "src/lib/filter.ts", "src/lib/inbox.ts", "src/lib/mentions.ts", "src/lib/merge.ts", "src/lib/mergeWrite.ts", "src/lib/conflicts.ts", "src/lib/notifications.ts", "src/lib/deepLink.ts"]
 }
