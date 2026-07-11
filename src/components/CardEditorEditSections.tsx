@@ -16,6 +16,7 @@ import { AttachmentLightbox } from "./AttachmentLightbox.js";
 import type { ContextMenuItem, OpenContextMenu } from "./contextMenu";
 import { isEditableTextControl, textControlContextItems } from "./contextMenu.js";
 import { Icon, LinkIcon, Spinner } from "./icons.js";
+import { RecurrenceControl } from "./RecurrenceControl.js";
 
 export type NoteLinkDraft = { mode: "selection" | "link"; label: string; url: string };
 
@@ -503,6 +504,7 @@ export function CardEditorSidePanel({
             </p>
           );
         })()}
+        <RecurrenceControl draft={draft} setDraft={setDraft} />
       </div>
 
       <div className="side-section">

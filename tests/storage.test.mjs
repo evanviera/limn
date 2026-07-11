@@ -28,6 +28,7 @@ import { buildConflict, buildConflicts } from "../.tmp/storage-test/src/lib/conf
 import { listNameTriggersMoveNotification, parseMovedToListNames } from "../.tmp/storage-test/src/lib/notifications.js";
 import { cardDeepLink, parseCardDeepLink } from "../.tmp/storage-test/src/lib/deepLink.js";
 import { buildInboxItems, inboxSeenAtKey, inboxUnreadCount, isInboxItemUnread } from "../.tmp/storage-test/src/lib/inbox.js";
+import { buildRecurringSuccessor, nextRecurrenceDate, normalizeRecurrence, recurrenceValidation } from "../.tmp/storage-test/src/lib/recurrence.js";
 
 const baseCard = {
   id: "card_one",
@@ -110,6 +111,47 @@ assert.equal(inboxSeenAtKey("/work:space", "grace"), "limn:inbox:seenAt:/work:sp
 
 const roundTripped = parseCard(serializeCard(baseCard), baseCard.fileName);
 assert.deepEqual(roundTripped, baseCard);
+
+// --- Recurrence: local-calendar cadence, validation, serialization, and copies ---
+assert.equal(nextRecurrenceDate("2026-07-01", { interval: 3, unit: "day" }, "2026-07-01"), "2026-07-04");
+assert.equal(nextRecurrenceDate("2026-07-01", { interval: 2, unit: "week" }, "2026-07-01"), "2026-07-15");
+assert.equal(nextRecurrenceDate("2026-01-31", { interval: 1, unit: "month", anchorDay: 31 }, "2026-01-31"), "2026-02-28");
+assert.equal(nextRecurrenceDate("2026-02-28", { interval: 1, unit: "month", anchorDay: 31 }, "2026-02-28"), "2026-03-31");
+assert.equal(nextRecurrenceDate("2026-07-20", { interval: 3, unit: "day" }, "2026-07-01"), "2026-07-23", "early completion keeps cadence");
+assert.equal(nextRecurrenceDate("2026-07-01", { interval: 3, unit: "day" }, "2026-07-20"), "2026-07-22", "late completion skips missed dates");
+for (const interval of [0, -1, 1.5, Number.NaN]) {
+  assert.match(recurrenceValidation({ interval, unit: "day" }, "2026-07-01"), /positive whole number/);
+}
+assert.match(recurrenceValidation({ interval: 1, unit: "day" }, ""), /requires a due date/);
+assert.equal(normalizeRecurrence({ interval: 0, unit: "day" }, "2026-07-01"), undefined);
+
+const recurringCard = {
+  ...baseCard,
+  recurrence: { interval: 1, unit: "month", anchorDay: 31 },
+  recurrenceNextId: "card_successor",
+  completed: true
+};
+assert.deepEqual(parseCard(serializeCard(recurringCard), recurringCard.fileName), recurringCard);
+const successor = buildRecurringSuccessor(recurringCard, "2026-07-10", "2026-07-10T12:00:00.000Z");
+assert.ok(successor);
+assert.equal(successor.id, "card_successor");
+assert.equal(successor.due, "2026-08-31");
+assert.equal(successor.completed, false);
+assert.equal(successor.archived, false);
+assert.deepEqual(successor.labels, recurringCard.labels);
+assert.deepEqual(successor.assignees, recurringCard.assignees);
+assert.equal(successor.body, recurringCard.body);
+assert.equal(successor.subtasks.every((item) => !item.completed), true);
+assert.deepEqual(successor.attachments, []);
+assert.deepEqual(successor.comments, []);
+assert.equal(successor.activity.length, 1);
+assert.equal(successor.activity[0].type, "created");
+assert.equal(successor.recurrenceSourceId, recurringCard.id);
+assert.equal(successor.recurrenceNextId, undefined);
+assert.notStrictEqual(successor.subtasks, recurringCard.subtasks);
+
+const legacyWithoutRecurrence = parseCard(serializeCard(baseCard), baseCard.fileName);
+assert.equal(legacyWithoutRecurrence.recurrence, undefined);
 
 // createComment snapshots author + name and stamps id/createdAt; no editedAt yet.
 const freshComment = createComment("ada", "Ada Lovelace", "  Trimmed on the way in  ");

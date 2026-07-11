@@ -24,6 +24,7 @@ focused" section before adding code to an existing large file.**
 - `RichNoteText.tsx` — renders card note text (inline links / bold / italic).
 - `BoardView.tsx` — board columns, drag-and-drop, `TaskCardBody`, `MemberDots`.
 - `CardAttachments.tsx` — the card editor's attachments section (list / add / open / remove), fully prop-driven.
+- `RecurrenceControl.tsx` — the compact, progressively disclosed interval editor beside card due-date controls.
 - `AttachmentImagePreview.tsx` — the inline image thumbnail shown for image attachments (loads bytes via `useAttachmentObjectUrl`).
 - `AttachmentLightbox.tsx` — the full-screen image viewer opened by clicking an image attachment; arrow keys / chevrons flip through the card's image attachments.
 - `CardComments.tsx` — the card editor's discussion section: threaded comments, composer, @mention highlighting, and the "who are you?" identity prompt, fully prop-driven.
@@ -64,6 +65,7 @@ when the last one closes). The open list + active path persist via the
 - `useModalKeys.ts` — modal focus-trap / Escape hook and the modal stack.
 - `useAttachmentObjectUrl.ts` — loads an image attachment's bytes into an object URL (with cleanup), shared by the thumbnail and the lightbox.
 - `attachments.ts` — image-extension detection helpers (`isImageAttachment`, `latestImageAttachment`, `attachmentFileExtension`).
+- `recurrence.ts` — pure local-calendar recurrence validation/date math and successor-card construction. Monthly rules retain an anchor day so a clamped February occurrence can return to the intended day in March.
 - `merge.ts` — the reusable, typed **three-way merge engine** (base/ours/theirs). Field-level policies (`threeWayScalar`, `threeWayStringSet`, `threeWayListById`) compose into per-entity mergers (`mergeCard`, `mergeBoard`, `mergeSettings`, `mergeMembers`). Structured data (labels, assignees, comments, activity, subtasks, board lists, groups, saved views, members) merges automatically; only free text both sides rewrote (a card's title/body, a board's name) is a hard conflict. Pure, no IO.
 - `mergeWrite.ts` — the generic, IO-injected conflict-write orchestrator (`resolveConflictWrite`): optimistic compare-and-swap → three-way merge → bounded retry, falling back to a preserved conflict copy for hard conflicts and restoring on a remote delete. Returns a `SaveOutcome` (`written` / `merged` / `conflict` / `restored`).
 - `conflicts.ts` — pure logic for the in-app conflict review. Turns raw conflict artifacts (from the `list_conflicts` command) into typed, reviewable `ReviewConflict`s: classifies each by its `_conflict_` file name, parses it, pairs it with the current on-disk entity, builds a field-by-field comparison, and proposes a lossless auto-merge via the `merge.ts` engine (disk text wins; both sides' structured data unions). No IO — the caller writes resolutions back through the normal conflict-aware save path.

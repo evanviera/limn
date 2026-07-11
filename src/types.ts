@@ -165,6 +165,16 @@ export interface Attachment {
   addedAt: string;
 }
 
+export type RecurrenceUnit = "day" | "week" | "month";
+
+export interface RecurrenceRule {
+  interval: number;
+  unit: RecurrenceUnit;
+  // The intended local-calendar day for monthly schedules. Keeping it explicit
+  // lets Jan 31 -> Feb 28 -> Mar 31 recover after the short month.
+  anchorDay?: number;
+}
+
 export interface Card {
   id: string;
   title: string;
@@ -173,6 +183,11 @@ export interface Card {
   assignees: string[];
   labels: string[];
   due: string;
+  recurrence?: RecurrenceRule;
+  // Set on a completed occurrence before its successor is written. The stable
+  // id makes retries/reloads/concurrent clients converge on one card file.
+  recurrenceNextId?: string;
+  recurrenceSourceId?: string;
   // Manual sort position within a list. Cards sort by this value ascending, with
   // due date as the tiebreaker. A shared value of 0 means "unordered": such a
   // list falls back to pure due-date sorting until a card is dragged to reorder.

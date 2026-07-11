@@ -681,4 +681,8 @@
   color: var(--text-muted);
   text-decoration: line-through;
 }
-
+.recurrence-control { display: grid; gap: 6px; margin-top: 10px; }
+.recurrence-interval { display: grid; grid-template-columns: auto minmax(54px, .6fr) minmax(92px, 1fr); align-items: center; gap: 6px; }
+.recurrence-interval input, .recurrence-interval select { min-width: 0; }
+.recurrence-help { color: var(--text-muted); font-size: 12px; line-height: 1.35; margin: 0; }
+.field-error { color: var(--danger); font-size: 12px; margin: 0; }

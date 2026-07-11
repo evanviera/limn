@@ -1,5 +1,6 @@
 import type { Attachment, Board, Card, Member, Subtask } from "../types";
 import { describeDue } from "../lib/dueDate";
+import { recurrenceSummary } from "../lib/recurrence.js";
 import { initials } from "../lib/format";
 import { openExternal } from "../storage";
 import { CardAttachments } from "./CardAttachments";
@@ -93,6 +94,12 @@ export function CardViewMode({
             <Icon name="calendar" />
             <span>{due ? due.label : "No due date"}</span>
           </div>
+          {card.recurrence && (
+            <div className="card-view-fact" data-testid="card-view-recurrence">
+              <Icon name="refresh" />
+              <span>{recurrenceSummary(card.recurrence)} · next task on completion</span>
+            </div>
+          )}
           <div className="card-view-fact">
             <Icon name="check" />
             <span>

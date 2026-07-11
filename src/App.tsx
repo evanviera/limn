@@ -65,6 +65,7 @@ import { ConflictReview } from "./components/ConflictReview";
 import type { ConflictChoice } from "./components/ConflictReview";
 import { buildConflicts } from "./lib/conflicts";
 import { parseCardDeepLink } from "./lib/deepLink";
+import { buildRecurringSuccessor, localToday, recurrenceValidation } from "./lib/recurrence.js";
 import type { ResolveEntity, ReviewConflict, WorkspaceEntities } from "./lib/conflicts";
 import { FilterView } from "./components/FilterView";
 import type { FilterRequest } from "./components/FilterView";
@@ -155,6 +156,7 @@ export default function App() {
   const [inboxSeenAt, setInboxSeenAt] = useState("");
   const [boards, setBoards] = useState<Board[]>([]);
   const [cards, setCards] = useState<Card[]>([]);
+  const recurrenceRepairRef = useRef(new Set<string>());
   const [activeBoardId, setActiveBoardId] = useState("");
   const [view, setView] = useState<View>("board");
   const [filterRequest, setFilterRequest] = useState<FilterRequest | null>(null);
@@ -1194,6 +1196,30 @@ export default function App() {
     return outcome;
   }
 
+  async function ensureRecurringSuccessor(source: Card) {
+    if (!workspacePath || !source.completed || !source.recurrenceNextId || recurrenceRepairRef.current.has(source.id)) return;
+    if (cardsRef.current.some((card) => card.id === source.recurrenceNextId)) return;
+    const successor = buildRecurringSuccessor(source, localToday(), timestamp());
+    if (!successor) return;
+    recurrenceRepairRef.current.add(source.id);
+    try {
+      const outcome = await persistCard(successor);
+      if (outcome?.status !== "conflict") setCards((current) => upsertById(current, successor));
+    } finally {
+      recurrenceRepairRef.current.delete(source.id);
+    }
+  }
+
+  useEffect(() => {
+    for (const card of cards) {
+      if (card.completed && card.recurrenceNextId && !cards.some((item) => item.id === card.recurrenceNextId)) {
+        void ensureRecurringSuccessor(card);
+      }
+    }
+    // Completion writes and workspace reloads both feed this repair pass.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [cards, workspacePath]);
+
   async function addBoard(groupId?: string) {
     openTextDialog({
       title: "Create board",
@@ -1908,6 +1934,11 @@ export default function App() {
     // Attachments and comments are persisted immediately and aren't tracked in
     // the editor draft, so keep the live copy's lists instead of the draft's
     // stale ones.
+    const recurrenceError = recurrenceValidation(nextCard.recurrence, nextCard.due);
+    if (recurrenceError) {
+      setError(recurrenceError);
+      throw new Error(recurrenceError);
+    }
     const normalized = {
       ...nextCard,
       attachments: live?.attachments ?? nextCard.attachments,
@@ -1923,6 +1954,9 @@ export default function App() {
       ),
       updatedAt: timestamp()
     };
+    if (previous && !previous.completed && normalized.completed && normalized.recurrence && !normalized.recurrenceNextId) {
+      normalized.recurrenceNextId = makeId("card");
+    }
     let withActivity = previous ? normalized : addActivity(normalized, "created", "Created card");
     const slackMessages: Array<{ key: SlackNotificationKey; message: string }> = [];
 
@@ -1959,6 +1993,7 @@ export default function App() {
       // Clean save: our version is now the ancestor for any follow-up edit in the
       // same session. (After a merge/conflict the reload supplies a fresh base.)
       editorBaseRef.current = withActivity;
+      if (withActivity.completed) await ensureRecurringSuccessor(withActivity);
     }
     if (result && result.status !== "conflict") {
       for (const slackMessage of slackMessages) {
@@ -2372,7 +2407,7 @@ export default function App() {
   async function toggleCardCompleted(card: Card) {
     const completed = !card.completed;
     const next = addActivity(
-      { ...card, completed, updatedAt: timestamp() },
+      { ...card, completed, updatedAt: timestamp(), ...(completed && card.recurrence && !card.recurrenceNextId ? { recurrenceNextId: makeId("card") } : {}) },
       completed ? "completed" : "updated",
       completed ? "Marked complete" : "Marked incomplete"
     );
@@ -2380,6 +2415,7 @@ export default function App() {
     // Completing a card from the board (checkbox, context menu, or keyboard
     // shortcut) must notify Slack just like completing it from the editor does.
     if (completed && result && result.status !== "conflict") {
+      if (result.status === "written") await ensureRecurringSuccessor(next);
       await sendSlack("cardCompleted", `✅ Task completed: ${next.title}\nAssigned to: ${assigneeSlackTags(next)}\nBoard: ${boardName(next.boardId)}${actorSlackLine()}`);
     }
   }

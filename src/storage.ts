@@ -1,5 +1,6 @@
 import { invoke } from "./ipc.js";
 import { EMPTY_FILTER } from "./lib/filter.js";
+import { normalizeRecurrence } from "./lib/recurrence.js";
 import { mergeBoard, mergeCard, mergeMembers, mergeSettings, type EntityMergeResult } from "./lib/merge.js";
 import { resolveConflictWrite, type ConflictWriteAdapter, type SaveOutcome } from "./lib/mergeWrite.js";
 import {
@@ -680,6 +681,7 @@ export function parseCard(content: string, fileName: string): Card | null {
     return null;
   }
 
+  const due = stringValue(values.due);
   return {
     id: values.id,
     title: values.title,
@@ -687,7 +689,10 @@ export function parseCard(content: string, fileName: string): Card | null {
     listId: stringValue(values.listId),
     assignees: stringArray(values.assignees),
     labels: stringArray(values.labels),
-    due: stringValue(values.due),
+    due,
+    ...(normalizeRecurrence(values.recurrence, due) ? { recurrence: normalizeRecurrence(values.recurrence, due) } : {}),
+    ...(stringValue(values.recurrenceNextId) ? { recurrenceNextId: stringValue(values.recurrenceNextId) } : {}),
+    ...(stringValue(values.recurrenceSourceId) ? { recurrenceSourceId: stringValue(values.recurrenceSourceId) } : {}),
     order: numberValue(values.order),
     completed: booleanValue(values.completed),
     archived: booleanValue(values.archived),
@@ -711,6 +716,9 @@ export function serializeCard(card: Card): string {
     assignees: card.assignees,
     labels: card.labels,
     due: card.due,
+    ...(card.recurrence ? { recurrence: card.recurrence } : {}),
+    ...(card.recurrenceNextId ? { recurrenceNextId: card.recurrenceNextId } : {}),
+    ...(card.recurrenceSourceId ? { recurrenceSourceId: card.recurrenceSourceId } : {}),
     order: card.order,
     completed: card.completed,
     archived: card.archived,
@@ -757,7 +765,7 @@ function parseFrontmatterValue(raw: string): unknown {
 }
 
 function formatFrontmatterValue(value: unknown): string {
-  if (Array.isArray(value)) {
+  if (Array.isArray(value) || (value !== null && typeof value === "object")) {
     return JSON.stringify(value);
   }
   if (typeof value === "string") {
