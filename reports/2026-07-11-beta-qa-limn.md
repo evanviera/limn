@@ -2,98 +2,132 @@
 
 - **Date:** 2026-07-11
 - **Tester role:** Expert productivity-app user, non-developer
-- **Target:** Limn 0.6.2, Vite dev server at `http://127.0.0.1:1420/?limnE2e`
-- **Environment:** macOS 26.5.1, Codex in-app browser, desktop-width pass plus 390x844 narrow viewport check
-- **Scenario:** Planned a Q3 client launch for Redwood Labs: created a workspace board, added team members, created launch cards, assigned owners, added labels, due dates, checklist items, notes, comments, saved a filtered view, reloaded for day-two persistence, checked narrow-window behavior, and tried correction/delete flows.
-- **Recommendation:** Use after fixes
+- **Target:** Limn 0.6.3 web test surface at `http://127.0.0.1:1420/?limnE2e`
+- **Environment:** macOS, Codex in-app browser, standard desktop viewport plus 390 × 844 narrow viewport; local Vite server; Tauri IPC replaced by the product's browser test harness
+- **Scenario:** Plan a small-team Q3 launch, create and advance a task, add notes/checklist/due date/label, add teammates, assign ownership, @mention a teammate, retrieve work through Filter, resize, and return after reload
+- **Recommendation:** **Use after fixes**
 
 ## Executive Summary
 
-Limn is already useful as a local-first task board for a small team. The board defaults, card detail model, notes rendering, checklist links, labels, due dates, identity-based comments, filter view, and saved views all fit real project work better than a plain spreadsheet and feel lighter than Asana or Notion.
+Limn already has a coherent product core. It is fast to understand, pleasant to look at, and unusually good at keeping a task lightweight while still supporting notes, checklists, attachments, ownership, due dates, labels, comments, and activity. I could move from an empty workspace to a credible team task without documentation. Reload persistence passed, and the Filter view is more useful than a typical early-stage board app because it combines search, facets, quick views, check-in counts, saved views, and calendar export.
 
-I would use this for a small trusted project after fixing one trust-damaging feedback issue: a normal solo card save produced a banner saying Limn merged edits from another device. That message makes me question whether the app saw a conflict or rewrote my data, even though the edited content persisted correctly.
+I would not yet move a real team onto it. The largest issue observed was a false “Merged edits from another device” message after ordinary same-device work. In a local-first tool, sync/conflict feedback is part of the trust contract; false alarms make users question whether work was overwritten. Beyond that defect, the product still feels closer to an excellent shared board than a complete daily productivity home. It needs a clearer first-run collaboration model, a stronger personal action surface, faster capture, and more legible narrow-window behavior.
 
 ## Workflow Coverage
 
 | Workflow | Result | Notes |
 | --- | --- | --- |
-| First-run setup | Pass with caveat | `?limnE2e` workspace opening worked. Plain Vite URL without the harness showed the same welcome screen but could not open a workspace. |
-| Core happy path | Pass | Created board, members, cards, due dates, labels, notes, checklist, comment, and saved filter view. |
-| Editing and correction | Issue | Edits persisted, but save feedback falsely implied a multi-device merge. Empty card title validation recovered clearly. |
-| Error recovery | Pass | Delete card flow showed a specific confirmation naming the card and explaining file removal; cancel preserved the card. |
-| Return/reload persistence | Pass | On the non-reset harness URL, reload restored workspace tab, board, card note, label, due date, assignee, active identity, and saved view chip. |
-| Keyboard/narrow viewport | Issue | Narrow DOM remained reachable, but the board depends on horizontal column scrolling at 390px. Keyboard-only coverage was light. |
+| First-run setup | Pass with usability gaps | Folder-first promise is clear; no guided explanation of how sharing, identity, backup, or multi-device edits work. |
+| Core happy path | Pass | Created a board and a detailed card, then moved it to In Progress. |
+| Editing and correction | Pass | Notes, checklist, label, due date, list, assignment, comments, and mention entry all worked. |
+| Error recovery | Pass | Empty member submission produced a clear inline message. No console warnings/errors appeared. |
+| Return/reload persistence | Pass | Board, card content, list, due date, label, members, assignment, and comment remained after reload. |
+| Keyboard/narrow viewport | Issue | Comment shortcut worked. Narrow layout remains operable, but navigation consumes substantial vertical space and the board requires horizontal panning with clipped context. |
 
 ## Would I Use It?
 
-For a small trusted team, yes after the misleading merge banner is fixed. The app has a practical local-first niche: it gives me Trello-like board structure while keeping work in readable files. For a launch checklist or client project, I would prefer it over Apple Notes or a spreadsheet because cards can carry due dates, owners, labels, comments, and checklist links without becoming a mess.
+After the sync-feedback issue is fixed, I would use Limn for a trusted two-to-five-person team that wants Trello-like coordination without placing its project data in a hosted SaaS. The readable-folder premise is genuinely differentiating, and the card details are better balanced than Trello's increasingly busy card surface.
 
-It would not replace Notion for long-form docs or Asana for large team dependency tracking. It could replace a Trello board for a small team if sync conflict messaging feels reliable.
+Today I would use it as a project board alongside a calendar and notes app, not as the place I begin and end my workday. Compared with Todoist or Asana it lacks a convincing personal command center and rapid capture loop. Compared with Notion it is much clearer and faster, but it offers less structure for project briefs and durable knowledge. Its best path is not to become a general-purpose workspace; it is to become the most trustworthy, focused, local-first execution board for a small team.
 
 ## Bugs
 
-### Medium: Normal Solo Save Reports a Cross-Device Merge
+### Medium: False cross-device merge message after ordinary same-device edits
 
-- **Surface:** Card editor save feedback
-- **Steps:** Create a board and card. In the card editor, change title, move list, set due date, add labels, assign members, add a note, add a checklist link, add a comment, then click Save.
-- **Actual:** The card saved and closed, but the board banner said: "Merged edits from another device into the card."
-- **Expected:** A normal save should say the card was saved, or show no conflict-style message. Merge/conflict language should appear only when another device or disk copy was actually involved.
-- **Impact:** This undermines trust in a local-first app. As a user, I would wonder whether my card conflicted, whether another teammate changed it, or whether some edits were auto-merged unexpectedly.
-- **Evidence:** Observed in the DOM after saving the edited card during the Redwood Labs scenario. The edited card content persisted correctly afterward.
+- **Surface:** Global status banner shown on Filter after card discussion and editing
+- **Steps:**
+  1. Create a card and save notes, a checklist step, label, due date, and list change.
+  2. Add members and post a comment from the current identity.
+  3. Reopen the card, assign another member, and save.
+  4. Open Filter.
+- **Actual:** Limn displayed “Merged edits from another device into the card.” No other device or external edit participated in the test.
+- **Expected:** Normal same-device saves should complete quietly. Cross-device merge copy should appear only when Limn has actually reconciled concurrent changes.
+- **Impact:** Users may believe a teammate or sync provider changed their files, or fear that part of their own edit was lost. That undermines the central local-first trust proposition.
+- **Evidence:** [filter-merge-banner.png](assets/2026-07-11-beta-qa-limn/filter-merge-banner.png)
+- **Reproducibility:** Observed once in one complete scenario; repeat on the native build before release triage.
 
-### Medium: Plain Browser Dev Target Looks Usable But Cannot Open a Workspace
+### Medium: Plain browser dev target looks usable but cannot open a workspace
 
-- **Surface:** First-run welcome screen at `http://127.0.0.1:1420/`
-- **Steps:** Open the Vite dev URL without `?limnE2e`. Click "Open workspace folder."
-- **Actual:** The welcome screen remains unchanged. Console-visible errors show missing Tauri IPC (`invoke`) and listener callback failures.
-- **Expected:** Either the browser target should show a clear "desktop shell required" message, or the documented browser QA path should be the only exposed/testable target.
-- **Impact:** A beta tester or contributor can lose time on a target that appears valid but cannot perform the first core action.
-- **Evidence:** `reports/assets/2026-07-11-beta-qa-limn/web-open-workspace-click.png` was captured during this step, though browser screenshot output was blank in this environment.
+- **Surface:** First-run welcome screen at the Vite URL without `?limnE2e`
+- **Steps:** Open `http://127.0.0.1:1420/` and click “Open workspace folder.”
+- **Actual:** The welcome screen remains unchanged; the earlier pass recorded missing desktop-shell IPC errors.
+- **Expected:** Show a clear “desktop app required” state, or route browser-based testers to the supported harness target.
+- **Impact:** Beta testers and contributors can mistake a nonfunctional surface for the product and fail at the first action.
+- **Evidence:** Prior-pass notes and `reports/assets/2026-07-11-beta-qa-limn/web-open-workspace-click.png`.
 
-### Low: Empty Card Submit Remains Enabled
+### Low: Empty card submit remains enabled
 
 - **Surface:** Add card dialog
-- **Steps:** Click Add card, leave Card title empty, click Add card.
-- **Actual:** The submit button is enabled; after clicking, the dialog shows "Card title is required" and does not create a blank card.
-- **Expected:** Disable the submit button until a non-empty title exists, or focus the field with validation before attempting submission.
-- **Impact:** Minor friction. Recovery is clear, but the enabled button invites a predictable failed action.
-- **Evidence:** Observed in the Add card dialog during the persistence scenario.
+- **Steps:** Open Add card, leave the title empty, and submit.
+- **Actual:** The enabled button accepts the click, then displays “Card title is required” without creating a card.
+- **Expected:** Disable submission until a non-empty title exists, or focus the field and validate before the attempted submit.
+- **Impact:** Recovery is safe and clear, but the interface invites a predictable failed action.
+- **Evidence:** Prior pass observation.
 
 ## Usability Notes and Opinions
 
-### Card Depth Is Strong
+### The first five minutes are clear, but the local-first collaboration model is not
 
-- **Observation:** Notes, links, labels, due date, assignees, checklist progress, and comments all persisted and resurfaced in both card detail and board summary.
-- **Why it matters:** This is enough structure for real launch/project tracking without feeling like a heavy project-management suite.
-- **Suggestion:** Keep the card detail model; it is the strongest part of the product right now.
+- **Observation:** The welcome screen explains that Limn writes readable files and asks for a folder. After opening one, the user immediately sees boards, identity, members, and Slack settings, but no guided explanation connects them.
+- **Why it matters:** A hosted board app quietly owns sync, permissions, backup, and identity. Limn delegates those choices to the user's folder provider, so users need to understand who can access the workspace, how teammates open it, what “You” means, and what happens during concurrent edits.
+- **Suggestion:** Add a short first-workspace checklist: name the workspace, choose your identity, invite/share via the folder's existing mechanism, explain backups, and show what conflict recovery looks like. Keep it skippable.
 
-### Filter Is Useful But Completed/Done Language Can Confuse
+### Filter is promising, but personal work should feel like a destination
 
-- **Observation:** The Filter view defaults to Active cards, so a completed card disappears from results. The check-in area also shows "Done," while the board has a separate Done list.
-- **Why it matters:** In board tools, users often treat Done as a list/column. Here it can also mean completed status.
-- **Suggestion:** Consider using "Completed" consistently in the Filter check-in, or explaining that the default view hides completed cards.
+- **Observation:** Filter has quick views, check-in counts, rich facets, saved views, and `.ics` export. “My tasks” is one chip among many, and the sidebar has no persistent personal work entry.
+- **Why it matters:** Team members return to productivity software to answer “What do I need to do now?” A board-centric navigation model makes that question secondary to project structure.
+- **Suggestion:** Promote a personal Today/My Work surface with overdue, due soon, assigned-without-date, and recently mentioned sections. Let it become the default return view per device.
 
-### Saved Views Feel Worth Keeping
+The earlier pass also found that “Done” can refer both to a board list and to completed status, while Filter hides completed cards by default. Use “Completed” consistently for status or explicitly explain the distinction. Saved-view chips persisted across reload and are worth keeping; consider letting users choose a saved view as their per-device default.
 
-- **Observation:** A text filter could be saved as "Quote follow-ups" / "Reload checks"; the saved view chip survived reload.
-- **Why it matters:** Recurring task review is where a local board becomes a daily tool instead of a one-off checklist.
-- **Suggestion:** Consider restoring the last active saved view after reload, or making it clearer that saved views are available chips rather than session state.
+### Capture is clean but not yet fast enough for all-day use
 
-### Narrow View Is Serviceable, Not Mobile-First
+- **Observation:** Adding a card requires choosing a list, opening a dialog, entering a title, then opening the full editor for meaningful details. I did not find a global quick-add or command surface in the visible UI.
+- **Why it matters:** During meetings, triage, and email processing, users need to capture a task without navigating back to a specific board/list.
+- **Suggestion:** Add a global quick-add action with title-first entry and optional board/list, assignee, and natural-language due date. A keyboard shortcut should work from anywhere.
 
-- **Observation:** At 390px width the board stayed contained, but columns extended horizontally inside the board area.
-- **Why it matters:** This is acceptable for quick review, but not ideal for long mobile editing sessions.
-- **Suggestion:** Treat narrow-width support as a secondary "review/check status" mode unless mobile editing is a product goal.
+### Narrow-window board use preserves functionality but loses orientation
+
+- **Observation:** At 390 × 844, workspace tabs and expanded navigation take roughly the upper half of the screen. The board then presents fixed-width columns horizontally; the next column and card are clipped, and long board names truncate in both navigation and the page heading.
+- **Why it matters:** Desktop productivity apps are often used beside a browser, document, or meeting window. Narrow split-screen is more important than phone support for Limn.
+- **Suggestion:** Collapse the sidebar/navigation behind a compact control at narrow widths, preserve the full board name through a tooltip or secondary detail, and consider a one-column/list-switcher mode for very narrow windows.
+- **Evidence:** [board-narrow.png](assets/2026-07-11-beta-qa-limn/board-narrow.png), [filter-narrow.png](assets/2026-07-11-beta-qa-limn/filter-narrow.png)
+
+### The card detail hierarchy is excellent
+
+- **Observation:** Read mode gives status, notes, checklist, attachments, discussion, properties, and activity without exposing every editing control. Edit mode adds controls without turning the card into a settings form.
+- **Why it matters:** This supports both quick review and deeper planning, and is a meaningful advantage over productivity tools whose task dialogs become visually exhausting.
+- **Suggestion:** Preserve this read/edit separation as the product expands. Resist adding more always-visible fields; use progressive disclosure.
+
+### Slack configuration appears before the core team ritual is established
+
+- **Observation:** Settings offers a webhook and event switches, while the product does not yet visibly establish a native inbox, mention center, or daily review loop.
+- **Why it matters:** External notifications can create noise and dependency before users know where Limn itself expects them to process changes.
+- **Suggestion:** Prioritize an in-app activity/mention inbox and notification hygiene. Position Slack as an optional delivery channel for defined team events, not the main collaboration backstop.
+
+### Missing capabilities that most constrain product-market fit
+
+These are product gaps observed from the visible experience, not defects:
+
+- A personal Today/My Work home and mention/activity inbox.
+- Global rapid capture and a command palette/keyboard navigation model.
+- A simple share/onboarding explanation for folder-based collaboration, identity, backup, and conflict recovery.
+- Recurring tasks or lightweight routines for operational teams.
+- Board templates for common small-team workflows so the empty state does not force process design.
+- Stronger planning context above the card level: a board brief, goal/outcome, owner, and target date would be enough; Limn does not need to become a document editor.
+- Native reminders surfaced inside Limn, not only calendar export or Slack events.
 
 ## Questions
 
-- Is the misleading merge banner specific to the browser harness, or can it happen in the packaged Tauri app?
-- Should completed cards remain in their current list by design, or should completing a card optionally move it to Done?
-- Should saved filters restore automatically after reload, or is the board intentionally the default return view?
+- Is the automatic selection of the first created member as “You” intentional? It is convenient, but the transition happens without explanation and could misattribute comments on a shared computer.
+- What is the intended sharing instruction for iCloud Drive, Dropbox, OneDrive, NAS, or Git-backed folders, and which are officially supported?
+- Is the Filter view intended to become the personal home, or is a dedicated My Work experience planned?
+- What guarantee should users infer from a successful Save: written locally, synced by the folder provider, or merely queued? The UI should name only the guarantee Limn can make.
 
 ## Coverage Gaps
 
-- Did not exercise the packaged Tauri app's native folder picker, real filesystem writes, real attachment file picker, or OS-level drag/drop.
-- Did not verify Slack webhook posting, updater behavior, actual `.ics` file contents, or real cloud-sync conflict files.
-- Screenshot capture through the in-app browser produced blank dark images in this environment, so this report relies mainly on DOM observations and interaction outcomes.
-- Keyboard-only testing was limited; modal focus and common button labels were checked indirectly through accessible roles, but a full tab-order pass remains needed.
+- Native Tauri folder picker, filesystem permissions, watcher behavior, offline cloud placeholders, and OS menus were not tested because this pass used the browser test surface.
+- Attachments were not added because the browser harness does not represent the full native file workflow.
+- Real concurrent editing, conflict review/resolution, and cloud-provider behavior were not exercised; these deserve a dedicated two-client native test.
+- Slack delivery and updater behavior were not exercised against external services.
+- Multi-workspace tab switching, calendar export file contents, large-board performance, drag-and-drop, archive recovery, destructive confirmations, screen-reader output, and full keyboard-only traversal remain for follow-up passes.
