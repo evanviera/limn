@@ -428,4 +428,45 @@ test.describe("smoke", () => {
     expect(merged).toContain('"external"');
     expect(merged).toContain("Local edit");
   });
+
+  test("an immediately-persisted comment does not make the next editor save look like a cross-device merge", async ({ page }) => {
+    await openApp(page);
+    await openWorkspace(page);
+
+    // One member — to comment as, and to assign.
+    await page.getByTestId("nav-members").click();
+    await page.getByTestId("member-name-input").fill("Ada Lovelace");
+    await page.getByTestId("add-member").click();
+
+    await page.getByTestId("create-board").click();
+    await page.getByTestId("text-dialog-input").fill("Trust Board");
+    await page.getByTestId("text-dialog-submit").click();
+
+    // Creating a card opens it in edit mode (the editor's merge base); let the
+    // create's watch-refresh settle first.
+    await page.getByTestId("add-card-todo").click();
+    await page.getByTestId("text-dialog-input").fill("Plan the launch");
+    await page.getByTestId("text-dialog-submit").click();
+    await expect(page.getByTestId("card-title-input")).toHaveValue("Plan the launch");
+    await page.waitForTimeout(300);
+
+    // Post a comment: this persists immediately and bumps the card's on-disk
+    // version without touching the editor draft. Let its watch-refresh settle.
+    await page.getByTestId("comment-identify-ada-lovelace").click();
+    await page.getByTestId("comment-input").fill("Kicking this off.");
+    await page.getByTestId("add-comment").click();
+    await expect(page.getByTestId("comment-list")).toContainText("Kicking this off.");
+    await page.waitForTimeout(300);
+
+    // Assign the member in the editor and save. Because the editor's merge base
+    // advanced to include the comment write, this is a clean same-device save —
+    // not the phantom "Merged edits from another device" that the QA pass hit.
+    await page.getByTestId("assignee-ada-lovelace").click();
+    await page.getByTestId("save-card").click();
+    await expect(page.getByTestId("card-title-input")).toHaveCount(0);
+
+    // The assignment actually landed, and no cross-device merge banner appeared.
+    await expect.poll(async () => (await snapshot(page)).cards[0].content).toContain('assignees: ["ada-lovelace"]');
+    await expect(page.getByText("Merged edits from another device")).toHaveCount(0);
+  });
 });

@@ -13,6 +13,10 @@ export interface BoardNavSections {
 
 interface WelcomeScreenProps {
   contextMenu: ReactNode;
+  // True when running outside the desktop shell (a plain browser tab), so no
+  // backend exists to open a folder — the screen explains that instead of
+  // offering an Open button that would silently fail.
+  desktopRequired: boolean;
   error: string;
   opening: boolean;
   onContextMenu: (event: ReactMouseEvent<HTMLElement>) => void;
@@ -21,6 +25,7 @@ interface WelcomeScreenProps {
 
 export function WelcomeScreen({
   contextMenu,
+  desktopRequired,
   error,
   opening,
   onContextMenu,
@@ -31,16 +36,31 @@ export function WelcomeScreen({
       <section className="welcome-panel">
         <p className="eyebrow">Limn</p>
         <h1>Local-first boards for a small trusted team.</h1>
-        <p className="muted">Choose a folder to create or open a workspace. Limn writes boards and cards as readable files.</p>
-        <button className="primary" data-testid="welcome-open-workspace" disabled={opening} onClick={onOpenWorkspace}>
-          {opening ? (
-            <>
-              <Spinner /> Opening…
-            </>
-          ) : (
-            "Open workspace folder"
-          )}
-        </button>
+        {desktopRequired ? (
+          <>
+            <p className="muted">
+              Limn needs the desktop app to read and write your workspace folder — a browser tab
+              can’t open one. Download and run the Limn desktop app to get started.
+            </p>
+            <p className="welcome-note" data-testid="welcome-desktop-required">
+              Working on Limn itself? Open the dev server with the <code>?limnE2e</code> test harness
+              to try the UI in a browser.
+            </p>
+          </>
+        ) : (
+          <>
+            <p className="muted">Choose a folder to create or open a workspace. Limn writes boards and cards as readable files.</p>
+            <button className="primary" data-testid="welcome-open-workspace" disabled={opening} onClick={onOpenWorkspace}>
+              {opening ? (
+                <>
+                  <Spinner /> Opening…
+                </>
+              ) : (
+                "Open workspace folder"
+              )}
+            </button>
+          </>
+        )}
         {error && <p className="error">{error}</p>}
       </section>
       {contextMenu}

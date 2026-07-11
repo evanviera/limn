@@ -22,7 +22,18 @@ export interface LimnTestIpc {
 declare global {
   interface Window {
     __LIMN_TEST_IPC__?: LimnTestIpc;
+    __TAURI_INTERNALS__?: unknown;
   }
+}
+
+// Whether a backend that can service IPC is present: the real Tauri desktop
+// shell (`__TAURI_INTERNALS__`) or the E2E test harness that stands in for it
+// (`__LIMN_TEST_IPC__`). A plain browser — the Vite dev URL opened without the
+// test harness — has neither, so every workspace command would throw. The UI
+// checks this to show a "desktop app required" state instead of an Open button
+// that silently fails.
+export function hasDesktopShell(): boolean {
+  return Boolean(window.__LIMN_TEST_IPC__ || window.__TAURI_INTERNALS__);
 }
 
 export async function invoke<T>(command: string, args?: Record<string, unknown>): Promise<T> {

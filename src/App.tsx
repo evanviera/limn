@@ -9,7 +9,7 @@ import type {
 } from "react";
 import type { PointerEvent as ReactPointerEvent } from "react";
 import { getCurrentWindow } from "@tauri-apps/api/window";
-import { listen, listenFileDrop } from "./ipc";
+import { hasDesktopShell, listen, listenFileDrop } from "./ipc";
 import {
   addActivity,
   addAttachmentFile,
@@ -675,6 +675,12 @@ export default function App() {
   // Open a workspace folder into a tab (picking one when no path is given) and
   // make it active. Adds a new tab or refreshes an existing tab's name.
   async function openWorkspace(path?: string) {
+    if (!hasDesktopShell()) {
+      // A plain browser tab has no backend to pick or read a folder; surface the
+      // desktop-app requirement instead of letting the IPC call throw.
+      setError("Limn needs the desktop app to open a workspace folder.");
+      return;
+    }
     const selectedPath = path ?? (await pickWorkspaceFolder());
     if (!selectedPath) {
       return;
@@ -1149,7 +1155,18 @@ export default function App() {
     pendingCardWriteRef.current[nextCard.id] = nextCard.updatedAt;
     const outcome = await saveCard(workspacePath, nextCard, previous);
     setCards((current) => upsertById(current, nextCard));
-    if (outcome.status !== "written") {
+    if (outcome.status === "written") {
+      // A clean write to the open card becomes the new merge ancestor for the
+      // editor. Immediately-persisted actions (posting a comment, adding an
+      // attachment, toggling a step) bump the card's version on disk without
+      // touching the editor draft; without advancing the base here, the next
+      // editor Save would compare its stale open-time base against the newer
+      // disk copy, "conflict", cleanly three-way-merge, and falsely report
+      // "Merged edits from another device" for the device's own edits.
+      if (nextCard.id === selectedCardIdRef.current) {
+        editorBaseRef.current = nextCard;
+      }
+    } else {
       // A merge/restore/conflict changed disk; drop the self-write marker so the
       // reload actually applies the reconciled card instead of our local draft,
       // and mark it reconciled so that reload doesn't warn "changed on disk".
@@ -2374,6 +2391,7 @@ export default function App() {
   if (!workspacePath || !settings) {
     return (
       <WelcomeScreen
+        desktopRequired={!hasDesktopShell()}
         error={error}
         opening={opening}
         onContextMenu={handleDefaultContextMenu}

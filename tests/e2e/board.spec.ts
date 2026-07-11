@@ -16,6 +16,34 @@ test.describe("smoke", () => {
     await expect(page.getByTestId("nav-settings")).toBeVisible();
   });
 
+  test("a plain browser tab (no desktop shell) explains it needs the desktop app", async ({ page }) => {
+    // Load the app without the E2E harness (and outside Tauri), so no backend can
+    // service a folder pick. The welcome screen must say so rather than offer an
+    // Open button that silently fails.
+    await page.goto("/");
+    await expect(page.getByTestId("welcome-desktop-required")).toBeVisible();
+    await expect(page.getByTestId("welcome-open-workspace")).toHaveCount(0);
+  });
+
+  test("the add-card dialog blocks submission until a title is typed", async ({ page }) => {
+    await openApp(page);
+    await openWorkspace(page);
+
+    await page.getByTestId("create-board").click();
+    await page.getByTestId("text-dialog-input").fill("Validation Board");
+    await page.getByTestId("text-dialog-submit").click();
+
+    await page.getByTestId("add-card-todo").click();
+    const submit = page.getByTestId("text-dialog-submit");
+    // Empty and whitespace-only titles keep the button disabled; a real title
+    // enables it. No failed-submit "title is required" round-trip.
+    await expect(submit).toBeDisabled();
+    await page.getByTestId("text-dialog-input").fill("   ");
+    await expect(submit).toBeDisabled();
+    await page.getByTestId("text-dialog-input").fill("Draft the brief");
+    await expect(submit).toBeEnabled();
+  });
+
   test("theme toggle switches to light mode and persists", async ({ page }) => {
     await openApp(page);
     await openWorkspace(page);

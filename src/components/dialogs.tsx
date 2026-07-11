@@ -101,7 +101,7 @@ export function TextDialog({
         {validation && <p className="form-error" id="text-dialog-error">{validation}</p>}
         <footer>
           <button type="button" onClick={onCancel}>Cancel</button>
-          <button className="primary" data-testid="text-dialog-submit" type="submit">
+          <button className="primary" data-testid="text-dialog-submit" disabled={!dialog.value.trim()} type="submit">
             {dialog.confirmLabel}
           </button>
         </footer>

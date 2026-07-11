@@ -52,6 +52,18 @@
   text-transform: uppercase;
 }
 
+.welcome-note {
+  color: var(--text-muted);
+  font-size: var(--text-sm);
+}
+
+.welcome-note code {
+  padding: 1px 5px;
+  border-radius: 4px;
+  background: var(--surface-sunken, rgba(127, 127, 127, 0.14));
+  font-size: 0.9em;
+}
+
 .app-frame {
   display: flex;
   flex-direction: column;
