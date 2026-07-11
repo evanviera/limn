@@ -24,16 +24,20 @@ const FILE_READ_TIMEOUT: Duration = Duration::from_secs(20);
 
 mod attachments;
 mod menu;
+mod open_workspaces;
 mod persist;
+mod storage_hints;
 
 use attachments::{
     add_attachment, delete_attachment, open_attachment, pick_attachment_files,
     read_attachment_large_preview, read_attachment_preview, read_attachment_thumbnail,
     reveal_attachment,
 };
+use open_workspaces::{get_open_workspaces, save_open_workspaces};
 use persist::{
     conditional_delete, conditional_write, ConflictFile, DeleteResult, WriteOutcome, WriteResult,
 };
+pub(crate) use storage_hints::cloud_storage_hint;
 
 #[derive(Default)]
 struct WatchState {
@@ -356,34 +360,6 @@ async fn read_files_parallel(
     (files, warnings)
 }
 
-// Recognize when a workspace path lives inside a known cloud-sync folder so the
-// UI can warn that "online-only" files may load slowly. This is a pure,
-// filesystem-free heuristic on the path string (matched case-insensitively);
-// modern macOS mounts Dropbox/Drive/OneDrive/Box under ~/Library/CloudStorage,
-// which the first pattern catches generically.
-fn cloud_storage_hint(path: &str) -> Option<String> {
-    let lower = path.replace('\\', "/").to_lowercase();
-    let providers: [(&str, &str); 11] = [
-        ("com~apple~clouddocs", "iCloud Drive"),
-        ("/mobile documents/", "iCloud Drive"),
-        ("dropbox", "Dropbox"),
-        ("google drive", "Google Drive"),
-        ("googledrive", "Google Drive"),
-        ("google_drive", "Google Drive"),
-        ("onedrive", "OneDrive"),
-        ("/box/", "Box"),
-        ("boxdrive", "Box"),
-        ("pcloud", "pCloud"),
-        ("/library/cloudstorage/", "a cloud storage folder"),
-    ];
-    for (needle, label) in providers {
-        if lower.contains(needle) {
-            return Some(label.to_string());
-        }
-    }
-    None
-}
-
 #[tauri::command]
 fn write_workspace_settings(
     path: String,
@@ -562,59 +538,6 @@ fn list_conflicts(path: String) -> Result<Vec<ConflictFile>, String> {
 fn delete_conflict_file(path: String, relative_path: String) -> Result<(), String> {
     let root = workspace_root(&path)?;
     persist::delete_conflict(&root, &relative_path)
-}
-
-// The set of workspaces the user has open as tabs, plus which one is active.
-// Persisted in `last-workspace.json`; the historical single-`path` file migrates
-// forward (its lone path becomes the sole open tab).
-#[derive(Serialize)]
-struct OpenWorkspaces {
-    active: Option<String>,
-    paths: Vec<String>,
-}
-
-#[tauri::command]
-fn save_open_workspaces(app: AppHandle, paths: Vec<String>, active: String) -> Result<(), String> {
-    let file = last_workspace_file(&app)?;
-    if let Some(parent) = file.parent() {
-        fs::create_dir_all(parent).map_err(display_err)?;
-    }
-    let active = if active.is_empty() {
-        serde_json::Value::Null
-    } else {
-        serde_json::Value::String(active)
-    };
-    atomic_write(
-        &file,
-        serde_json::json!({ "path": active, "open": paths }).to_string(),
-    )
-}
-
-#[tauri::command]
-fn get_open_workspaces(app: AppHandle) -> Result<OpenWorkspaces, String> {
-    let file = last_workspace_file(&app)?;
-    if !file.exists() {
-        return Ok(OpenWorkspaces {
-            active: None,
-            paths: Vec::new(),
-        });
-    }
-    let content = fs::read_to_string(file).map_err(display_err)?;
-    let value: serde_json::Value = serde_json::from_str(&content).map_err(display_err)?;
-    let active = value
-        .get("path")
-        .and_then(|path| path.as_str())
-        .map(ToOwned::to_owned);
-    // Prefer the explicit open-tab list; fall back to the legacy single path so
-    // files written by older versions still restore their one workspace.
-    let paths = match value.get("open").and_then(|open| open.as_array()) {
-        Some(items) => items
-            .iter()
-            .filter_map(|item| item.as_str().map(ToOwned::to_owned))
-            .collect(),
-        None => active.clone().into_iter().collect(),
-    };
-    Ok(OpenWorkspaces { active, paths })
 }
 
 // Resolve a shared card link (`limn://card/<cardId>`): return the first of
@@ -955,14 +878,6 @@ fn extract_frontmatter_value(content: &str, key: &str) -> Option<String> {
     }
 
     None
-}
-
-fn last_workspace_file(app: &AppHandle) -> Result<PathBuf, String> {
-    Ok(app
-        .path()
-        .app_config_dir()
-        .map_err(display_err)?
-        .join("last-workspace.json"))
 }
 
 fn display_err<E: std::fmt::Display>(error: E) -> String {

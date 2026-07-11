@@ -12,11 +12,20 @@ import { makeId, normalizeUrl, openExternal } from "../storage";
 import { MAX_NAME_LENGTH } from "../lib/constants";
 import { isImageAttachment } from "../lib/attachments";
 import { cardDeepLink } from "../lib/deepLink";
-import { describeDue, dueInputFromToday } from "../lib/dueDate";
-import { initials } from "../lib/format";
-import { AttachmentLightbox } from "./AttachmentLightbox";
 import { CardAttachments } from "./CardAttachments";
 import { CardComments } from "./CardComments";
+import {
+  CardEditorDropzone,
+  CardEditorFooter,
+  CardEditorHeader,
+  CardEditorLightbox,
+  CardEditorSidePanel,
+  CardEditorSplitter,
+  CardEditorTitleField,
+  ChecklistEditor,
+  NotesEditor
+} from "./CardEditorEditSections.js";
+import type { NoteLinkDraft } from "./CardEditorEditSections";
 import { CardViewPanel } from "./CardViewPanel";
 import {
   NOTE_INLINE_PATTERN,
@@ -32,11 +41,8 @@ import {
   unwrapNoteFormat
 } from "../lib/noteFormat";
 import { useModalKeys } from "../lib/useModalKeys";
-import { Icon, LinkIcon, Spinner } from "./icons";
 import { isEditableTextControl, textControlContextItems, writeClipboard } from "./contextMenu";
 import type { ContextMenuItem, OpenContextMenu } from "./contextMenu";
-
-type NoteLinkDraft = { mode: "selection" | "link"; label: string; url: string };
 
 const CARD_EDITOR_SIDE_WIDTH_DEFAULT = 280;
 const CARD_EDITOR_SIDE_WIDTH_MIN = 240;
@@ -884,195 +890,27 @@ export function CardEditor({
           onOpenContextMenu(event, cardEditorContextItems(), draft.title || "Card");
         }}
       >
-        <header className="card-editor-header">
-          <div className="card-editor-heading">
-            <p className="eyebrow">Edit card</p>
-            <h2>{board ? `${board.name} / ${board.lists.find((list) => list.id === draft.listId)?.name ?? "Unlisted"}` : "Card details"}</h2>
-          </div>
-          <button aria-label="Close" className="icon-button" disabled={saving} title="Close" onClick={onClose}>
-            <Icon name="x" />
-          </button>
-        </header>
+        <CardEditorHeader board={board} draft={draft} saving={saving} onClose={onClose} />
 
         <div className="card-editor-body" data-testid="card-editor-body" ref={cardEditorBodyRef} style={cardEditorBodyStyle}>
           <div className="card-editor-main">
-            <label className="title-field">
-              <span className="field-label">Title</span>
-              <input
-                data-testid="card-title-input"
-                value={draft.title}
-                onChange={(event) => setDraft({ ...draft, title: event.target.value })}
-                placeholder="Card title"
-              />
-            </label>
+            <CardEditorTitleField draft={draft} setDraft={setDraft} />
 
-            <section className="main-section" aria-labelledby="subtasks-heading">
-              <div className="main-section-head">
-                <div>
-                  <h3 id="subtasks-heading">Checklist</h3>
-                  <p className="main-section-sub">
-                    {draft.subtasks.length === 0 ? "No steps yet" : `${completedSubtasks} of ${draft.subtasks.length} complete`}
-                  </p>
-                </div>
-                <button data-testid="add-subtask" onClick={addSubtask}>
-                  <Icon name="plus" /> Add step
-                </button>
-              </div>
-              {draft.subtasks.length === 0 && <p className="section-empty">Add a step when this card needs a checklist.</p>}
-              {draft.subtasks.length > 0 && (
-                <div className="subtask-list">
-                  {draft.subtasks.map((subtask) => {
-                    const isExpanded = expandedSubtasks.has(subtask.id);
-                    const itemCount = subtask.items.length;
-                    const hasUrl = subtask.url.trim().length > 0;
-                    return (
-                      <div
-                        key={subtask.id}
-                        className={`subtask-block ${subtask.completed ? "completed" : ""}`}
-                        onContextMenu={(event) => {
-                          if (isEditableTextControl(event.target)) {
-                            onOpenContextMenu(event, textControlContextItems(event.target));
-                            return;
-                          }
-                          onOpenContextMenu(event, subtaskContextItems(subtask, isExpanded), subtask.title || "Step");
-                        }}
-                      >
-                        <div className="subtask-head">
-                          <input
-                            className="subtask-check"
-                            checked={subtask.completed}
-                            data-testid={`subtask-${subtask.id}-toggle`}
-                            type="checkbox"
-                            aria-label="Mark sub-task complete"
-                            onChange={(event) => updateSubtask(subtask.id, { completed: event.target.checked })}
-                          />
-                          <input
-                            className="subtask-title"
-                            data-testid={`subtask-${subtask.id}-title`}
-                            value={subtask.title}
-                            onChange={(event) => updateSubtask(subtask.id, { title: event.target.value })}
-                            placeholder="Step"
-                          />
-                          {(isExpanded || hasUrl) && (
-                            <div className={`link-line ${hasUrl ? "has-url" : ""}`}>
-                              <LinkIcon />
-                              <input
-                                className="link-input"
-                                data-testid={`subtask-${subtask.id}-url`}
-                                value={subtask.url}
-                                onChange={(event) => updateSubtask(subtask.id, { url: event.target.value })}
-                                placeholder="Add link"
-                              />
-                              {hasUrl && (
-                                <button
-                                  aria-label="Open link"
-                                  className="link-open"
-                                  data-testid={`subtask-${subtask.id}-open`}
-                                  title="Open link"
-                                  onClick={() => void openExternal(subtask.url.trim())}
-                                >
-                                  <Icon name="chevron-up-right" />
-                                </button>
-                              )}
-                            </div>
-                          )}
-                          <button
-                            className="subtask-expand"
-                            data-expanded={isExpanded}
-                            aria-expanded={isExpanded}
-                            aria-label={isExpanded ? "Hide list items" : "Show list items"}
-                            title={isExpanded ? "Hide list items" : "Show list items"}
-                            onClick={() => toggleSubtaskExpanded(subtask.id)}
-                          >
-                            {itemCount > 0 && <span className="subtask-count">{itemCount}</span>}
-                            <Icon name="chevron-down" />
-                          </button>
-                          <button
-                            aria-label="Remove sub-task"
-                            className="subtask-remove"
-                            data-testid={`subtask-${subtask.id}-remove`}
-                            title="Remove sub-task"
-                            onClick={() => removeSubtask(subtask.id)}
-                          >
-                            <Icon name="x" />
-                          </button>
-                        </div>
-                        {isExpanded && (
-                          <div className="subtask-items-editor">
-                            {itemCount > 0 && (
-                              <ul className="subtask-item-list">
-                                {subtask.items.map((item) => {
-                                  const itemHasUrl = item.url.trim().length > 0;
-                                  return (
-                                    <li
-                                      key={item.id}
-                                      className="subtask-item-row"
-                                      onContextMenu={(event) => {
-                                        if (isEditableTextControl(event.target)) {
-                                          onOpenContextMenu(event, textControlContextItems(event.target));
-                                          return;
-                                        }
-                                        onOpenContextMenu(event, subtaskItemContextItems(subtask, item), item.text || "Detail");
-                                      }}
-                                    >
-                                      <span className="subtask-item-bullet" aria-hidden="true" />
-                                      <input
-                                        className="subtask-item-text"
-                                        data-testid={`subtask-item-${item.id}-text`}
-                                        value={item.text}
-                                        onChange={(event) => updateSubtaskItem(subtask.id, item.id, { text: event.target.value })}
-                                        placeholder="List item"
-                                      />
-                                      <div className={`link-line ${itemHasUrl ? "has-url" : ""}`}>
-                                        <LinkIcon />
-                                        <input
-                                          className="link-input"
-                                          data-testid={`subtask-item-${item.id}-url`}
-                                          value={item.url}
-                                          onChange={(event) => updateSubtaskItem(subtask.id, item.id, { url: event.target.value })}
-                                          placeholder="Add link"
-                                        />
-                                        {itemHasUrl && (
-                                          <button
-                                            aria-label="Open list item link"
-                                            className="link-open"
-                                            data-testid={`subtask-item-${item.id}-open`}
-                                            title="Open link"
-                                            onClick={() => void openExternal(item.url.trim())}
-                                          >
-                                            <Icon name="chevron-up-right" />
-                                          </button>
-                                        )}
-                                      </div>
-                                      <button
-                                        aria-label="Remove list item"
-                                        className="subtask-remove"
-                                        data-testid={`subtask-item-${item.id}-remove`}
-                                        title="Remove list item"
-                                        onClick={() => removeSubtaskItem(subtask.id, item.id)}
-                                      >
-                                        <Icon name="x" />
-                                      </button>
-                                    </li>
-                                  );
-                                })}
-                              </ul>
-                            )}
-                            <button
-                              className="subtask-add-item"
-                              data-testid={`subtask-${subtask.id}-add-item`}
-                              onClick={() => addSubtaskItem(subtask.id)}
-                            >
-                              <Icon name="plus" /> Add detail
-                            </button>
-                          </div>
-                        )}
-                      </div>
-                    );
-                  })}
-                </div>
-              )}
-            </section>
+            <ChecklistEditor
+              completedSubtasks={completedSubtasks}
+              draft={draft}
+              expandedSubtasks={expandedSubtasks}
+              onAddSubtask={addSubtask}
+              onAddSubtaskItem={addSubtaskItem}
+              onRemoveSubtask={removeSubtask}
+              onRemoveSubtaskItem={removeSubtaskItem}
+              onToggleSubtaskExpanded={toggleSubtaskExpanded}
+              onUpdateSubtask={updateSubtask}
+              onUpdateSubtaskItem={updateSubtaskItem}
+              onOpenContextMenu={onOpenContextMenu}
+              subtaskContextItems={subtaskContextItems}
+              subtaskItemContextItems={subtaskItemContextItems}
+            />
 
             <CardAttachments
               attachments={card.attachments}
@@ -1086,107 +924,30 @@ export function CardEditor({
               onCopyText={onCopyText}
             />
 
-            <section className="main-section notes-editor" aria-labelledby="notes-heading">
-              <div className="main-section-head notes-editor-header">
-                <h3 id="notes-heading">Notes</h3>
-                <div className="notes-toolbar" aria-label="Notes formatting">
-                  <button
-                    aria-label="Bold"
-                    className="notes-tool"
-                    data-testid="notes-bold"
-                    title="Bold"
-                    type="button"
-                    onMouseDown={(event) => event.preventDefault()}
-                    onClick={formatNotesAsBold}
-                  >
-                    <strong>B</strong>
-                  </button>
-                  <button
-                    aria-label="Italic"
-                    className="notes-tool"
-                    data-testid="notes-italic"
-                    title="Italic"
-                    type="button"
-                    onMouseDown={(event) => event.preventDefault()}
-                    onClick={formatNotesAsItalic}
-                  >
-                    <em>I</em>
-                  </button>
-                  <button
-                    aria-label="Create link"
-                    className="notes-tool"
-                    data-testid="notes-link"
-                    title="Create link"
-                    type="button"
-                    onMouseDown={(event) => event.preventDefault()}
-                    onClick={formatNotesAsLink}
-                  >
-                    <LinkIcon />
-                  </button>
-                </div>
-              </div>
-              {linkDraft && (
-                <form className="notes-link-form" data-testid="notes-link-form" onSubmit={replaceNotesLinkDraft}>
-                  <input
-                    aria-label="Link text"
-                    data-testid="notes-link-label"
-                    placeholder="Link text"
-                    ref={notesLinkLabelInputRef}
-                    value={linkDraft.label}
-                    onChange={(event) => updateNotesLinkDraft({ label: event.target.value })}
-                  />
-                  <input
-                    aria-label="Link URL"
-                    data-testid="notes-link-url"
-                    placeholder="https://example.com"
-                    ref={notesLinkInputRef}
-                    value={linkDraft.url}
-                    onChange={(event) => updateNotesLinkDraft({ url: event.target.value })}
-                  />
-                  <button className="primary" data-testid="notes-link-apply" type="submit">
-                    {linkDraft.mode === "link" ? "Update" : "Apply"}
-                  </button>
-                  {linkDraft.mode === "link" && (
-                    <>
-                      <button data-testid="notes-link-open" type="button" onClick={openNotesLinkDraft}>
-                        Open
-                      </button>
-                      <button data-testid="notes-link-remove" type="button" onClick={removeNotesLink}>
-                        Remove link
-                      </button>
-                    </>
-                  )}
-                  <button
-                    data-testid="notes-link-cancel"
-                    type="button"
-                    onClick={() => {
-                      setLinkDraft(null);
-                      clearActiveNotesLink();
-                      pendingNotesLinkRangeRef.current = null;
-                      notesInputRef.current?.focus();
-                    }}
-                  >
-                    Cancel
-                  </button>
-                </form>
-              )}
-              <div
-                aria-labelledby="notes-heading"
-                aria-multiline="true"
-                className="notes-rich-input"
-                contentEditable
-                data-testid="card-notes-input"
-                data-placeholder="Add notes"
-                ref={notesInputRef}
-                role="textbox"
-                suppressContentEditableWarning
-                onClick={handleNotesLinkClick}
-                onInput={handleNotesInput}
-                onKeyDown={handleNotesLinkKeyDown}
-                onPaste={handleNotesPaste}
-                onContextMenu={handleNotesContextMenu}
-              />
-            </section>
+            <NotesEditor
+              linkDraft={linkDraft}
+              notesInputRef={notesInputRef}
+              notesLinkInputRef={notesLinkInputRef}
+              notesLinkLabelInputRef={notesLinkLabelInputRef}
+              onCancelLinkDraft={() => {
+                setLinkDraft(null);
+                clearActiveNotesLink();
+                pendingNotesLinkRangeRef.current = null;
+                notesInputRef.current?.focus();
+              }}
+              onFormatBold={formatNotesAsBold}
+              onFormatItalic={formatNotesAsItalic}
+              onFormatLink={formatNotesAsLink}
+              onNotesClick={handleNotesLinkClick}
+              onNotesContextMenu={handleNotesContextMenu}
+              onNotesInput={handleNotesInput}
+              onNotesKeyDown={handleNotesLinkKeyDown}
+              onNotesPaste={handleNotesPaste}
+              onOpenLinkDraft={openNotesLinkDraft}
+              onRemoveLink={removeNotesLink}
+              onReplaceLinkDraft={replaceNotesLinkDraft}
+              onUpdateLinkDraft={updateNotesLinkDraft}
+            />
 
             <CardComments
               key={card.id}
@@ -1202,248 +963,57 @@ export function CardEditor({
             />
           </div>
 
-          <div
-            aria-label="Resize card detail columns"
-            aria-orientation="vertical"
-            aria-valuemax={CARD_EDITOR_SIDE_WIDTH_MAX}
-            aria-valuemin={CARD_EDITOR_SIDE_WIDTH_MIN}
-            aria-valuenow={Math.round(sideWidth)}
-            className="card-editor-splitter"
-            data-testid="card-editor-splitter"
-            role="separator"
-            tabIndex={0}
-            title="Resize columns"
+          <CardEditorSplitter
+            maxSideWidth={CARD_EDITOR_SIDE_WIDTH_MAX}
+            minSideWidth={CARD_EDITOR_SIDE_WIDTH_MIN}
+            sideWidth={sideWidth}
             onKeyDown={handleCardEditorSplitterKeyDown}
             onPointerDown={handleCardEditorSplitterPointerDown}
           />
 
-          <aside className="card-editor-side" aria-label="Card properties" data-testid="card-editor-side">
-            <div className="side-section">
-              <span className="side-heading">Status</span>
-              <label
-                className="status-toggle"
-                data-checked={draft.completed}
-                onContextMenu={(event) => onOpenContextMenu(event, [
-                  {
-                    label: draft.completed ? "Mark incomplete" : "Mark complete",
-                    icon: "check",
-                    onSelect: () => setDraft({ ...draft, completed: !draft.completed })
-                  }
-                ], "Status")}
-              >
-                <input
-                  data-testid="card-completed-input"
-                  type="checkbox"
-                  checked={draft.completed}
-                  onChange={(event) => setDraft({ ...draft, completed: event.target.checked })}
-                />
-                <span>{draft.completed ? "Completed" : "Mark complete"}</span>
-              </label>
-            </div>
-
-            <div className="side-section">
-              <span className="side-heading">Details</span>
-              <label className="side-field side-field-select">
-                <span>Board</span>
-                <select
-                  data-testid="card-board-select"
-                  value={draft.boardId}
-                  onChange={(event) => {
-                    const nextBoard = boards.find((item) => item.id === event.target.value);
-                    setDraft({ ...draft, boardId: event.target.value, listId: nextBoard?.lists[0]?.id ?? "" });
-                  }}
-                >
-                  {boards.map((item) => (
-                    <option key={item.id} value={item.id}>
-                      {item.name}
-                    </option>
-                  ))}
-                </select>
-              </label>
-              <label className="side-field side-field-select">
-                <span>List</span>
-                <select data-testid="card-list-select" value={draft.listId} onChange={(event) => setDraft({ ...draft, listId: event.target.value })}>
-                  {board?.lists.map((list) => (
-                    <option key={list.id} value={list.id}>
-                      {list.name}
-                    </option>
-                  ))}
-                </select>
-              </label>
-              <label
-                className="side-field side-field-date"
-                onContextMenu={(event) => onOpenContextMenu(event, [
-                  { label: "Clear due date", icon: "x", disabled: !draft.due, onSelect: () => setDraft({ ...draft, due: "" }) },
-                  { label: "Copy due date", icon: "copy", disabled: !draft.due, onSelect: () => void onCopyText(draft.due) }
-                ], "Due date")}
-              >
-                <Icon name="calendar" />
-                <span>Due date</span>
-                <input data-testid="card-due-input" type="date" value={draft.due} onChange={(event) => setDraft({ ...draft, due: event.target.value })} />
-              </label>
-              <div className="due-shortcuts">
-                <button type="button" data-testid="due-set-today" onClick={() => setDraft({ ...draft, due: dueInputFromToday(0) })}>Today</button>
-                <button type="button" data-testid="due-set-tomorrow" onClick={() => setDraft({ ...draft, due: dueInputFromToday(1) })}>Tomorrow</button>
-                <button type="button" data-testid="due-set-next-week" onClick={() => setDraft({ ...draft, due: dueInputFromToday(7) })}>Next week</button>
-                <button type="button" data-testid="due-clear" disabled={!draft.due} onClick={() => setDraft({ ...draft, due: "" })}>Clear</button>
-              </div>
-              {draft.due && (() => {
-                const due = describeDue(draft.due);
-                return (
-                  <p className={`due-hint due-${draft.completed ? "complete" : due.status}`} data-testid="card-due-hint">
-                    {due.label}
-                  </p>
-                );
-              })()}
-            </div>
-
-            <div className="side-section">
-              <span className="side-heading">Assignees</span>
-              <div className="assignee-list">
-                {members.length === 0 && <p className="empty-inline">Add members before assigning cards.</p>}
-                {members.map((member) => (
-                  <label
-                    key={member.id}
-                    className={`assignee-option ${draft.assignees.includes(member.id) ? "checked" : ""}`}
-                    onContextMenu={(event) => onOpenContextMenu(event, [
-                      {
-                        label: draft.assignees.includes(member.id) ? "Unassign member" : "Assign member",
-                        icon: "users",
-                        onSelect: () => updateAssignee(member.id, !draft.assignees.includes(member.id))
-                      },
-                      { label: "Copy member name", icon: "copy", onSelect: () => void onCopyText(member.name) }
-                    ], member.name)}
-                  >
-                    <input
-                      checked={draft.assignees.includes(member.id)}
-                      data-testid={`assignee-${member.id}`}
-                      type="checkbox"
-                      onChange={(event) => updateAssignee(member.id, event.target.checked)}
-                    />
-                    <span className="avatar small" style={{ background: member.color }}>
-                      {initials(member.name)}
-                    </span>
-                    <span className="assignee-name">{member.name}</span>
-                  </label>
-                ))}
-              </div>
-            </div>
-
-            <div className="side-section">
-              <span className="side-heading"><Icon name="tag" /> Labels</span>
-              <div className="label-field">
-                {draft.labels.length > 0 && (
-                  <div className="label-chips">
-                    {draft.labels.map((label) => (
-                      <span
-                        className="label-chip"
-                        key={label}
-                        onContextMenu={(event) => onOpenContextMenu(event, [
-                          { label: "Copy label", icon: "copy", onSelect: () => void onCopyText(label) },
-                          { type: "separator" },
-                          { label: "Remove label", icon: "x", danger: true, onSelect: () => removeLabel(label) }
-                        ], label)}
-                      >
-                        <span className="label-chip-text">{label}</span>
-                        <button
-                          className="label-chip-remove"
-                          type="button"
-                          aria-label={`Remove label ${label}`}
-                          title={`Remove ${label}`}
-                          onClick={() => removeLabel(label)}
-                        >
-                          <Icon name="x" />
-                        </button>
-                      </span>
-                    ))}
-                  </div>
-                )}
-                <input
-                  className="label-input"
-                  data-testid="card-labels-input"
-                  value={labelInput}
-                  onChange={(event) => setLabelInput(event.target.value)}
-                  onKeyDown={(event) => {
-                    if (event.key === "Enter" || event.key === ",") {
-                      event.preventDefault();
-                      commitLabels(labelInput);
-                    } else if (event.key === "Backspace" && labelInput === "" && draft.labels.length > 0) {
-                      removeLabel(draft.labels[draft.labels.length - 1]);
-                    }
-                  }}
-                  onBlur={() => commitLabels(labelInput)}
-                  placeholder="Add label…"
-                />
-              </div>
-            </div>
-
-            <div className="side-section side-activity">
-              <span className="side-heading">Activity</span>
-              {draft.activity.length === 0 && <p className="empty-inline">No activity yet.</p>}
-              {draft.activity.slice(0, 8).map((event) => (
-                <div className="activity-row" key={event.id}>
-                  <time>{new Date(event.createdAt).toLocaleString()}</time>
-                  <span>{event.message}</span>
-                </div>
-              ))}
-            </div>
-          </aside>
+          <CardEditorSidePanel
+            board={board}
+            boards={boards}
+            draft={draft}
+            labelInput={labelInput}
+            members={members}
+            setDraft={setDraft}
+            setLabelInput={setLabelInput}
+            onCommitLabels={commitLabels}
+            onCopyText={onCopyText}
+            onOpenContextMenu={onOpenContextMenu}
+            onRemoveLabel={removeLabel}
+            onUpdateAssignee={updateAssignee}
+          />
         </div>
 
-        <footer>
-          <div className="destructive-actions">
-            <button data-testid="archive-card" disabled={saving} onClick={() => void onArchive(draft)}>
-              <Icon name="archive" /> Archive
-            </button>
-            <button data-testid="delete-card" disabled={saving} onClick={() => void onDelete(draft)}>
-              <Icon name="trash" /> Delete
-            </button>
-          </div>
-          <button
-            className="primary"
-            data-testid="save-card"
-            disabled={saving}
-            onClick={() => {
-              setSaving(true);
-              void onSave(draft)
-                .then(onClose)
-                .catch(() => setSaving(false));
-            }}
-          >
-            {saving ? (
-              <>
-                <Spinner /> Saving…
-              </>
-            ) : (
-              <>
-                <Icon name="save" /> Save
-              </>
-            )}
-          </button>
-        </footer>
+        <CardEditorFooter
+          draft={draft}
+          saving={saving}
+          onArchive={onArchive}
+          onDelete={onDelete}
+          onSaveAndClose={() => {
+            setSaving(true);
+            void onSave(draft)
+              .then(onClose)
+              .catch(() => setSaving(false));
+          }}
+        />
 
-        {fileDragActive && (
-          <div className="card-editor-dropzone" data-testid="card-editor-dropzone" aria-hidden="true">
-            <div className="card-editor-dropzone-inner">
-              <Icon name="paperclip" />
-              <p>Drop files to attach</p>
-            </div>
-          </div>
-        )}
+        <CardEditorDropzone active={fileDragActive} />
       </aside>
 
-      {lightboxAttachment && lightboxIndex !== null && (
-        <AttachmentLightbox
-          attachments={imageAttachments}
-          index={lightboxIndex}
-          workspacePath={workspacePath}
-          cardId={card.id}
-          onClose={() => setLightboxIndex(null)}
-          onNavigate={setLightboxIndex}
-          onOpenExternally={(attachment) => void onOpenAttachment(card.id, attachment)}
-          onRevealInFolder={(attachment) => void onRevealAttachment(card.id, attachment)}
-        />
-      )}
+      <CardEditorLightbox
+        cardId={card.id}
+        imageAttachments={imageAttachments}
+        lightboxAttachment={lightboxAttachment}
+        lightboxIndex={lightboxIndex}
+        workspacePath={workspacePath}
+        onClose={() => setLightboxIndex(null)}
+        onNavigate={setLightboxIndex}
+        onOpenExternally={(attachment) => void onOpenAttachment(card.id, attachment)}
+        onRevealInFolder={(attachment) => void onRevealAttachment(card.id, attachment)}
+      />
     </div>
   );
 }

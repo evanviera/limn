@@ -11,6 +11,8 @@
 @import "./styles/dialogs.css";
 @import "./styles/conflicts.css";
 @import "./styles/card-editor.css";
+@import "./styles/card-editor-attachments.css";
+@import "./styles/card-editor-lightbox.css";
 @import "./styles/card-view.css";
 @import "./styles/comments.css";
 @import "./styles/responsive.css";

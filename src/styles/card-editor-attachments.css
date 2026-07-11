@@ -1,0 +1,287 @@
+/* Sub-task editor blocks, attachments, and inline link rows in the card editor. */
+.subtask-list {
+  display: grid;
+  gap: 0;
+  min-width: 0;
+  border-top: 1px solid var(--border-soft);
+  border-bottom: 1px solid var(--border-soft);
+}
+
+.subtask-block {
+  display: grid;
+  gap: var(--space-2);
+  min-width: 0;
+  padding: var(--space-3) 0;
+  background: transparent;
+  border: 0;
+  border-radius: 0;
+  transition: background var(--transition);
+}
+
+.subtask-block + .subtask-block {
+  border-top: 1px solid var(--border-soft);
+}
+
+.subtask-block:focus-within {
+  background: var(--subtask-focus-bg);
+}
+
+.subtask-block.completed {
+  background: transparent;
+}
+
+.subtask-head {
+  display: grid;
+  grid-template-columns: auto minmax(120px, 1.3fr) minmax(120px, 1fr) auto auto;
+  align-items: center;
+  gap: var(--space-2);
+  min-width: 0;
+}
+
+.subtask-head .subtask-check {
+  flex: none;
+}
+
+.subtask-title {
+  min-width: 0;
+  background: transparent;
+  border-color: transparent;
+  font-weight: var(--weight-medium);
+}
+
+.subtask-title:hover:not(:focus) {
+  background: var(--surface);
+  border-color: var(--border-soft);
+}
+
+.subtask-block.completed .subtask-title {
+  color: var(--text-muted);
+  text-decoration: line-through;
+  text-decoration-color: var(--success-border);
+}
+
+.subtask-expand {
+  flex: none;
+  gap: var(--space-2);
+  min-width: 30px;
+  height: 30px;
+  padding: 0 var(--space-2);
+  color: var(--text-muted);
+  background: transparent;
+  border-color: transparent;
+}
+
+.subtask-expand:hover:not(:disabled) {
+  color: var(--text-strong);
+  background: var(--surface-hover);
+}
+
+.subtask-count {
+  font-size: var(--text-sm);
+  font-variant-numeric: tabular-nums;
+}
+
+.subtask-expand .icon {
+  transition: transform var(--transition);
+}
+
+.subtask-expand[data-expanded="true"] .icon {
+  transform: rotate(180deg);
+}
+
+.subtask-remove,
+.link-open {
+  flex: none;
+  width: 30px;
+  min-width: 30px;
+  padding: 0;
+}
+
+.subtask-remove {
+  color: var(--text-faint);
+  background: transparent;
+  border-color: transparent;
+}
+
+.subtask-remove:hover:not(:disabled) {
+  color: var(--danger);
+  background: var(--danger-soft);
+  border-color: var(--danger-border);
+}
+
+.attachment-list {
+  display: grid;
+  gap: var(--space-1);
+  min-width: 0;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.attachment-row {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  align-items: center;
+  gap: var(--space-2);
+  min-width: 0;
+}
+
+.attachment-open {
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr) auto;
+  align-items: center;
+  justify-content: start;
+  gap: var(--space-2);
+  min-width: 0;
+  text-align: left;
+  color: var(--text-strong);
+  background: transparent;
+  border-color: transparent;
+}
+
+.attachment-open:hover:not(:disabled) {
+  background: var(--surface-hover);
+  border-color: var(--border-soft);
+}
+
+.attachment-open .icon {
+  color: var(--text-muted);
+}
+
+.attachment-image-preview {
+  display: block;
+  width: 52px;
+  height: 38px;
+  object-fit: cover;
+  background: var(--surface);
+  border: 1px solid var(--border-soft);
+  border-radius: var(--radius-md);
+}
+
+.attachment-image-loading {
+  background:
+    linear-gradient(90deg, transparent, var(--surface-hover), transparent),
+    var(--surface);
+  background-size: 200% 100%, auto;
+}
+
+.attachment-image-failed {
+  background: var(--empty-overlay);
+}
+
+.attachment-name {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.attachment-size {
+  flex: none;
+  color: var(--text-muted);
+  font-size: var(--text-sm);
+  font-variant-numeric: tabular-nums;
+}
+
+.link-line {
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr) auto;
+  align-items: center;
+  gap: var(--space-2);
+  min-width: 0;
+  margin-left: 24px;
+  padding-left: var(--space-2);
+  color: var(--text-faint);
+}
+
+.link-line.has-url {
+  color: var(--accent-link);
+}
+
+.link-line > .icon {
+  width: 15px;
+  height: 15px;
+}
+
+.link-input {
+  min-width: 0;
+  height: 30px;
+  color: var(--text);
+  background: transparent;
+  border-color: transparent;
+  font-size: var(--text-sm);
+}
+
+.link-input:hover:not(:focus) {
+  border-color: var(--border-soft);
+}
+
+.link-input:focus {
+  background: var(--input-bg);
+}
+
+.link-open {
+  height: 30px;
+  color: var(--accent-link);
+  border-color: transparent;
+}
+
+.subtask-head .link-line,
+.subtask-item-row .link-line {
+  margin-left: 0;
+  padding-left: 0;
+}
+
+.subtask-items-editor {
+  display: grid;
+  gap: var(--space-2);
+  min-width: 0;
+  margin: var(--space-1) 0 0 30px;
+  padding: var(--space-3) 0 var(--space-1) var(--space-4);
+  border-left: 1px solid var(--border-soft);
+}
+
+.subtask-add-item {
+  justify-self: start;
+  min-height: 28px;
+  padding: 0 var(--space-3);
+  color: var(--text-muted);
+  background: transparent;
+  border-color: transparent;
+}
+
+.subtask-add-item:hover:not(:disabled) {
+  color: var(--text-strong);
+  background: var(--surface);
+  border-color: var(--border-soft);
+}
+
+.subtask-item-list {
+  display: grid;
+  gap: var(--space-2);
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.subtask-item-row {
+  display: grid;
+  grid-template-columns: auto minmax(120px, 1.3fr) minmax(120px, 1fr) auto;
+  align-items: center;
+  gap: var(--space-2);
+  min-width: 0;
+}
+
+.subtask-item-bullet {
+  flex: none;
+  width: 5px;
+  height: 5px;
+  background: var(--text-faint);
+  border-radius: var(--radius-pill);
+}
+
+.subtask-item-row .subtask-item-text {
+  min-width: 0;
+  height: 30px;
+  font-size: var(--text-sm);
+}

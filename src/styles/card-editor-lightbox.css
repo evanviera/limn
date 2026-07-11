@@ -1,0 +1,154 @@
+/* Drag attach overlay and image attachment lightbox. */
+.card-editor-dropzone {
+  position: absolute;
+  inset: 0;
+  z-index: 5;
+  display: grid;
+  place-items: center;
+  padding: var(--space-6);
+  background: var(--overlay-bg);
+  backdrop-filter: blur(2px);
+  animation: fade-in var(--transition) ease;
+  pointer-events: none;
+}
+
+.card-editor-dropzone-inner {
+  display: grid;
+  justify-items: center;
+  gap: var(--space-3);
+  padding: var(--space-6) var(--space-7);
+  color: var(--accent-text);
+  background: var(--accent-soft);
+  border: 2px dashed var(--accent-border);
+  border-radius: var(--radius-lg);
+}
+
+.card-editor-dropzone-inner p {
+  margin: 0;
+  color: var(--text-strong);
+  font-weight: var(--weight-medium);
+}
+
+.card-editor-dropzone-inner .icon {
+  width: 28px;
+  height: 28px;
+  color: var(--accent);
+}
+
+.lightbox-backdrop {
+  position: fixed;
+  inset: 0;
+  z-index: 40;
+  display: grid;
+  grid-template-rows: minmax(0, 1fr);
+  padding: clamp(16px, 4vw, 48px);
+  background: rgba(5, 7, 8, 0.86);
+  backdrop-filter: blur(6px);
+  animation: fade-in var(--transition) ease;
+}
+
+.lightbox {
+  display: grid;
+  grid-template-rows: auto minmax(0, 1fr);
+  gap: var(--space-4);
+  min-height: 0;
+  color: #f4f7fb;
+  outline: none;
+}
+
+.lightbox-toolbar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--space-4);
+}
+
+.lightbox-caption {
+  display: grid;
+  gap: 2px;
+  min-width: 0;
+}
+
+.lightbox-name {
+  overflow: hidden;
+  font-weight: var(--weight-medium);
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.lightbox-meta {
+  color: rgba(244, 247, 251, 0.66);
+  font-size: var(--text-sm);
+  font-variant-numeric: tabular-nums;
+}
+
+.lightbox-actions {
+  display: flex;
+  flex: none;
+  gap: var(--space-2);
+}
+
+.lightbox-button.icon-button {
+  color: #f4f7fb;
+  background: rgba(255, 255, 255, 0.1);
+  border-color: rgba(255, 255, 255, 0.16);
+}
+
+.lightbox-button.icon-button:hover:not(:disabled) {
+  background: rgba(255, 255, 255, 0.2);
+}
+
+.lightbox-stage {
+  position: relative;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  min-height: 0;
+}
+
+.lightbox-image {
+  max-width: 100%;
+  max-height: 100%;
+  width: auto;
+  height: auto;
+  object-fit: contain;
+  border-radius: var(--radius-md);
+  box-shadow: 0 24px 80px rgba(0, 0, 0, 0.5);
+  transition: filter 180ms ease;
+}
+
+.lightbox-image.is-sharpening {
+  filter: blur(6px);
+}
+
+.lightbox-status {
+  color: rgba(244, 247, 251, 0.72);
+  font-size: var(--text-sm);
+}
+
+.lightbox-nav {
+  position: absolute;
+  top: 50%;
+  display: grid;
+  place-items: center;
+  width: 44px;
+  height: 44px;
+  padding: 0;
+  transform: translateY(-50%);
+  color: #f4f7fb;
+  background: rgba(255, 255, 255, 0.1);
+  border: 1px solid rgba(255, 255, 255, 0.16);
+  border-radius: var(--radius-pill);
+}
+
+.lightbox-nav:hover:not(:disabled) {
+  background: rgba(255, 255, 255, 0.22);
+}
+
+.lightbox-nav.prev {
+  left: 0;
+}
+
+.lightbox-nav.next {
+  right: 0;
+}
