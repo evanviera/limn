@@ -6,12 +6,13 @@
 - **Environment:** macOS, Codex in-app browser, standard desktop viewport plus 390 × 844 narrow viewport; local Vite server; Tauri IPC replaced by the product's browser test harness
 - **Scenario:** Plan a small-team Q3 launch, create and advance a task, add notes/checklist/due date/label, add teammates, assign ownership, @mention a teammate, retrieve work through Filter, resize, and return after reload
 - **Recommendation:** **Use after fixes**
+- **Patch status (2026-07-11):** ✅ All three reported bugs fixed in commit `973297d`, each with e2e regression coverage. Build, storage, Rust, and Playwright suites pass. Original findings are preserved below with a **Resolution** note appended to each.
 
 ## Executive Summary
 
 Limn already has a coherent product core. It is fast to understand, pleasant to look at, and unusually good at keeping a task lightweight while still supporting notes, checklists, attachments, ownership, due dates, labels, comments, and activity. I could move from an empty workspace to a credible team task without documentation. Reload persistence passed, and the Filter view is more useful than a typical early-stage board app because it combines search, facets, quick views, check-in counts, saved views, and calendar export.
 
-I would not yet move a real team onto it. The largest issue observed was a false “Merged edits from another device” message after ordinary same-device work. In a local-first tool, sync/conflict feedback is part of the trust contract; false alarms make users question whether work was overwritten. Beyond that defect, the product still feels closer to an excellent shared board than a complete daily productivity home. It needs a clearer first-run collaboration model, a stronger personal action surface, faster capture, and more legible narrow-window behavior.
+I would not yet move a real team onto it. The largest issue observed was a false “Merged edits from another device” message after ordinary same-device work (**since fixed — see Bugs**). In a local-first tool, sync/conflict feedback is part of the trust contract; false alarms make users question whether work was overwritten. Beyond that defect, the product still feels closer to an excellent shared board than a complete daily productivity home. It needs a clearer first-run collaboration model, a stronger personal action surface, faster capture, and more legible narrow-window behavior.
 
 ## Workflow Coverage
 
@@ -32,7 +33,9 @@ Today I would use it as a project board alongside a calendar and notes app, not 
 
 ## Bugs
 
-### Medium: False cross-device merge message after ordinary same-device edits
+> **Status: all fixed (2026-07-11, commit `973297d`).** Each bug below carries a **Resolution** note describing the fix and its regression test.
+
+### Medium: False cross-device merge message after ordinary same-device edits — ✅ Fixed
 
 - **Surface:** Global status banner shown on Filter after card discussion and editing
 - **Steps:**
@@ -45,8 +48,9 @@ Today I would use it as a project board alongside a calendar and notes app, not 
 - **Impact:** Users may believe a teammate or sync provider changed their files, or fear that part of their own edit was lost. That undermines the central local-first trust proposition.
 - **Evidence:** [filter-merge-banner.png](assets/2026-07-11-beta-qa-limn/filter-merge-banner.png)
 - **Reproducibility:** Observed once in one complete scenario; repeat on the native build before release triage.
+- **Resolution:** Fixed. Root cause: while a card was open, immediately-persisted actions (posting a comment, adding an attachment, toggling a checklist step) wrote the card to disk and bumped its version, but the editor's merge base stayed pinned to the version the card was opened at. The next editor Save then compared that stale base against the newer disk copy, the compare-and-swap "conflicted", a clean three-way merge ran, and the outcome was reported as a cross-device merge. `persistCard` now advances the editor's merge base on a clean write to the open card, so same-device saves complete quietly. Genuine external-edit merges still report correctly. Covered by the e2e regression *"an immediately-persisted comment does not make the next editor save look like a cross-device merge"* (`tests/e2e/card-editor.spec.ts`). **Note:** originally observed on the browser test surface; a native two-client pass is still worth doing before release for full confidence.
 
-### Medium: Plain browser dev target looks usable but cannot open a workspace
+### Medium: Plain browser dev target looks usable but cannot open a workspace — ✅ Fixed
 
 - **Surface:** First-run welcome screen at the Vite URL without `?limnE2e`
 - **Steps:** Open `http://127.0.0.1:1420/` and click “Open workspace folder.”
@@ -54,8 +58,9 @@ Today I would use it as a project board alongside a calendar and notes app, not 
 - **Expected:** Show a clear “desktop app required” state, or route browser-based testers to the supported harness target.
 - **Impact:** Beta testers and contributors can mistake a nonfunctional surface for the product and fail at the first action.
 - **Evidence:** Prior-pass notes and `reports/assets/2026-07-11-beta-qa-limn/web-open-workspace-click.png`.
+- **Resolution:** Fixed. A new `hasDesktopShell()` check detects when neither the Tauri shell nor the `?limnE2e` test harness is present. In that case the welcome screen now shows a clear “Limn needs the desktop app to open a workspace folder” state (and points contributors to the `?limnE2e` harness) instead of a non-functional Open button; `openWorkspace` also guards the IPC call so it can never throw into the void. Covered by the e2e regression *"a plain browser tab (no desktop shell) explains it needs the desktop app"* (`tests/e2e/board.spec.ts`).
 
-### Low: Empty card submit remains enabled
+### Low: Empty card submit remains enabled — ✅ Fixed
 
 - **Surface:** Add card dialog
 - **Steps:** Open Add card, leave the title empty, and submit.
@@ -63,6 +68,7 @@ Today I would use it as a project board alongside a calendar and notes app, not 
 - **Expected:** Disable submission until a non-empty title exists, or focus the field and validate before the attempted submit.
 - **Impact:** Recovery is safe and clear, but the interface invites a predictable failed action.
 - **Evidence:** Prior pass observation.
+- **Resolution:** Fixed. The shared text dialog's submit button is now disabled until a non-whitespace title exists, removing the failed-submit round-trip. This applies to every text dialog (all require a non-empty value), and existing validation (e.g. duplicate-name checks) still runs on submit. Covered by the e2e regression *"the add-card dialog blocks submission until a title is typed"* (`tests/e2e/board.spec.ts`).
 
 ## Usability Notes and Opinions
 
