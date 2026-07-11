@@ -78,8 +78,9 @@ import { SettingsView } from "./components/SettingsView";
 import { WindowsTitlebar } from "./components/WindowsTitlebar";
 import { WorkspaceTabs } from "./components/WorkspaceTabs";
 import { WelcomeScreen, WorkspaceBanners, WorkspaceSidebar } from "./components/WorkspaceChrome.js";
-import { LIST_WIDTH_MODE_STORAGE_KEY, LIST_WIDTH_STORAGE_KEY, THEME_STORAGE_KEY } from "./lib/constants";
+import { LIST_WIDTH_MODE_STORAGE_KEY, LIST_WIDTH_STORAGE_KEY, MAX_SIDEBAR_WIDTH, MIN_SIDEBAR_WIDTH, THEME_STORAGE_KEY } from "./lib/constants";
 import type { ListWidthMode, SlackNotificationKey, ThemeMode } from "./lib/constants";
+import { useResizableSidebar } from "./lib/useResizableSidebar";
 import { buildCalendar, dueReminderCount, type CalendarEntry } from "./lib/dueDate";
 import { EMPTY_FILTER } from "./lib/filter";
 import { listNameTriggersMoveNotification } from "./lib/notifications";
@@ -178,6 +179,7 @@ export default function App() {
   // the synced workspace) so each machine keeps its own layout.
   const [listWidth, setListWidth] = useState<number>(() => readStoredListWidth());
   const [listWidthMode, setListWidthMode] = useState<ListWidthMode>(() => readStoredListWidthMode());
+  const sidebar = useResizableSidebar();
   const [contextMenu, setContextMenu] = useState<ContextMenuState | null>(null);
   // Preserved conflict artifacts awaiting in-app review, and whether the review
   // surface is open. Refreshed on every workspace load/reload.
@@ -2399,7 +2401,10 @@ export default function App() {
         onOpen={() => void openWorkspace()}
         onReorder={reorderWorkspace}
       />
-      <div className="app-shell">
+      <div
+        className={`app-shell${sidebar.resizing ? " resizing" : ""}`}
+        style={{ "--sidebar-width": `${sidebar.width}px` } as CSSProperties}
+      >
         <WorkspaceSidebar
           activeBoardId={activeBoard?.id ?? ""}
           activeMember={activeMember}
@@ -2424,6 +2429,24 @@ export default function App() {
           onToggleTheme={() => setThemeMode((current) => (current === "dark" ? "light" : "dark"))}
           onOpenDueReminderFilter={openDueReminderFilter}
           onSetView={setView}
+        />
+
+        <div
+          className="sidebar-resizer"
+          role="separator"
+          aria-orientation="vertical"
+          aria-label="Resize sidebar"
+          aria-valuenow={sidebar.width}
+          aria-valuemin={MIN_SIDEBAR_WIDTH}
+          aria-valuemax={MAX_SIDEBAR_WIDTH}
+          tabIndex={0}
+          title="Drag to resize · double-click to reset"
+          data-testid="sidebar-resizer"
+          onPointerDown={sidebar.onPointerDown}
+          onPointerMove={sidebar.onPointerMove}
+          onPointerUp={sidebar.onPointerUp}
+          onKeyDown={sidebar.onKeyDown}
+          onDoubleClick={sidebar.onDoubleClick}
         />
 
         <main className="workspace">

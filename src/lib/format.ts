@@ -1,10 +1,14 @@
 import type { Board } from "../types";
 import {
   DEFAULT_LIST_WIDTH,
+  DEFAULT_SIDEBAR_WIDTH,
   LIST_WIDTH_MODE_STORAGE_KEY,
   LIST_WIDTH_STORAGE_KEY,
   MAX_LIST_WIDTH,
+  MAX_SIDEBAR_WIDTH,
   MIN_LIST_WIDTH,
+  MIN_SIDEBAR_WIDTH,
+  SIDEBAR_WIDTH_STORAGE_KEY,
   THEME_STORAGE_KEY,
   type ListWidthMode,
   type ThemeMode
@@ -43,6 +47,24 @@ export function readStoredListWidthMode(): ListWidthMode {
     localStorage.removeItem(LIST_WIDTH_MODE_STORAGE_KEY);
   }
   return localStorage.getItem(LIST_WIDTH_MODE_STORAGE_KEY) === "flexible" ? "flexible" : "fixed";
+}
+
+// Clamp a sidebar-width value to the supported range, falling back to the
+// default for anything non-numeric so a corrupt localStorage entry can't break
+// the layout.
+export function clampSidebarWidth(value: number): number {
+  if (!Number.isFinite(value)) {
+    return DEFAULT_SIDEBAR_WIDTH;
+  }
+  return Math.min(MAX_SIDEBAR_WIDTH, Math.max(MIN_SIDEBAR_WIDTH, Math.round(value)));
+}
+
+export function readStoredSidebarWidth(): number {
+  if (isE2eReset()) {
+    localStorage.removeItem(SIDEBAR_WIDTH_STORAGE_KEY);
+  }
+  const raw = localStorage.getItem(SIDEBAR_WIDTH_STORAGE_KEY);
+  return raw === null ? DEFAULT_SIDEBAR_WIDTH : clampSidebarWidth(Number(raw));
 }
 
 // Extract a clean message for user-facing error banners so we don't surface the

@@ -13,6 +13,13 @@ export const DEFAULT_LIST_WIDTH = 320;
 export const MIN_LIST_WIDTH = 200;
 export const MAX_LIST_WIDTH = 640;
 
+// The boards sidebar width is likewise per-computer, kept in localStorage so the
+// panel holds its size across sessions and workspaces.
+export const SIDEBAR_WIDTH_STORAGE_KEY = "limn-sidebar-width";
+export const DEFAULT_SIDEBAR_WIDTH = 264;
+export const MIN_SIDEBAR_WIDTH = 200;
+export const MAX_SIDEBAR_WIDTH = 480;
+
 export type ThemeMode = "dark" | "light";
 export type ListWidthMode = "fixed" | "flexible";
 export type SlackNotificationKey = keyof WorkspaceSettings["slackNotifications"];

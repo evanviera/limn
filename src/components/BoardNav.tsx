@@ -1,4 +1,4 @@
-import { useRef, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import type { MouseEvent as ReactMouseEvent, PointerEvent as ReactPointerEvent } from "react";
 import { Icon } from "./icons";
 import { countLabel } from "../lib/format";
@@ -66,6 +66,17 @@ export function BoardNav({
   const suppressClickRef = useRef(false);
   const [draggingId, setDraggingId] = useState<string | null>(null);
   const [dropTarget, setDropTarget] = useState<DropTarget | null>(null);
+
+  // While a board is in flight, flag the body so the whole window shows a
+  // grabbing cursor and suppresses text selection. Cleared on drop/cancel and on
+  // unmount so the class can never leak past a drag.
+  useEffect(() => {
+    if (!draggingId) {
+      return undefined;
+    }
+    document.body.classList.add("is-board-dragging");
+    return () => document.body.classList.remove("is-board-dragging");
+  }, [draggingId]);
 
   // Resolve the pointer to a target category (the section under it) and an
   // insertion index among that section's boards, excluding the dragged one. The

@@ -129,13 +129,60 @@
 }
 
 .app-shell {
+  position: relative;
   display: grid;
-  grid-template-columns: clamp(248px, 20vw, 280px) minmax(0, 1fr);
+  grid-template-columns: var(--sidebar-width, 264px) minmax(0, 1fr);
   flex: 1 1 auto;
   width: 100%;
   min-height: 0;
   overflow: hidden;
   background: var(--app-bg);
+}
+
+/* The draggable divider sits on top of the sidebar's right border. It's a thin
+   strip with a wider invisible hit area so it's easy to grab. */
+.sidebar-resizer {
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  left: var(--sidebar-width, 264px);
+  z-index: 5;
+  width: 10px;
+  transform: translateX(-50%);
+  cursor: col-resize;
+  touch-action: none;
+}
+
+.sidebar-resizer::after {
+  content: "";
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  left: 50%;
+  width: 2px;
+  transform: translateX(-50%);
+  background: var(--accent);
+  opacity: 0;
+  transition: opacity 120ms ease;
+}
+
+.sidebar-resizer:hover::after,
+.sidebar-resizer:focus-visible::after,
+.app-shell.resizing .sidebar-resizer::after {
+  opacity: 1;
+}
+
+.sidebar-resizer:focus-visible {
+  outline: none;
+}
+
+/* While actively dragging the divider, freeze the cursor and kill text
+   selection window-wide, mirroring the card/list drag behavior. */
+.app-shell.resizing,
+.app-shell.resizing * {
+  cursor: col-resize !important;
+  user-select: none !important;
+  -webkit-user-select: none !important;
 }
 
 /* The tab strip across the top of the window; each open workspace is a tab. */
@@ -417,8 +464,20 @@
   padding-right: var(--space-3);
 }
 
+/* The board being dragged fades and lifts so it clearly reads as "picked up". */
 .board-nav-item.dragging {
   opacity: 0.5;
+  background: var(--accent-soft);
+  box-shadow: inset 0 0 0 1px var(--accent-border);
+}
+
+/* While a board is in flight, the whole window shows a grabbing cursor and stops
+   selecting text, mirroring the card/list drag behavior. */
+body.is-board-dragging,
+body.is-board-dragging * {
+  cursor: grabbing !important;
+  user-select: none !important;
+  -webkit-user-select: none !important;
 }
 
 /* Horizontal insertion marker shown above/below the board the dragged board
@@ -433,23 +492,25 @@
 .board-nav-item.drop-after::after {
   content: "";
   position: absolute;
-  left: 4px;
-  right: 4px;
-  height: 2px;
-  border-radius: 1px;
+  left: 2px;
+  right: 2px;
+  height: 3px;
+  border-radius: var(--radius-pill);
   background: var(--accent);
+  box-shadow: 0 0 0 1px var(--accent-border);
 }
 
 .board-nav-item.drop-before::before {
-  top: -2px;
+  top: -3px;
 }
 
 .board-nav-item.drop-after::after {
-  bottom: -2px;
+  bottom: -3px;
 }
 
 .board-group-empty.drop-into {
-  box-shadow: inset 0 0 0 1px var(--accent);
+  box-shadow: inset 0 0 0 2px var(--accent);
+  background: var(--accent-soft);
   border-radius: var(--radius-sm);
 }
 

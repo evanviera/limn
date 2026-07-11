@@ -312,6 +312,78 @@ test.describe("smoke", () => {
     }).toBeGreaterThan(0);
   });
 
+  test("dragging a board in the sidebar shows drop feedback", async ({ page }) => {
+    await openApp(page);
+    await openWorkspace(page);
+
+    async function createBoard(name: string) {
+      await page.getByTestId("create-board").click();
+      await page.getByTestId("text-dialog-input").fill(name);
+      await page.getByTestId("text-dialog-submit").click();
+      await expect(page.locator(".board-nav-item", { hasText: name })).toBeVisible();
+    }
+
+    await createBoard("Alpha");
+    await createBoard("Beta");
+
+    const alpha = page.locator(".board-nav-item", { hasText: "Alpha" });
+    const beta = page.locator(".board-nav-item", { hasText: "Beta" });
+    const alphaBox = await alpha.boundingBox();
+    const betaBox = await beta.boundingBox();
+    if (!alphaBox || !betaBox) {
+      throw new Error("board bounding boxes unavailable");
+    }
+
+    // Press Alpha and drag onto Beta. Mid-drag the UI should show the picked-up
+    // board, exactly one insertion line, and the window-wide grabbing cursor.
+    await page.mouse.move(alphaBox.x + alphaBox.width / 2, alphaBox.y + alphaBox.height / 2);
+    await page.mouse.down();
+    await page.mouse.move(betaBox.x + betaBox.width / 2, betaBox.y + betaBox.height - 2);
+
+    await expect(page.locator(".board-nav-item.dragging")).toHaveCount(1);
+    await expect(page.locator(".board-nav-item.drop-before, .board-nav-item.drop-after")).toHaveCount(1);
+    await expect(page.locator("body.is-board-dragging")).toHaveCount(1);
+
+    await page.mouse.up();
+
+    // All drag feedback clears once the pointer is released.
+    await expect(page.locator(".board-nav-item.dragging")).toHaveCount(0);
+    await expect(page.locator("body.is-board-dragging")).toHaveCount(0);
+  });
+
+  test("the boards sidebar can be resized and the width persists", async ({ page }) => {
+    await openApp(page);
+    await openWorkspace(page);
+
+    const shell = page.locator(".app-shell");
+    const resizer = page.getByTestId("sidebar-resizer");
+
+    const sidebarWidth = () =>
+      shell.evaluate((element) =>
+        Number(getComputedStyle(element).getPropertyValue("--sidebar-width").replace("px", "").trim())
+      );
+
+    const initial = await sidebarWidth();
+    const box = await resizer.boundingBox();
+    if (!box) {
+      throw new Error("resizer bounding box unavailable");
+    }
+
+    // Drag the divider 80px to the right to widen the sidebar.
+    await page.mouse.move(box.x + box.width / 2, box.y + box.height / 2);
+    await page.mouse.down();
+    await page.mouse.move(box.x + box.width / 2 + 80, box.y + box.height / 2);
+    await page.mouse.up();
+
+    await expect.poll(sidebarWidth).toBeGreaterThan(initial + 60);
+    const resized = await sidebarWidth();
+
+    // The width is per-computer: it survives reopening without a reset.
+    await openApp(page, { reset: false });
+    await openWorkspace(page);
+    await expect.poll(sidebarWidth).toBe(resized);
+  });
+
   test("lists can be reordered by dragging", async ({ page }) => {
     await openApp(page);
     await openWorkspace(page);
