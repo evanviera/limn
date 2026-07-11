@@ -319,6 +319,11 @@ body.is-card-dragging .column:hover {
   background: var(--surface-hover);
   border-color: var(--accent-border);
   box-shadow: var(--drag-shadow);
+  /* The preview is repositioned via `transform` on every pointer move. The base
+     .task-card rule transitions `transform`, which would ease each move over
+     140ms and make the ghost lag/jitter behind the cursor (very visible on a
+     trackpad). Snap to the pointer instead. */
+  transition: none;
 }
 
 body.is-card-dragging,
