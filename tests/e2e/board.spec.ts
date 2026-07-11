@@ -266,6 +266,49 @@ test.describe("smoke", () => {
     }).toBeGreaterThan(0);
   });
 
+  test("dragging a card over an empty list keeps the placeholder as a stable drop target", async ({ page }) => {
+    await openApp(page);
+    await openWorkspace(page);
+
+    await page.getByTestId("create-board").click();
+    await page.getByTestId("text-dialog-input").fill("Flow Board");
+    await page.getByTestId("text-dialog-submit").click();
+
+    // Seed a single card in To Do; In Progress stays empty.
+    await page.getByTestId("add-card-todo").click();
+    await page.getByTestId("text-dialog-input").fill("Alpha");
+    await page.getByTestId("text-dialog-submit").click();
+    await expect(page.getByTestId("card-title-input")).toBeVisible();
+    await page.keyboard.press("Escape");
+    await expect(page.getByTestId("card-title-input")).toBeHidden();
+
+    const emptyPlaceholder = page.getByTestId("list-in-progress").locator(".empty-list");
+    await expect(emptyPlaceholder).toHaveCount(1);
+
+    const alpha = page.getByTestId("list-todo").locator(".task-card").first();
+    const alphaBox = await alpha.boundingBox();
+    const targetBox = await page.getByTestId("list-in-progress").boundingBox();
+    if (!alphaBox || !targetBox) {
+      throw new Error("bounding boxes unavailable");
+    }
+
+    await page.mouse.move(alphaBox.x + alphaBox.width / 2, alphaBox.y + alphaBox.height / 2);
+    await page.mouse.down();
+    await page.mouse.move(alphaBox.x + alphaBox.width / 2, alphaBox.y + alphaBox.height / 2 + 20);
+    await page.mouse.move(targetBox.x + targetBox.width / 2, targetBox.y + targetBox.height / 2);
+
+    // The placeholder must stay mounted (never swapped for the 2px indicator) so
+    // the empty column keeps a constant height and the drop target does not
+    // flicker under the pointer. It highlights instead of collapsing.
+    await expect(emptyPlaceholder).toHaveCount(1);
+    await expect(emptyPlaceholder).toHaveClass(/is-drop-target/);
+
+    await page.mouse.up();
+
+    await expect.poll(async () => page.getByTestId("list-in-progress").locator(".task-card h3").allTextContents()).toEqual(["Alpha"]);
+    await expect(page.getByTestId("list-todo").locator(".task-card")).toHaveCount(0);
+  });
+
   test("boards can be reordered by dragging in the sidebar", async ({ page }) => {
     await openApp(page);
     await openWorkspace(page);

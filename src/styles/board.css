@@ -477,6 +477,16 @@ body.is-list-dragging * {
   border: 1px dashed var(--border-soft);
   border-radius: var(--radius-lg);
   font-size: var(--text-sm);
+  transition: background var(--transition), border-color var(--transition), color var(--transition);
+}
+
+/* The empty-list placeholder doubles as the drop target so an empty column keeps
+   a constant height while a card is dragged over it (see BoardView). */
+.empty-list.is-drop-target {
+  color: var(--text-strong);
+  background: var(--accent-soft);
+  border-style: solid;
+  border-color: var(--accent);
 }
 
 .card-notes-preview {

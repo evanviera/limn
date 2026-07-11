@@ -661,8 +661,21 @@ export function BoardView(props: BoardViewProps) {
                 </button>
               </header>
               <div className="card-stack">
-                {listCards.length === 0 && indicatorAt !== 0 && <p className="empty-list">Drop cards here.</p>}
-                {indicatorAt === 0 && <div className="drop-indicator" data-testid={`drop-indicator-${list.id}`} />}
+                {listCards.length === 0 ? (
+                  // Keep the placeholder mounted for empty lists so the column height stays
+                  // constant while dragging over it. Swapping it for the 2px drop-indicator
+                  // collapses a content-sized empty column out from under the pointer, which
+                  // flips the elementFromPoint hit test off the list and back — a flicker.
+                  // Highlight the placeholder as the drop target instead.
+                  <p
+                    className={`empty-list ${indicatorAt === 0 ? "is-drop-target" : ""}`}
+                    data-testid={indicatorAt === 0 ? `drop-indicator-${list.id}` : undefined}
+                  >
+                    Drop cards here.
+                  </p>
+                ) : (
+                  indicatorAt === 0 && <div className="drop-indicator" data-testid={`drop-indicator-${list.id}`} />
+                )}
                 {listCards.map((card, position) => (
                   <Fragment key={card.id}>
                     <article
