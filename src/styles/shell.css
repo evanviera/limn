@@ -359,10 +359,27 @@
 }
 
 .sidebar button.active {
+  position: relative;
   color: var(--text-strong);
   background: var(--surface-raised);
-  border-color: var(--border-soft);
-  box-shadow: inset 2px 0 0 var(--accent-hover);
+  border-color: transparent;
+}
+
+/* Selected marker: a short, vertically-centered rounded accent bar on the left
+   edge (VS Code / Linear style) instead of a full-height inset stripe that hugs
+   the button's rounded corners. Reads as deliberate, not cheesy. The
+   :not(.drop-before) guard yields ::before back to the board-reorder drop line
+   when the active board is a drop target during a drag. */
+.sidebar button.active:not(.drop-before)::before {
+  content: "";
+  position: absolute;
+  top: 50%;
+  left: 4px;
+  width: 3px;
+  height: 18px;
+  transform: translateY(-50%);
+  background: var(--accent);
+  border-radius: var(--radius-pill);
 }
 
 .nav-badge {

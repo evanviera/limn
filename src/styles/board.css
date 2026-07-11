@@ -286,7 +286,6 @@ body.is-card-dragging .column:hover {
 .task-card:hover {
   background: var(--card-hover-bg);
   box-shadow: var(--card-shadow-hover);
-  transform: translateY(-1px);
 }
 
 .task-card:focus-visible {
@@ -380,6 +379,16 @@ body.is-list-dragging * {
   background: none;
   border: none;
   cursor: pointer;
+}
+
+/* The whole card lifts and opens on hover/click, so the title must not paint its
+   own box. Without this, the global button:hover fill hugs the text (padding is
+   0), producing a dark rectangle flush against the first letter. It stays a
+   clean, box-less open target; the card's own hover is the only affordance. */
+.card-open:hover:not(:disabled) {
+  color: inherit;
+  background: none;
+  border-color: transparent;
 }
 
 .card-open:focus-visible {

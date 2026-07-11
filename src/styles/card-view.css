@@ -208,6 +208,16 @@
   border-color: transparent;
 }
 
+/* These are link-styled buttons, so hover should brighten the text, not paint
+   the global button box tight around it. */
+.card-view-link:hover:not(:disabled),
+.card-view-item-link:hover:not(:disabled) {
+  color: var(--accent-link-hover);
+  background: transparent;
+  border-color: transparent;
+  text-decoration-color: var(--accent-link-hover);
+}
+
 .card-view-step-items {
   grid-column: 1 / -1;
   display: grid;
