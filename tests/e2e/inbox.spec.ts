@@ -48,12 +48,17 @@ test.describe("inbox", () => {
     await expect(page.getByText("You commented")).toHaveCount(0);
     await expect(page.getByText("leaving myself a status note.")).toHaveCount(0);
     await expect(page.getByTestId(/inbox-item-mention:/)).toHaveCount(1);
+    await page.getByTestId("inbox-unread-only").check();
+    await expect(page.getByTestId(/inbox-item-/)).toHaveCount(3);
     await page.getByTestId(/inbox-item-mention:/).click();
     await expect(page.getByRole("heading", { name: "Plan the launch" })).toBeVisible();
     await page.getByRole("button", { name: "Close", exact: true }).click();
 
     await page.getByTestId("inbox-mark-all-read").click();
     await expect(page.getByTestId("inbox-unread-count")).toBeHidden();
+    await expect(page.getByText("No unread messages.")).toBeVisible();
+    await page.getByTestId("inbox-unread-only").uncheck();
+    await expect(page.getByTestId(/inbox-item-/)).toHaveCount(3);
   });
 
   test("without an identity the inbox offers the identity picker", async ({ page }) => {

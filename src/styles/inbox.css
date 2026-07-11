@@ -2,6 +2,9 @@
 .inbox-header { display: flex; align-items: center; justify-content: space-between; max-width: 900px; margin: 0 auto var(--space-6); }
 .inbox-header h1 { margin: 0; }
 .inbox-header .eyebrow { margin-bottom: var(--space-1); }
+.inbox-header-actions { display: flex; align-items: center; gap: var(--space-3); }
+.inbox-unread-filter { display: flex; align-items: center; gap: var(--space-2); color: var(--text-muted); font-size: var(--text-sm); cursor: pointer; }
+.inbox-unread-filter input { margin: 0; }
 .inbox-groups { display: grid; gap: var(--space-6); max-width: 900px; margin: 0 auto; }
 .inbox-group h2 { margin: 0 0 var(--space-2); color: var(--text-muted); font-size: var(--text-sm); }
 .inbox-list { overflow: hidden; border: 1px solid var(--border); border-radius: var(--radius-lg); }

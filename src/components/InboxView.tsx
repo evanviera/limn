@@ -1,3 +1,4 @@
+import { useState } from "react";
 import type { Board, Card } from "../types";
 import type { InboxItem } from "../lib/inbox";
 import { isInboxItemUnread } from "../lib/inbox.js";
@@ -38,6 +39,8 @@ function relativeTime(iso: string, now = new Date()): string {
 }
 
 export function InboxView(props: InboxViewProps) {
+  const [unreadOnly, setUnreadOnly] = useState(false);
+
   if (!props.activeMemberId) {
     return (
       <section className="inbox-view inbox-empty" data-testid="inbox-no-identity">
@@ -47,8 +50,11 @@ export function InboxView(props: InboxViewProps) {
     );
   }
 
+  const visibleItems = unreadOnly
+    ? props.items.filter((item) => isInboxItemUnread(item, props.seenAt))
+    : props.items;
   const groups = new Map<InboxGroup, InboxItem[]>();
-  for (const item of props.items) {
+  for (const item of visibleItems) {
     const group = groupFor(item.createdAt);
     groups.set(group, [...(groups.get(group) ?? []), item]);
   }
@@ -57,9 +63,20 @@ export function InboxView(props: InboxViewProps) {
     <section className="inbox-view" data-testid="inbox-view">
       <header className="inbox-header">
         <div><p className="eyebrow">Awareness</p><h1>Inbox</h1></div>
-        <button data-testid="inbox-mark-all-read" disabled={!props.items.some((item) => isInboxItemUnread(item, props.seenAt))} onClick={props.onMarkAllRead}>Mark all read</button>
+        <div className="inbox-header-actions">
+          <label className="inbox-unread-filter">
+            <input
+              type="checkbox"
+              checked={unreadOnly}
+              data-testid="inbox-unread-only"
+              onChange={(event) => setUnreadOnly(event.target.checked)}
+            />
+            Unread only
+          </label>
+          <button data-testid="inbox-mark-all-read" disabled={!props.items.some((item) => isInboxItemUnread(item, props.seenAt))} onClick={props.onMarkAllRead}>Mark all read</button>
+        </div>
       </header>
-      {props.items.length === 0 ? <p className="inbox-empty">You're all caught up.</p> : (
+      {visibleItems.length === 0 ? <p className="inbox-empty">{unreadOnly && props.items.length > 0 ? "No unread messages." : "You're all caught up."}</p> : (
         <div className="inbox-groups">
           {(["Today", "Yesterday", "Earlier"] as InboxGroup[]).map((group) => groups.has(group) && (
             <section className="inbox-group" key={group}>
