@@ -16,6 +16,23 @@ test.describe("smoke", () => {
     await expect(page.getByTestId("nav-settings")).toBeVisible();
   });
 
+  test("board header actions consistently pair icons with visible labels", async ({ page }) => {
+    await openApp(page);
+    await openWorkspace(page);
+
+    await page.getByTestId("create-board").click();
+    await page.getByTestId("text-dialog-input").fill("Editorial Board");
+    await page.getByTestId("text-dialog-submit").click();
+
+    await expect(page.getByRole("group", { name: "Board management" })).toBeVisible();
+    await expect(page.getByRole("group", { name: "Card display" })).toBeVisible();
+    await expect(page.getByTestId("rename-board")).toContainText("Rename");
+    await expect(page.getByTestId("delete-board")).toContainText("Delete");
+    await expect(page.getByTestId("compact-board-toggle")).toContainText("Compact");
+    await expect(page.getByTestId("compact-completed-toggle")).toContainText("Compact completed");
+    await expect(page.getByTestId("add-list")).toContainText("Add list");
+  });
+
   test("a plain browser tab (no desktop shell) explains it needs the desktop app", async ({ page }) => {
     // Load the app without the E2E harness (and outside Tauri), so no backend can
     // service a folder pick. The welcome screen must say so rather than offer an
@@ -137,6 +154,43 @@ test.describe("smoke", () => {
       const latest = await snapshot(page);
       return JSON.parse(latest.boards[0].content).groupId;
     }).toBe(group.id);
+  });
+
+  test("board categories can be collapsed and expanded", async ({ page }) => {
+    await openApp(page);
+    await openWorkspace(page);
+
+    await page.getByTestId("create-board").click();
+    await page.getByTestId("text-dialog-input").fill("Roadmap");
+    await page.getByTestId("text-dialog-submit").click();
+
+    await page.getByTestId("create-board-category").click();
+    await page.getByTestId("text-dialog-input").fill("Client Work");
+    await page.getByTestId("text-dialog-submit").click();
+
+    const initialState = await snapshot(page);
+    const board = JSON.parse(initialState.boards[0].content) as { id: string };
+    const group = (initialState.settings.boardGroups as Array<{ id: string; name: string }>)[0];
+    const groupHeading = page.getByTestId(`board-group-${group.id}`);
+    const toggle = page.getByTestId(`board-group-collapse-${group.id}`);
+
+    await expect(toggle).toHaveAttribute("aria-expanded", "true");
+    await expect(page.getByText("No boards in this category.")).toBeVisible();
+    await toggle.click();
+    await expect(toggle).toHaveAttribute("aria-expanded", "false");
+    await expect(page.getByText("No boards in this category.")).toBeHidden();
+
+    await toggle.click();
+    await page.getByTestId(`board-nav-${board.id}`).click({ button: "right" });
+    await page.getByTestId("context-menu").getByRole("menuitem", { name: "Move to Client Work" }).click();
+    await expect(groupHeading).toContainText("1 board");
+    await expect(page.getByTestId(`board-nav-${board.id}`)).toBeVisible();
+
+    await toggle.click();
+    await expect(toggle).toHaveAttribute("aria-expanded", "false");
+    await expect(page.getByTestId(`board-nav-${board.id}`)).toBeHidden();
+    await toggle.click();
+    await expect(page.getByTestId(`board-nav-${board.id}`)).toBeVisible();
   });
 
   test("external workspace change bursts reload once and show the latest board", async ({ page }) => {

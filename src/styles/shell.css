@@ -474,14 +474,14 @@
   text-transform: uppercase;
 }
 
-.board-group-heading span:first-child {
+.board-group-heading span:first-of-type {
   overflow: hidden;
   min-width: 0;
   text-overflow: ellipsis;
   white-space: nowrap;
 }
 
-.board-group-heading span:last-child {
+.board-group-heading span:last-of-type {
   flex: 0 0 auto;
   color: var(--text-faint);
   font-weight: var(--weight-medium);

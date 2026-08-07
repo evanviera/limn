@@ -558,30 +558,34 @@ export function BoardView(props: BoardViewProps) {
           <p className="meta-line">{countLabel(props.board.lists.length, "list")} / {countLabel(props.cards.length, "card")}</p>
         </div>
         <div className="header-actions">
-          <button aria-label="Rename board" className="icon-button" data-testid="rename-board" title="Rename board" onClick={() => void props.onRenameBoard(props.board)}>
-            <Icon name="edit" />
-          </button>
-          <button aria-label="Delete board" className="icon-button" data-testid="delete-board" title="Delete board" onClick={() => void props.onDeleteBoard(props.board)}>
-            <Icon name="trash" />
-          </button>
-          <button
-            aria-pressed={compactCards}
-            className={`compact-toggle ${compactCards ? "active" : ""}`}
-            data-testid="compact-board-toggle"
-            title={compactCards ? "Show full cards" : "Show compact cards"}
-            onClick={() => setCompactCards((current) => !current)}
-          >
-            <Icon name={compactCards ? "maximize" : "minus"} /> Compact
-          </button>
-          <button
-            aria-pressed={autoCompactCompletedCards}
-            className={`compact-toggle ${autoCompactCompletedCards ? "active" : ""}`}
-            data-testid="compact-completed-toggle"
-            title={autoCompactCompletedCards ? "Show completed cards in full" : "Automatically compact completed cards"}
-            onClick={() => setAutoCompactCompletedCards((current) => !current)}
-          >
-            <Icon name="check" /> Compact completed
-          </button>
+          <div className="board-header-action-group" role="group" aria-label="Board management">
+            <button aria-label="Rename board" data-testid="rename-board" title="Rename board" onClick={() => void props.onRenameBoard(props.board)}>
+              <Icon name="edit" /> Rename
+            </button>
+            <button aria-label="Delete board" data-testid="delete-board" title="Delete board" onClick={() => void props.onDeleteBoard(props.board)}>
+              <Icon name="trash" /> Delete
+            </button>
+          </div>
+          <div className="board-header-action-group" role="group" aria-label="Card display">
+            <button
+              aria-pressed={compactCards}
+              className={`compact-toggle ${compactCards ? "active" : ""}`}
+              data-testid="compact-board-toggle"
+              title={compactCards ? "Show full cards" : "Show compact cards"}
+              onClick={() => setCompactCards((current) => !current)}
+            >
+              <Icon name={compactCards ? "maximize" : "minus"} /> Compact
+            </button>
+            <button
+              aria-pressed={autoCompactCompletedCards}
+              className={`compact-toggle ${autoCompactCompletedCards ? "active" : ""}`}
+              data-testid="compact-completed-toggle"
+              title={autoCompactCompletedCards ? "Show completed cards in full" : "Automatically compact completed cards"}
+              onClick={() => setAutoCompactCompletedCards((current) => !current)}
+            >
+              <Icon name="check" /> Compact completed
+            </button>
+          </div>
           <button className="primary" data-testid="add-list" onClick={() => void props.onAddList()}>
             <Icon name="plus" /> Add list
           </button>

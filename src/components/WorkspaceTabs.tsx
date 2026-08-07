@@ -150,10 +150,6 @@ export function WorkspaceTabs({ workspaces, activePath, opening, onSelect, onClo
 
   return (
     <div className="workspace-tabs" data-testid="workspace-tabs" role="tablist" ref={stripRef}>
-      <div className="workspace-tabs-brand" aria-label="Limn">
-        <span aria-hidden="true">L</span>
-        <strong>limn</strong>
-      </div>
       {workspaces.map((workspace) => {
         const active = workspace.path === activePath;
         const dragging = workspace.path === draggingPath;

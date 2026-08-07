@@ -66,6 +66,19 @@ export function BoardNav({
   const suppressClickRef = useRef(false);
   const [draggingId, setDraggingId] = useState<string | null>(null);
   const [dropTarget, setDropTarget] = useState<DropTarget | null>(null);
+  const [collapsedGroupIds, setCollapsedGroupIds] = useState<Set<string>>(() => new Set());
+
+  function toggleGroupCollapsed(groupId: string) {
+    setCollapsedGroupIds((current) => {
+      const next = new Set(current);
+      if (next.has(groupId)) {
+        next.delete(groupId);
+      } else {
+        next.add(groupId);
+      }
+      return next;
+    });
+  }
 
   // While a board is in flight, flag the body so the whole window shows a
   // grabbing cursor and suppresses text selection. Cleared on drop/cancel and on
@@ -252,22 +265,41 @@ export function BoardNav({
       {hasGroups &&
         sections.grouped.map(({ group, boards: groupBoards }) => {
           const marker = sectionMarker(group.id, groupBoards);
+          const collapsed = collapsedGroupIds.has(group.id);
+          const isCollapsedDropTarget = collapsed && dropTarget?.groupId === group.id;
           return (
-            <div className="board-group" key={group.id} data-board-section data-group-id={group.id}>
+            <div
+              className={`board-group${collapsed ? " collapsed" : ""}${isCollapsedDropTarget ? " drop-into" : ""}`}
+              key={group.id}
+              data-board-section
+              data-group-id={group.id}
+            >
               <div
                 className="board-group-heading"
                 data-testid={`board-group-${group.id}`}
                 title="Category options"
                 onContextMenu={(event) => onGroupContextMenu(event, group)}
               >
+                <button
+                  type="button"
+                  className="board-group-collapse"
+                  aria-expanded={!collapsed}
+                  aria-label={`${collapsed ? "Expand" : "Collapse"} ${group.name}`}
+                  data-testid={`board-group-collapse-${group.id}`}
+                  title={`${collapsed ? "Expand" : "Collapse"} category`}
+                  onClick={() => toggleGroupCollapsed(group.id)}
+                >
+                  <Icon name={collapsed ? "chevron-right" : "chevron-down"} />
+                </button>
                 <span>{group.name}</span>
                 <span>{countLabel(groupBoards.length, "board")}</span>
               </div>
-              {groupBoards.length === 0 ? (
-                <p className={`empty-small board-group-empty${marker.intoEmpty ? " drop-into" : ""}`}>No boards in this category.</p>
-              ) : (
-                groupBoards.map((board) => renderBoard(board, marker))
-              )}
+              {!collapsed &&
+                (groupBoards.length === 0 ? (
+                  <p className={`empty-small board-group-empty${marker.intoEmpty ? " drop-into" : ""}`}>No boards in this category.</p>
+                ) : (
+                  groupBoards.map((board) => renderBoard(board, marker))
+                ))}
             </div>
           );
         })}
