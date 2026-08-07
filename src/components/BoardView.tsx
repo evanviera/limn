@@ -11,6 +11,7 @@ import type { ContextMenuItem, OpenContextMenu } from "./contextMenu";
 
 export interface BoardViewProps {
   board: Board;
+  allCards: Card[];
   cards: Card[];
   members: Member[];
   workspacePath: string | null;
@@ -21,6 +22,8 @@ export interface BoardViewProps {
   onDeleteBoard: (board: Board) => Promise<void>;
   onRenameList: (list: BoardList) => Promise<void>;
   onDeleteList: (list: BoardList) => Promise<void>;
+  onArchiveListCards: (list: BoardList) => Promise<void>;
+  onDeleteListCards: (list: BoardList) => Promise<void>;
   onToggleListCollapsed: (list: BoardList) => Promise<void>;
   onMoveList: (listId: string, index: number) => Promise<void>;
   onAddCard: (listId: string) => Promise<void>;
@@ -468,6 +471,9 @@ export function BoardView(props: BoardViewProps) {
   }
 
   function listContextItems(list: BoardList): ContextMenuItem[] {
+    const activeCardCount = props.cards.filter((card) => card.listId === list.id).length;
+    const allCardCount = props.allCards.filter((card) => card.listId === list.id).length;
+
     return [
       { label: "Add card", icon: "plus", onSelect: () => void props.onAddCard(list.id) },
       {
@@ -477,6 +483,20 @@ export function BoardView(props: BoardViewProps) {
       },
       { label: "Rename list", icon: "edit", onSelect: () => void props.onRenameList(list) },
       { label: "Copy list name", icon: "copy", onSelect: () => void props.onCopyText(list.name) },
+      { type: "separator" },
+      {
+        label: "Archive all cards",
+        icon: "archive",
+        disabled: activeCardCount === 0,
+        onSelect: () => void props.onArchiveListCards(list)
+      },
+      {
+        label: "Delete all cards",
+        icon: "trash",
+        danger: true,
+        disabled: allCardCount === 0,
+        onSelect: () => void props.onDeleteListCards(list)
+      },
       { type: "separator" },
       { label: "Delete list", icon: "trash", danger: true, onSelect: () => void props.onDeleteList(list) }
     ];

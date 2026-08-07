@@ -279,6 +279,10 @@ export default function App() {
     () => cards.filter((card) => !card.archived && card.boardId === activeBoard?.id),
     [activeBoard?.id, cards]
   );
+  const activeBoardCards = useMemo(
+    () => cards.filter((card) => card.boardId === activeBoard?.id),
+    [activeBoard?.id, cards]
+  );
   const boardGroups = settings?.boardGroups ?? [];
   const boardNavSections = useMemo(() => {
     const validGroupIds = new Set(boardGroups.map((group) => group.id));
@@ -1495,6 +1499,68 @@ export default function App() {
     });
   }
 
+  async function archiveListCards(list: BoardList) {
+    if (!activeBoard) {
+      return;
+    }
+    const listCards = cards.filter(
+      (card) => card.boardId === activeBoard.id && card.listId === list.id && !card.archived
+    );
+    if (listCards.length === 0) {
+      return;
+    }
+
+    openConfirmDialog({
+      title: "Archive all cards",
+      message: `Archive ${countLabel(listCards.length, "card")} in "${list.name}"? Archived cards remain available from Filter.`,
+      confirmLabel: "Archive all cards",
+      onConfirm: async () => {
+        const archivedCards = listCards.map((card) =>
+          addActivity({ ...card, archived: true }, "archived", `Archived with all cards in ${list.name}`)
+        );
+        await Promise.all(archivedCards.map((card, index) => persistCard(card, listCards[index])));
+        const archivedIds = new Set(listCards.map((card) => card.id));
+        if (selectedCardIdRef.current && archivedIds.has(selectedCardIdRef.current)) {
+          setSelectedCardId(null);
+        }
+      }
+    });
+  }
+
+  async function deleteListCards(list: BoardList) {
+    if (!activeBoard || !workspacePath) {
+      return;
+    }
+    // Archived cards retain their list id, so deleting every card in a list also
+    // removes cards that were archived earlier and are currently hidden here.
+    const listCards = cards.filter((card) => card.boardId === activeBoard.id && card.listId === list.id);
+    if (listCards.length === 0) {
+      return;
+    }
+
+    openConfirmDialog({
+      title: "Delete all cards",
+      message: `Permanently delete ${countLabel(listCards.length, "card")} in "${list.name}"? This removes their card files and attachments from disk.`,
+      confirmLabel: "Delete all cards",
+      destructive: true,
+      onConfirm: async () => {
+        const outcomes = await Promise.all(listCards.map((card) => deleteCard(workspacePath, card)));
+        const conflict = outcomes.find((outcome) => outcome.status === "conflict");
+        if (conflict) {
+          // Some independent deletes may already have succeeded. Reload so the
+          // board reflects exactly which cards remain after the refused delete.
+          await handleSaveOutcome(conflict, "card batch", "delete");
+          return;
+        }
+        const deletedIds = new Set(listCards.map((card) => card.id));
+        setCards((current) => current.filter((card) => !deletedIds.has(card.id)));
+        if (selectedCardIdRef.current && deletedIds.has(selectedCardIdRef.current)) {
+          setSelectedCardId(null);
+        }
+      }
+    });
+  }
+
   async function moveList(listId: string, index: number) {
     if (!activeBoard) {
       return;
@@ -2553,6 +2619,7 @@ export default function App() {
         {view === "board" && activeBoard && (
           <BoardView
             board={activeBoard}
+            allCards={activeBoardCards}
             cards={visibleCards}
             members={members}
             workspacePath={workspacePath}
@@ -2562,6 +2629,8 @@ export default function App() {
             onDeleteBoard={removeBoard}
             onRenameList={renameList}
             onDeleteList={deleteList}
+            onArchiveListCards={archiveListCards}
+            onDeleteListCards={deleteListCards}
             onToggleListCollapsed={toggleListCollapsed}
             onMoveList={moveList}
             onAddCard={addCard}

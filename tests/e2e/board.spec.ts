@@ -294,6 +294,54 @@ test.describe("smoke", () => {
     }).toBeGreaterThan(0);
   });
 
+  test("a list context menu can archive and permanently delete all of its cards", async ({ page }) => {
+    await openApp(page);
+    await openWorkspace(page);
+
+    await page.getByTestId("create-board").click();
+    await page.getByTestId("text-dialog-input").fill("Batch Board");
+    await page.getByTestId("text-dialog-submit").click();
+
+    async function createCard(title: string) {
+      await page.getByTestId("add-card-todo").click();
+      await page.getByTestId("text-dialog-input").fill(title);
+      await page.getByTestId("text-dialog-submit").click();
+      await expect(page.getByTestId("card-title-input")).toBeVisible();
+      await page.keyboard.press("Escape");
+      await expect(page.getByTestId("card-title-input")).toBeHidden();
+    }
+
+    await createCard("Alpha");
+    await createCard("Beta");
+
+    const todoList = page.getByTestId("list-todo");
+    const todoTitle = page.getByTestId("list-title-todo");
+    await todoTitle.click({ button: "right" });
+    const menu = page.getByTestId("context-menu");
+    await expect(menu.getByRole("menuitem", { name: "Archive all cards" })).toBeEnabled();
+    await menu.getByRole("menuitem", { name: "Archive all cards" }).click();
+    await expect(page.getByRole("dialog", { name: "Archive all cards" })).toContainText('Archive 2 cards in "To Do"?');
+    await page.getByTestId("confirm-dialog-submit").click();
+
+    await expect(todoList.locator(".task-card")).toHaveCount(0);
+    await expect.poll(async () => {
+      const state = await snapshot(page);
+      return state.cards.filter((file) => /^archived:\s*true$/m.test(file.content)).length;
+    }).toBe(2);
+
+    // Delete-all still includes the hidden archived cards assigned to the list.
+    await todoTitle.click({ button: "right" });
+    await expect(menu.getByRole("menuitem", { name: "Archive all cards" })).toBeDisabled();
+    await expect(menu.getByRole("menuitem", { name: "Delete all cards" })).toBeEnabled();
+    await menu.getByRole("menuitem", { name: "Delete all cards" }).click();
+    await expect(page.getByRole("dialog", { name: "Delete all cards" })).toContainText('Permanently delete 2 cards in "To Do"?');
+    await page.getByTestId("confirm-dialog-submit").click();
+
+    await expect.poll(async () => (await snapshot(page)).cards.length).toBe(0);
+    await todoTitle.click({ button: "right" });
+    await expect(menu.getByRole("menuitem", { name: "Delete all cards" })).toBeDisabled();
+  });
+
   test("dragging a card over an empty list keeps the placeholder as a stable drop target", async ({ page }) => {
     await openApp(page);
     await openWorkspace(page);
