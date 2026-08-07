@@ -253,6 +253,20 @@ test.describe("smoke", () => {
     await expect(card.locator(".card-subtasks")).toContainText("Checklist");
     await expect(card.locator(".card-notes-preview")).toContainText("This note should collapse");
 
+    // Selective mode reacts to completion state without shrinking active cards.
+    await page.getByTestId("compact-completed-toggle").click();
+    await expect(page.getByTestId("compact-completed-toggle")).toHaveAttribute("aria-pressed", "true");
+    await expect(card).not.toHaveClass(/compact/);
+    await card.getByTestId(/card-open-/).click();
+    await page.getByTestId("card-view-complete").click();
+    await page.getByRole("button", { name: "Close", exact: true }).click();
+    await expect(card).toHaveClass(/compact/);
+    await expect(card.locator(".label-row")).toHaveCount(0);
+
+    await page.getByTestId("compact-completed-toggle").click();
+    await expect(card).not.toHaveClass(/compact/);
+    await expect(card.locator(".label-row")).toContainText("Planning");
+
     await page.getByTestId("compact-board-toggle").click();
     await expect(page.getByTestId("compact-board-toggle")).toHaveAttribute("aria-pressed", "true");
     await expect(card).toHaveClass(/compact/);

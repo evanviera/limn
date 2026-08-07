@@ -82,6 +82,7 @@ export function BoardView(props: BoardViewProps) {
   const [draggingListId, setDraggingListId] = useState<string | null>(null);
   const [listDropTarget, setListDropTarget] = useState<{ index: number } | null>(null);
   const [compactCards, setCompactCards] = useState(false);
+  const [autoCompactCompletedCards, setAutoCompactCompletedCards] = useState(false);
   const mouseDragCleanupRef = useRef<(() => void) | null>(null);
   const mouseListDragCleanupRef = useRef<(() => void) | null>(null);
   const suppressCardClickRef = useRef<string | null>(null);
@@ -544,6 +545,10 @@ export function BoardView(props: BoardViewProps) {
         : listDropTarget.index
       : -1;
 
+  function cardIsCompact(card: Card): boolean {
+    return compactCards || (autoCompactCompletedCards && card.completed);
+  }
+
   return (
     <section className="board-view" onContextMenu={(event) => props.onOpenContextMenu(event, boardContextItems(), props.board.name)}>
       <header className="content-header">
@@ -567,6 +572,15 @@ export function BoardView(props: BoardViewProps) {
             onClick={() => setCompactCards((current) => !current)}
           >
             <Icon name={compactCards ? "maximize" : "minus"} /> Compact
+          </button>
+          <button
+            aria-pressed={autoCompactCompletedCards}
+            className={`compact-toggle ${autoCompactCompletedCards ? "active" : ""}`}
+            data-testid="compact-completed-toggle"
+            title={autoCompactCompletedCards ? "Show completed cards in full" : "Automatically compact completed cards"}
+            onClick={() => setAutoCompactCompletedCards((current) => !current)}
+          >
+            <Icon name="check" /> Compact completed
           </button>
           <button className="primary" data-testid="add-list" onClick={() => void props.onAddList()}>
             <Icon name="plus" /> Add list
@@ -704,35 +718,38 @@ export function BoardView(props: BoardViewProps) {
                 ) : (
                   indicatorAt === 0 && <div className="drop-indicator" data-testid={`drop-indicator-${list.id}`} />
                 )}
-                {listCards.map((card, position) => (
-                  <Fragment key={card.id}>
-                    <article
-                      aria-label={`${card.title}${card.completed ? " (completed)" : ""}`}
-                      className={`task-card ${compactCards ? "compact" : ""} ${card.completed ? "completed" : ""} ${dragPreview?.cardId === card.id ? "drag-source" : ""} ${props.dropTargetCardId === card.id ? "drop-target" : ""}`}
-                      data-card-id={card.id}
-                      data-testid={`card-${card.id}`}
-                      onClick={() => openCard(card.id)}
-                      onContextMenu={(event) => props.onOpenContextMenu(event, cardContextItems(card), card.title)}
-                      onPointerCancel={cancelPointerDrag}
-                      onPointerDown={(event) => beginPointerDrag(event, card.id)}
-                      onPointerMove={updatePointerDrag}
-                      onPointerUp={finishPointerDrag}
-                      onMouseDown={(event) => beginMouseDrag(event, card.id)}
-                    >
-                      <TaskCardBody
-                        card={card}
-                        compact={compactCards}
-                        members={props.members}
-                        workspacePath={props.workspacePath}
-                        onOpen={openCard}
-                        onToggleSubtask={props.onToggleSubtask}
-                        onOpenContextMenu={props.onOpenContextMenu}
-                        onCopyText={props.onCopyText}
-                      />
-                    </article>
-                    {indicatorAt === position + 1 && <div className="drop-indicator" data-testid={`drop-indicator-${list.id}`} />}
-                  </Fragment>
-                ))}
+                {listCards.map((card, position) => {
+                  const isCompact = cardIsCompact(card);
+                  return (
+                    <Fragment key={card.id}>
+                      <article
+                        aria-label={`${card.title}${card.completed ? " (completed)" : ""}`}
+                        className={`task-card ${isCompact ? "compact" : ""} ${card.completed ? "completed" : ""} ${dragPreview?.cardId === card.id ? "drag-source" : ""} ${props.dropTargetCardId === card.id ? "drop-target" : ""}`}
+                        data-card-id={card.id}
+                        data-testid={`card-${card.id}`}
+                        onClick={() => openCard(card.id)}
+                        onContextMenu={(event) => props.onOpenContextMenu(event, cardContextItems(card), card.title)}
+                        onPointerCancel={cancelPointerDrag}
+                        onPointerDown={(event) => beginPointerDrag(event, card.id)}
+                        onPointerMove={updatePointerDrag}
+                        onPointerUp={finishPointerDrag}
+                        onMouseDown={(event) => beginMouseDrag(event, card.id)}
+                      >
+                        <TaskCardBody
+                          card={card}
+                          compact={isCompact}
+                          members={props.members}
+                          workspacePath={props.workspacePath}
+                          onOpen={openCard}
+                          onToggleSubtask={props.onToggleSubtask}
+                          onOpenContextMenu={props.onOpenContextMenu}
+                          onCopyText={props.onCopyText}
+                        />
+                      </article>
+                      {indicatorAt === position + 1 && <div className="drop-indicator" data-testid={`drop-indicator-${list.id}`} />}
+                    </Fragment>
+                  );
+                })}
               </div>
               <button className="add-card" data-testid={`add-card-${list.id}`} onClick={() => void props.onAddCard(list.id)}>
                 <Icon name="plus" /> Add card
@@ -743,7 +760,7 @@ export function BoardView(props: BoardViewProps) {
       </div>
       {dragPreview && dragPreviewCard && (
         <article
-          className={`task-card drag-preview ${compactCards ? "compact" : ""} ${dragPreviewCard.completed ? "completed" : ""}`}
+          className={`task-card drag-preview ${cardIsCompact(dragPreviewCard) ? "compact" : ""} ${dragPreviewCard.completed ? "completed" : ""}`}
           data-testid="card-drag-preview"
           style={{
             height: dragPreview.height,
@@ -751,7 +768,7 @@ export function BoardView(props: BoardViewProps) {
             width: dragPreview.width
           }}
         >
-          <TaskCardBody card={dragPreviewCard} compact={compactCards} members={props.members} workspacePath={props.workspacePath} />
+          <TaskCardBody card={dragPreviewCard} compact={cardIsCompact(dragPreviewCard)} members={props.members} workspacePath={props.workspacePath} />
         </article>
       )}
     </section>
