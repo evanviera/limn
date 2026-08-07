@@ -1,0 +1,439 @@
+/* Editorial theme layer
+   ---------------------
+   Option 02's paper-and-ink character lives here so the existing feature
+   partials remain focused on behavior and layout. Tokens supply the palette;
+   this file defines the shared visual language across app chrome and boards. */
+
+.workspace-tabs {
+  min-height: 48px;
+  gap: 0;
+  padding: 0 10px;
+  background: var(--app-bg);
+  border-bottom-color: var(--border);
+}
+
+.workspace-tabs-brand {
+  display: flex;
+  flex: 0 0 auto;
+  align-items: center;
+  gap: var(--space-3);
+  align-self: center;
+  margin-right: 18px;
+  color: var(--text-strong);
+  font-family: var(--font-display);
+  font-size: var(--text-lg);
+}
+
+.workspace-tabs-brand span {
+  display: grid;
+  place-items: center;
+  width: 26px;
+  height: 26px;
+  color: var(--accent-text);
+  background: var(--accent);
+  border-radius: var(--radius-pill);
+  font-family: var(--font-ui);
+  font-size: var(--text-sm);
+  font-weight: var(--weight-bold);
+}
+
+.workspace-tabs-brand strong {
+  font-weight: var(--weight-normal);
+  letter-spacing: -0.02em;
+}
+
+.workspace-tab {
+  align-self: stretch;
+  min-height: 47px;
+  padding: 0 10px 0 12px;
+  border-width: 0 1px;
+  border-radius: 0;
+}
+
+.workspace-tab.active {
+  background: var(--board-bg);
+  border-color: var(--border-soft);
+}
+
+.workspace-tab:hover {
+  background: var(--surface-hover);
+}
+
+.workspace-tab-add {
+  align-self: center;
+  border-radius: var(--radius-sm);
+}
+
+.app-shell {
+  background: var(--board-bg);
+}
+
+.sidebar {
+  gap: 22px;
+  padding: 20px 14px 14px;
+  border-right-color: var(--border);
+}
+
+.sidebar-action {
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr) auto;
+  gap: 10px;
+  min-height: 56px !important;
+  padding: 8px !important;
+  background: var(--pane-bg-2) !important;
+  border-color: var(--border-soft) !important;
+}
+
+.sidebar-action:hover:not(:disabled) {
+  border-color: var(--border) !important;
+}
+
+.sidebar-workspace-mark {
+  display: grid;
+  place-items: center;
+  width: 30px;
+  height: 30px;
+  color: var(--accent-text);
+  background: var(--accent);
+  border-radius: var(--radius-pill);
+  font-family: var(--font-display);
+  font-size: var(--text-sm);
+}
+
+.sidebar-workspace-copy {
+  display: grid;
+  min-width: 0;
+  gap: 1px;
+  text-align: left;
+}
+
+.sidebar-workspace-copy span {
+  color: var(--text-faint);
+  font-size: var(--text-xs);
+  font-weight: var(--weight-medium);
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+}
+
+.sidebar-workspace-copy strong {
+  overflow: hidden;
+  color: var(--text-strong);
+  font-weight: var(--weight-medium);
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.board-nav {
+  counter-reset: editorial-board;
+  gap: var(--space-2);
+}
+
+.nav-heading {
+  padding: 0 8px 7px;
+  border-bottom: 1px solid var(--border-soft);
+  font-size: var(--text-xs);
+  letter-spacing: 0.08em;
+}
+
+.nav-heading-actions {
+  align-items: center;
+}
+
+.nav-heading button {
+  width: 24px;
+  min-width: 24px;
+  min-height: 24px;
+}
+
+.board-nav-item {
+  counter-increment: editorial-board;
+}
+
+.board-nav-item::before {
+  content: counter(editorial-board, decimal-leading-zero);
+  flex: 0 0 22px;
+  color: var(--text-faint);
+  font-size: var(--text-xs);
+  font-variant-numeric: tabular-nums;
+}
+
+.sidebar button.active,
+.sidebar button.active:hover:not(:disabled) {
+  color: var(--nav-active-text);
+  background: var(--nav-active-bg);
+}
+
+.sidebar button.active:not(.drop-before)::before {
+  position: static;
+  width: auto;
+  height: auto;
+  transform: none;
+  color: currentColor;
+  background: transparent;
+  border-radius: 0;
+  opacity: 0.72;
+}
+
+.sidebar .board-nav-item.active:not(.drop-before)::before {
+  content: counter(editorial-board, decimal-leading-zero);
+}
+
+.board-nav-item.drop-before,
+.board-nav-item.drop-after {
+  box-shadow: inset 0 3px 0 var(--accent);
+}
+
+.board-nav-item.drop-after {
+  box-shadow: inset 0 -3px 0 var(--accent);
+}
+
+.board-nav-item.drop-before::before,
+.board-nav-item.drop-after::after {
+  position: static;
+  width: auto;
+  height: auto;
+  background: transparent;
+  box-shadow: none;
+}
+
+.board-nav-item.drop-after::after {
+  content: none;
+}
+
+.board-group-heading {
+  padding-top: 10px;
+  letter-spacing: 0.08em;
+}
+
+.sidebar-bottom {
+  padding-top: 12px;
+  border-top-color: var(--border);
+}
+
+.sidebar-bottom button {
+  min-height: 34px;
+}
+
+.identity-select {
+  min-height: 46px !important;
+}
+
+.workspace {
+  padding: 28px 26px 24px;
+}
+
+.content-header {
+  align-items: flex-start;
+  margin-bottom: 18px;
+  padding-bottom: 16px;
+  border-bottom-color: var(--border);
+}
+
+.content-header .eyebrow {
+  color: var(--accent);
+  letter-spacing: 0.09em;
+}
+
+.content-header h1 {
+  margin-top: 4px;
+  font-family: var(--font-display);
+  font-size: clamp(1.75rem, 3vw, 2.45rem);
+  font-weight: var(--weight-normal);
+  letter-spacing: -0.04em;
+  line-height: 0.98;
+}
+
+.content-header .meta-line {
+  margin-top: 9px;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+}
+
+.header-actions {
+  align-items: center;
+  gap: var(--space-4);
+}
+
+.header-actions button {
+  min-height: 36px;
+  background: transparent;
+  border-color: var(--border);
+}
+
+.header-actions button:hover:not(:disabled) {
+  background: var(--surface-hover);
+}
+
+.header-actions button.primary {
+  color: var(--accent-text);
+  background: var(--accent);
+  border-color: var(--accent);
+  box-shadow: none;
+}
+
+.columns {
+  gap: 0;
+  padding-bottom: 0;
+}
+
+.column {
+  gap: 10px;
+  padding: 0 14px 10px;
+  background: transparent;
+  border: 0;
+  border-right: 1px solid var(--border-soft);
+  border-radius: 0;
+}
+
+.column:first-child {
+  padding-left: 0;
+}
+
+.column:last-child {
+  padding-right: 0;
+  border-right: 0;
+}
+
+.column.collapsed {
+  width: 48px;
+  padding: 10px 0;
+  border-right: 1px solid var(--border-soft);
+}
+
+.column-header {
+  min-height: 38px;
+  padding: 0 2px 8px;
+  border-bottom: 1px solid var(--border);
+}
+
+.column-header h2 {
+  font-family: var(--font-display);
+  font-size: var(--text-lg);
+  font-weight: var(--weight-normal);
+  letter-spacing: -0.015em;
+}
+
+.column-header span {
+  font-variant-numeric: tabular-nums;
+  opacity: 1;
+}
+
+.card-stack {
+  gap: 10px;
+  padding: 0 1px;
+}
+
+.task-card {
+  gap: 10px;
+  padding: 13px 12px;
+  border-color: var(--border-soft);
+  border-radius: var(--radius-sm);
+}
+
+.task-card:hover {
+  border-color: var(--accent-border);
+  transform: translateY(-1px);
+}
+
+.task-card.completed {
+  background: var(--card-bg);
+  border-left: 3px solid var(--success);
+  box-shadow: var(--card-shadow);
+}
+
+.task-card.completed:hover {
+  box-shadow: var(--card-shadow-hover);
+}
+
+.task-card h3 {
+  font-weight: var(--weight-medium);
+  line-height: 1.3;
+}
+
+.label-row {
+  order: -1;
+  gap: var(--space-4);
+}
+
+.label-row span {
+  padding: 0;
+  color: var(--accent);
+  background: transparent;
+  border-radius: 0;
+  font-size: var(--text-xs);
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+}
+
+.label-row span + span::before {
+  content: "·";
+  margin-right: var(--space-4);
+  color: var(--text-faint);
+}
+
+.card-notes-preview {
+  line-height: 1.45;
+}
+
+.task-card footer {
+  padding-top: 2px;
+  color: var(--text-faint);
+}
+
+.add-card {
+  min-height: 32px;
+  padding-left: var(--space-1);
+  border-radius: 0;
+}
+
+.add-card:hover:not(:disabled) {
+  color: var(--accent);
+  background: transparent;
+}
+
+.task-card-cover {
+  border-radius: var(--radius-sm) var(--radius-sm) 0 0;
+}
+
+.context-menu,
+.dialog,
+.card-editor,
+.card-view-shell {
+  border-color: var(--border);
+}
+
+.welcome-panel h1,
+.settings-view .content-header h1,
+.filter-view .content-header h1,
+.archive-view .content-header h1,
+.inbox-view .content-header h1 {
+  font-family: var(--font-display);
+  font-weight: var(--weight-normal);
+  letter-spacing: -0.04em;
+}
+
+@media (max-width: 800px) {
+  .workspace-tabs-brand {
+    display: none;
+  }
+
+  .sidebar {
+    gap: var(--space-5);
+    padding: var(--space-5);
+  }
+
+  .workspace {
+    padding: 18px 16px;
+  }
+
+  .columns {
+    gap: var(--space-5);
+  }
+
+  .column,
+  .column:first-child,
+  .column:last-child {
+    padding: 0 10px 10px;
+    border: 1px solid var(--border-soft);
+  }
+}

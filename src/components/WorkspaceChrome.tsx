@@ -80,6 +80,7 @@ interface WorkspaceSidebarProps {
   opening: boolean;
   themeMode: ThemeMode;
   view: View;
+  workspaceName: string;
   onBoardContextMenu: (event: ReactMouseEvent<HTMLElement>, board: Board) => void;
   onCreateBoard: () => void;
   onCreateGroup: () => void;
@@ -105,6 +106,7 @@ export function WorkspaceSidebar({
   opening,
   themeMode,
   view,
+  workspaceName,
   onBoardContextMenu,
   onCreateBoard,
   onCreateGroup,
@@ -126,7 +128,12 @@ export function WorkspaceSidebar({
           </>
         ) : (
           <>
-            <Icon name="folder" /> Open workspace
+            <span className="sidebar-workspace-mark" aria-hidden="true">{workspaceName.slice(0, 1).toUpperCase()}</span>
+            <span className="sidebar-workspace-copy">
+              <span>Workspace</span>
+              <strong>{workspaceName}</strong>
+            </span>
+            <Icon name="chevron-down" />
           </>
         )}
       </button>

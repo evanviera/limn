@@ -1,69 +1,72 @@
 :root {
-  --app-bg: #101214;
-  --sidebar-bg: #171714;
-  --pane-bg: #16191c;
-  --pane-bg-2: #1b1f23;
-  --pane-bg-3: #22272b;
+  --app-bg: #181613;
+  --sidebar-bg: #211d18;
+  --pane-bg: #201c18;
+  --pane-bg-2: #26211c;
+  --pane-bg-3: #302920;
 
   /* Board elevation layers — the canvas recedes, lists sit on it, cards float
      above lists. Three clearly separated tints so contrast (not outlines) does
      the visual work. See board.css. */
-  --board-bg: #0d1013;
-  --list-bg: #191d22;
-  --list-hover-bg: #1d2228;
-  --card-bg: #252b31;
-  --card-hover-bg: #2c333a;
-  --card-shadow: 0 1px 2px rgba(0, 0, 0, 0.34), 0 0 0 1px rgba(0, 0, 0, 0.16);
-  --card-shadow-hover: 0 6px 16px rgba(0, 0, 0, 0.42), 0 0 0 1px rgba(0, 0, 0, 0.2);
-  --editor-bg: #121416;
-  --editor-chrome-bg: rgba(18, 20, 22, 0.94);
-  --editor-footer-bg: rgba(18, 20, 22, 0.96);
-  --surface: #1d2226;
-  --surface-raised: #30373d;
-  --surface-hover: #2a3136;
-  --border: #3a4248;
-  --border-soft: #293036;
-  --text: #e9edf0;
-  --text-strong: #f8faf8;
-  --text-muted: #a7b0b7;
-  --text-faint: #77828a;
-  --accent: #4f9d75;
-  --accent-hover: #5cb684;
-  --accent-text: #f8faf8;
-  --accent-soft: rgba(79, 157, 117, 0.14);
-  --accent-border: rgba(105, 186, 138, 0.38);
-  --accent-link: #7bc7d9;
-  --accent-link-hover: #9fe1ee;
-  --accent-link-border: rgba(123, 199, 217, 0.6);
-  --selection: rgba(105, 186, 138, 0.3);
-  --success: #76c987;
-  --success-soft: rgba(118, 201, 135, 0.12);
-  --success-border: rgba(118, 201, 135, 0.32);
-  --warning: #d5a94e;
-  --warning-soft: rgba(213, 169, 78, 0.13);
-  --warning-border: rgba(213, 169, 78, 0.34);
-  --danger: #e27672;
-  --danger-text: #f8faf8;
-  --danger-soft: rgba(226, 118, 114, 0.12);
-  --danger-border: rgba(226, 118, 114, 0.46);
-  --input-bg: #111416;
+  --board-bg: #181613;
+  --list-bg: #201c18;
+  --list-hover-bg: #2b251f;
+  --card-bg: #2a241e;
+  --card-hover-bg: #312a23;
+  --card-shadow: 0 4px 12px rgba(0, 0, 0, 0.16), 0 0 0 1px rgba(255, 248, 237, 0.03);
+  --card-shadow-hover: 0 8px 22px rgba(0, 0, 0, 0.24), 0 0 0 1px rgba(211, 123, 93, 0.22);
+  --editor-bg: #1b1815;
+  --editor-chrome-bg: rgba(27, 24, 21, 0.94);
+  --editor-footer-bg: rgba(27, 24, 21, 0.96);
+  --surface: #26211c;
+  --surface-raised: #302920;
+  --surface-hover: #342c24;
+  --border: #504438;
+  --border-soft: #3b332b;
+  --text: #d8cec2;
+  --text-strong: #fff8ed;
+  --text-muted: #b2a598;
+  --text-faint: #8f8174;
+  --accent: #d37b5d;
+  --accent-hover: #e18b6d;
+  --accent-text: #fffaf1;
+  --accent-soft: rgba(211, 123, 93, 0.14);
+  --accent-border: rgba(211, 123, 93, 0.42);
+  --accent-link: #91b6bf;
+  --accent-link-hover: #b0d0d6;
+  --accent-link-border: rgba(145, 182, 191, 0.58);
+  --selection: rgba(211, 123, 93, 0.28);
+  --success: #8cb493;
+  --success-soft: rgba(140, 180, 147, 0.12);
+  --success-border: rgba(140, 180, 147, 0.32);
+  --warning: #ddb16d;
+  --warning-soft: rgba(221, 177, 109, 0.13);
+  --warning-border: rgba(221, 177, 109, 0.34);
+  --danger: #df8176;
+  --danger-text: #fffaf1;
+  --danger-soft: rgba(223, 129, 118, 0.12);
+  --danger-border: rgba(223, 129, 118, 0.42);
+  --input-bg: #211d19;
   --overlay-bg: rgba(5, 7, 8, 0.66);
   --button-border: rgba(255, 255, 255, 0.08);
-  --empty-overlay: rgba(24, 24, 22, 0.64);
-  --welcome-sheen: rgba(255, 255, 255, 0.035);
-  --active-line: rgba(255, 255, 255, 0.035);
-  --row-hover: rgba(255, 255, 255, 0.06);
-  --subtle-bg: rgba(255, 255, 255, 0.035);
-  --subtask-focus-bg: rgba(255, 255, 255, 0.018);
-  --column-bg: rgba(255, 255, 255, 0.018);
-  --column-hover-border: rgba(255, 255, 255, 0.12);
-  --card-hover-border: rgba(255, 255, 255, 0.14);
-  --chip-bg: rgba(255, 255, 255, 0.035);
+  --empty-overlay: rgba(42, 36, 30, 0.64);
+  --welcome-sheen: rgba(211, 123, 93, 0.04);
+  --active-line: rgba(255, 248, 237, 0.035);
+  --row-hover: rgba(255, 248, 237, 0.055);
+  --subtle-bg: rgba(255, 248, 237, 0.04);
+  --subtask-focus-bg: rgba(255, 248, 237, 0.022);
+  --column-bg: rgba(255, 248, 237, 0.018);
+  --column-hover-border: rgba(211, 123, 93, 0.26);
+  --card-hover-border: rgba(211, 123, 93, 0.3);
+  --chip-bg: rgba(255, 248, 237, 0.045);
   --chip-remove-hover-bg: rgba(255, 255, 255, 0.1);
   --drag-shadow: 0 18px 42px rgba(0, 0, 0, 0.34), 0 0 0 1px var(--accent-border);
-  --focus: 0 0 0 2px rgba(118, 170, 139, 0.48);
+  --focus: 0 0 0 2px rgba(211, 123, 93, 0.48);
   --shadow: 0 24px 80px rgba(0, 0, 0, 0.42);
   --font-ui: -apple-system, BlinkMacSystemFont, "Segoe UI Variable", "Segoe UI", system-ui, sans-serif;
+  --font-display: Georgia, "Times New Roman", serif;
+  --nav-active-bg: #d8b77a;
+  --nav-active-text: #201c18;
   --color-scheme: dark;
 
   /* Type scale — five steps, only the first is "decorative" (uppercase labels).
@@ -76,9 +79,9 @@
   --text-xl: 1.375rem;    /* 22px — page / board titles */
 
   /* Weights */
-  --weight-normal: 500;
-  --weight-medium: 600;
-  --weight-bold: 700;
+  --weight-normal: 400;
+  --weight-medium: 500;
+  --weight-bold: 600;
 
   /* Spacing scale */
   --space-1: 2px;
@@ -89,9 +92,9 @@
   --space-6: 16px;
 
   /* Radii */
-  --radius-sm: 4px;
-  --radius-md: 6px;
-  --radius-lg: 8px;
+  --radius-sm: 2px;
+  --radius-md: 3px;
+  --radius-lg: 5px;
   --radius-pill: 999px;
 
   /* Motion */
@@ -109,69 +112,71 @@
 }
 
 :root[data-theme="light"] {
-  --app-bg: #f6f8f6;
-  --sidebar-bg: #e9efeb;
-  --pane-bg: #ffffff;
-  --pane-bg-2: #ffffff;
-  --pane-bg-3: #edf2ee;
+  --app-bg: #e1d7c9;
+  --sidebar-bg: #e9e0d3;
+  --pane-bg: #fffdf8;
+  --pane-bg-2: #f8f2e8;
+  --pane-bg-3: #eee4d7;
 
   /* Board elevation layers (light). Muted sage canvas so the grey list panels
      read as surfaces and the white cards clearly float above them. */
-  --board-bg: #d7ded9;
-  --list-bg: #eaeee9;
-  --list-hover-bg: #e3e8e3;
-  --card-bg: #ffffff;
-  --card-hover-bg: #ffffff;
-  --card-shadow: 0 1px 1px rgba(31, 44, 39, 0.08), 0 1px 3px rgba(31, 44, 39, 0.07);
-  --card-shadow-hover: 0 6px 16px rgba(31, 44, 39, 0.16), 0 1px 2px rgba(31, 44, 39, 0.1);
-  --editor-bg: #fbfcfa;
-  --editor-chrome-bg: rgba(251, 252, 250, 0.94);
-  --editor-footer-bg: rgba(251, 252, 250, 0.96);
-  --surface: #f7faf8;
-  --surface-raised: #ffffff;
-  --surface-hover: #eef4f0;
-  --border: #afbbb4;
-  --border-soft: #d5ddd7;
-  --text: #25302d;
-  --text-strong: #111817;
-  --text-muted: #56635e;
-  --text-faint: #728079;
-  --accent: #2f7d57;
-  --accent-hover: #256846;
-  --accent-text: #ffffff;
-  --accent-soft: rgba(47, 125, 87, 0.12);
-  --accent-border: rgba(47, 125, 87, 0.32);
-  --accent-link: #0b6f83;
-  --accent-link-hover: #075b6b;
-  --accent-link-border: rgba(11, 111, 131, 0.42);
-  --selection: rgba(47, 125, 87, 0.22);
-  --success: #2f7d57;
-  --success-soft: rgba(47, 125, 87, 0.11);
-  --success-border: rgba(47, 125, 87, 0.28);
-  --warning: #8a5a05;
-  --warning-soft: rgba(176, 111, 0, 0.1);
-  --warning-border: rgba(176, 111, 0, 0.28);
-  --danger: #b43a37;
-  --danger-text: #ffffff;
-  --danger-soft: rgba(180, 58, 55, 0.09);
-  --danger-border: rgba(180, 58, 55, 0.28);
-  --input-bg: #ffffff;
-  --overlay-bg: rgba(24, 31, 29, 0.36);
-  --button-border: rgba(17, 24, 23, 0.11);
-  --empty-overlay: rgba(255, 255, 255, 0.74);
-  --welcome-sheen: rgba(47, 125, 87, 0.055);
-  --active-line: rgba(17, 24, 23, 0.045);
-  --row-hover: rgba(47, 125, 87, 0.08);
-  --subtle-bg: rgba(17, 24, 23, 0.045);
-  --subtask-focus-bg: rgba(47, 125, 87, 0.06);
-  --column-bg: rgba(255, 255, 255, 0.78);
-  --column-hover-border: rgba(47, 125, 87, 0.24);
-  --card-hover-border: rgba(47, 125, 87, 0.24);
-  --chip-bg: rgba(17, 24, 23, 0.045);
-  --chip-remove-hover-bg: rgba(17, 24, 23, 0.08);
-  --drag-shadow: 0 18px 42px rgba(31, 44, 39, 0.16), 0 0 0 1px var(--accent-border);
-  --focus: 0 0 0 2px rgba(47, 125, 87, 0.34);
-  --shadow: 0 24px 80px rgba(31, 44, 39, 0.18);
+  --board-bg: #f5f0e7;
+  --list-bg: transparent;
+  --list-hover-bg: rgba(156, 76, 50, 0.06);
+  --card-bg: #fffdf8;
+  --card-hover-bg: #fffaf3;
+  --card-shadow: 0 4px 12px rgba(61, 47, 33, 0.06), 0 0 0 1px rgba(61, 47, 33, 0.025);
+  --card-shadow-hover: 0 8px 22px rgba(61, 47, 33, 0.11), 0 0 0 1px rgba(156, 76, 50, 0.18);
+  --editor-bg: #f8f3ea;
+  --editor-chrome-bg: rgba(248, 243, 234, 0.94);
+  --editor-footer-bg: rgba(248, 243, 234, 0.96);
+  --surface: #f8f3ea;
+  --surface-raised: #fffdf8;
+  --surface-hover: #eee5d8;
+  --border: #b9ab99;
+  --border-soft: #d5cbbc;
+  --text: #51483e;
+  --text-strong: #211c17;
+  --text-muted: #71665b;
+  --text-faint: #95887a;
+  --accent: #9c4c32;
+  --accent-hover: #843e29;
+  --accent-text: #fffaf1;
+  --accent-soft: rgba(156, 76, 50, 0.11);
+  --accent-border: rgba(156, 76, 50, 0.34);
+  --accent-link: #355c6b;
+  --accent-link-hover: #294b57;
+  --accent-link-border: rgba(53, 92, 107, 0.4);
+  --selection: rgba(156, 76, 50, 0.2);
+  --success: #42674b;
+  --success-soft: rgba(66, 103, 75, 0.1);
+  --success-border: rgba(66, 103, 75, 0.28);
+  --warning: #8e5e1e;
+  --warning-soft: rgba(142, 94, 30, 0.1);
+  --warning-border: rgba(142, 94, 30, 0.28);
+  --danger: #a53f35;
+  --danger-text: #fffaf1;
+  --danger-soft: rgba(165, 63, 53, 0.09);
+  --danger-border: rgba(165, 63, 53, 0.28);
+  --input-bg: #fffdf8;
+  --overlay-bg: rgba(45, 37, 29, 0.38);
+  --button-border: rgba(33, 28, 23, 0.12);
+  --empty-overlay: rgba(255, 253, 248, 0.7);
+  --welcome-sheen: rgba(156, 76, 50, 0.05);
+  --active-line: rgba(33, 28, 23, 0.045);
+  --row-hover: rgba(156, 76, 50, 0.065);
+  --subtle-bg: rgba(33, 28, 23, 0.045);
+  --subtask-focus-bg: rgba(156, 76, 50, 0.05);
+  --column-bg: rgba(255, 253, 248, 0.28);
+  --column-hover-border: rgba(156, 76, 50, 0.24);
+  --card-hover-border: rgba(156, 76, 50, 0.26);
+  --chip-bg: rgba(33, 28, 23, 0.045);
+  --chip-remove-hover-bg: rgba(33, 28, 23, 0.08);
+  --drag-shadow: 0 18px 42px rgba(61, 47, 33, 0.17), 0 0 0 1px var(--accent-border);
+  --focus: 0 0 0 2px rgba(156, 76, 50, 0.34);
+  --shadow: 0 24px 80px rgba(61, 47, 33, 0.2);
+  --nav-active-bg: #314c3b;
+  --nav-active-text: #fffaf1;
   --color-scheme: light;
 }
 

@@ -2680,6 +2680,7 @@ export default function App() {
           opening={opening}
           themeMode={themeMode}
           view={view}
+          workspaceName={openWorkspaces.find((workspace) => workspace.path === workspacePath)?.name ?? "Workspace"}
           onOpenWorkspace={() => void openWorkspace()}
           onSelectBoard={(boardId) => {
             setActiveBoardId(boardId);
