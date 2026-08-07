@@ -4,6 +4,7 @@ import type { Board, BoardList, Card, Member } from "../types";
 import { countLabel } from "../lib/format";
 import { cardDeepLink } from "../lib/deepLink";
 import { compareCardsByOrder } from "../lib/ordering";
+import { readBoardDisplayPreference, writeBoardDisplayPreference } from "../lib/viewPreferences";
 import { Icon } from "./icons";
 import { EmptyState } from "./dialogs";
 import { TaskCardBody } from "./TaskCard";
@@ -81,8 +82,8 @@ export function BoardView(props: BoardViewProps) {
   const [dropTarget, setDropTarget] = useState<{ listId: string; index: number } | null>(null);
   const [draggingListId, setDraggingListId] = useState<string | null>(null);
   const [listDropTarget, setListDropTarget] = useState<{ index: number } | null>(null);
-  const [compactCards, setCompactCards] = useState(false);
-  const [autoCompactCompletedCards, setAutoCompactCompletedCards] = useState(false);
+  const [compactCards, setCompactCards] = useState(() => readBoardDisplayPreference("compactCards"));
+  const [autoCompactCompletedCards, setAutoCompactCompletedCards] = useState(() => readBoardDisplayPreference("compactCompleted"));
   const [viewMenuOpen, setViewMenuOpen] = useState(false);
   const viewMenuRef = useRef<HTMLDivElement | null>(null);
   const viewMenuToggleRef = useRef<HTMLButtonElement | null>(null);
@@ -100,6 +101,14 @@ export function BoardView(props: BoardViewProps) {
     },
     []
   );
+
+  useEffect(() => {
+    writeBoardDisplayPreference("compactCards", compactCards);
+  }, [compactCards]);
+
+  useEffect(() => {
+    writeBoardDisplayPreference("compactCompleted", autoCompactCompletedCards);
+  }, [autoCompactCompletedCards]);
 
   useEffect(() => {
     if (!viewMenuOpen) {

@@ -80,6 +80,7 @@ interface WorkspaceSidebarProps {
   opening: boolean;
   themeMode: ThemeMode;
   view: View;
+  workspacePath: string;
   workspaceName: string;
   onBoardContextMenu: (event: ReactMouseEvent<HTMLElement>, board: Board) => void;
   onCreateBoard: () => void;
@@ -106,6 +107,7 @@ export function WorkspaceSidebar({
   opening,
   themeMode,
   view,
+  workspacePath,
   workspaceName,
   onBoardContextMenu,
   onCreateBoard,
@@ -143,6 +145,7 @@ export function WorkspaceSidebar({
         totalBoards={boards.length}
         activeBoardId={activeBoardId}
         isBoardView={view === "board"}
+        workspacePath={workspacePath}
         onSelectBoard={onSelectBoard}
         onMoveBoard={onMoveBoard}
         onBoardContextMenu={onBoardContextMenu}

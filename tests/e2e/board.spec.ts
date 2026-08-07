@@ -195,7 +195,11 @@ test.describe("smoke", () => {
     await toggle.click();
     await expect(toggle).toHaveAttribute("aria-expanded", "false");
     await expect(page.getByTestId(`board-nav-${board.id}`)).toBeHidden();
-    await toggle.click();
+
+    await openApp(page, { reset: false });
+    await expect(page.getByTestId(`board-group-collapse-${group.id}`)).toHaveAttribute("aria-expanded", "false");
+    await expect(page.getByTestId(`board-nav-${board.id}`)).toBeHidden();
+    await page.getByTestId(`board-group-collapse-${group.id}`).click();
     await expect(page.getByTestId(`board-nav-${board.id}`)).toBeVisible();
   });
 
@@ -324,7 +328,10 @@ test.describe("smoke", () => {
     await expect(card).toHaveClass(/compact/);
     await expect(card.locator(".label-row")).toHaveCount(0);
 
+    await openApp(page, { reset: false });
+    await expect(card).toHaveClass(/compact/);
     await page.getByTestId("board-view-menu-toggle").click();
+    await expect(page.getByTestId("compact-completed-toggle")).toHaveAttribute("aria-pressed", "true");
     await page.getByTestId("compact-completed-toggle").click();
     await expect(card).not.toHaveClass(/compact/);
     await expect(card.locator(".label-row")).toContainText("Planning");
@@ -340,6 +347,11 @@ test.describe("smoke", () => {
     await expect(card.locator(".label-row")).toHaveCount(0);
     await expect(card.locator(".card-subtasks")).toHaveCount(0);
     await expect(card.locator(".card-notes-preview")).toHaveCount(0);
+
+    await openApp(page, { reset: false });
+    await expect(card).toHaveClass(/compact/);
+    await page.getByTestId("board-view-menu-toggle").click();
+    await expect(page.getByTestId("compact-board-toggle")).toHaveAttribute("aria-pressed", "true");
   });
 
   test("cards can be reordered within a list by dragging", async ({ page }) => {

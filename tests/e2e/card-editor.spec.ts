@@ -37,6 +37,12 @@ test.describe("smoke", () => {
     await splitter.focus();
     await page.keyboard.press("ArrowRight");
     await expect.poll(async () => (await side.boundingBox())?.width ?? 0).toBeLessThan(widenedBox!.width);
+
+    const persistedWidth = await splitter.getAttribute("aria-valuenow");
+    await openApp(page, { reset: false });
+    await page.getByTestId(/card-open-.*/).click();
+    await page.getByTestId("edit-card").click();
+    await expect(page.getByTestId("card-editor-splitter")).toHaveAttribute("aria-valuenow", persistedWidth!);
   });
 
   test("reopening a card lands in read mode before edit mode", async ({ page }) => {

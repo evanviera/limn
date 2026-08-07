@@ -66,6 +66,7 @@ when the last one closes). The open list + active path persist via the
 - `updateMessages.ts` — updater banner/settings message builders and `UpdateStatus`.
 - `useModalKeys.ts` — modal focus-trap / Escape hook and the modal stack.
 - `useAttachmentObjectUrl.ts` — loads an image attachment's bytes into an object URL (with cleanup), shared by the thumbnail and the lightbox.
+- `viewPreferences.ts` — device-local persistence for board display modes, collapsed board categories, and the card-editor column width.
 - `attachments.ts` — image-extension detection helpers (`isImageAttachment`, `latestImageAttachment`, `attachmentFileExtension`).
 - `recurrence.ts` — pure local-calendar recurrence validation/date math and successor-card construction. Monthly rules retain an anchor day so a clamped February occurrence can return to the intended day in March.
 - `merge.ts` — the reusable, typed **three-way merge engine** (base/ours/theirs). Field-level policies (`threeWayScalar`, `threeWayStringSet`, `threeWayListById`) compose into per-entity mergers (`mergeCard`, `mergeBoard`, `mergeSettings`, `mergeMembers`). Structured data (labels, assignees, comments, activity, subtasks, board lists, groups, saved views, members) merges automatically; only free text both sides rewrote (a card's title/body, a board's name) is a hard conflict. Pure, no IO.

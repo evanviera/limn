@@ -41,6 +41,7 @@ import {
   unwrapNoteFormat
 } from "../lib/noteFormat";
 import { useModalKeys } from "../lib/useModalKeys";
+import { readCardEditorSideWidth, writeCardEditorSideWidth } from "../lib/viewPreferences";
 import { isEditableTextControl, textControlContextItems, writeClipboard } from "./contextMenu";
 import type { ContextMenuItem, OpenContextMenu } from "./contextMenu";
 
@@ -108,7 +109,9 @@ export function CardEditor({
   // it's closed. Image attachments open in the viewer; other files open natively.
   const [lightboxIndex, setLightboxIndex] = useState<number | null>(null);
   const [labelInput, setLabelInput] = useState("");
-  const [sideWidth, setSideWidth] = useState(CARD_EDITOR_SIDE_WIDTH_DEFAULT);
+  const [sideWidth, setSideWidth] = useState(() =>
+    readCardEditorSideWidth(CARD_EDITOR_SIDE_WIDTH_DEFAULT, CARD_EDITOR_SIDE_WIDTH_MIN, CARD_EDITOR_SIDE_WIDTH_MAX)
+  );
   const [resizingColumns, setResizingColumns] = useState(false);
   // Which sub-tasks have their list-items section expanded. Kept out of the card
   // model since it's pure view state; reset whenever a different card opens.
@@ -178,6 +181,10 @@ export function CardEditor({
 
   // Detach any live splitter-drag window listeners when the editor unmounts.
   useEffect(() => () => resizeCleanupRef.current?.(), []);
+
+  useEffect(() => {
+    writeCardEditorSideWidth(sideWidth);
+  }, [sideWidth]);
 
   function updateAssignee(memberId: string, checked: boolean) {
     setDraft((current) => ({

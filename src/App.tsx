@@ -2703,6 +2703,7 @@ export default function App() {
           opening={opening}
           themeMode={themeMode}
           view={view}
+          workspacePath={workspacePath}
           workspaceName={openWorkspaces.find((workspace) => workspace.path === workspacePath)?.name ?? "Workspace"}
           onOpenWorkspace={() => void openWorkspace()}
           onSelectBoard={(boardId) => {

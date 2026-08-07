@@ -2,6 +2,7 @@ import { useEffect, useRef, useState } from "react";
 import type { MouseEvent as ReactMouseEvent, PointerEvent as ReactPointerEvent } from "react";
 import { Icon } from "./icons";
 import { countLabel } from "../lib/format";
+import { readCollapsedBoardGroupIds, writeCollapsedBoardGroupIds } from "../lib/viewPreferences";
 import type { Board, BoardGroup } from "../types";
 
 interface BoardNavSections {
@@ -15,6 +16,7 @@ interface BoardNavProps {
   totalBoards: number;
   activeBoardId: string;
   isBoardView: boolean;
+  workspacePath: string;
   onSelectBoard: (boardId: string) => void;
   // Drop `boardId` into category `groupId` (undefined = Ungrouped/flat) at the
   // given index among that category's other boards.
@@ -52,6 +54,7 @@ export function BoardNav({
   totalBoards,
   activeBoardId,
   isBoardView,
+  workspacePath,
   onSelectBoard,
   onMoveBoard,
   onBoardContextMenu,
@@ -66,7 +69,11 @@ export function BoardNav({
   const suppressClickRef = useRef(false);
   const [draggingId, setDraggingId] = useState<string | null>(null);
   const [dropTarget, setDropTarget] = useState<DropTarget | null>(null);
-  const [collapsedGroupIds, setCollapsedGroupIds] = useState<Set<string>>(() => new Set());
+  const [collapsedGroupIds, setCollapsedGroupIds] = useState<Set<string>>(() => readCollapsedBoardGroupIds(workspacePath));
+
+  useEffect(() => {
+    setCollapsedGroupIds(readCollapsedBoardGroupIds(workspacePath));
+  }, [workspacePath]);
 
   function toggleGroupCollapsed(groupId: string) {
     setCollapsedGroupIds((current) => {
@@ -76,6 +83,7 @@ export function BoardNav({
       } else {
         next.add(groupId);
       }
+      writeCollapsedBoardGroupIds(workspacePath, next);
       return next;
     });
   }
