@@ -24,6 +24,7 @@ export interface FilterViewProps {
   savedViews: SavedView[];
   requestedFilter: FilterRequest | null;
   onOpenCard: (card: Card) => void;
+  onRestoreCard: (card: Card) => Promise<void>;
   onExportCalendar: () => Promise<void>;
   // Persist the current filter as a new named view (App handles naming + write).
   onSaveView: (filter: CardFilter) => void;
@@ -468,6 +469,7 @@ export function FilterView(props: FilterViewProps) {
                   onClick={() => props.onOpenCard(card)}
                   onContextMenu={(event) => props.onOpenContextMenu(event, [
                     { label: "Open card", icon: "edit", onSelect: () => props.onOpenCard(card) },
+                    ...(card.archived ? [{ label: "Restore card", icon: "refresh" as const, onSelect: () => props.onRestoreCard(card) }] : []),
                     { label: "Copy title", icon: "copy", onSelect: () => void props.onCopyText(card.title) }
                   ], card.title)}
                 >

@@ -259,6 +259,7 @@ export function mergeCard(base: Card, ours: Card, theirs: Card): EntityMergeResu
     order: threeWayScalar(base.order, ours.order, theirs.order).value,
     completed: threeWayScalar(base.completed, ours.completed, theirs.completed).value,
     archived: threeWayScalar(base.archived, ours.archived, theirs.archived).value,
+    archivedAt: threeWayScalar(base.archivedAt, ours.archivedAt, theirs.archivedAt).value,
     assignees: threeWayStringSet(base.assignees, ours.assignees, theirs.assignees),
     labels: threeWayStringSet(base.labels, ours.labels, theirs.labels),
     activity: threeWayListById(base.activity, ours.activity, theirs.activity, {

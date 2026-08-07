@@ -28,6 +28,7 @@ import { buildConflict, buildConflicts } from "../.tmp/storage-test/src/lib/conf
 import { listNameTriggersMoveNotification, parseMovedToListNames } from "../.tmp/storage-test/src/lib/notifications.js";
 import { cardDeepLink, parseCardDeepLink } from "../.tmp/storage-test/src/lib/deepLink.js";
 import { buildInboxItems, inboxSeenAtKey, inboxUnreadCount, isInboxItemUnread } from "../.tmp/storage-test/src/lib/inbox.js";
+import { archiveLocation, archiveReason, archiveTimestamp, compareArchivedCards } from "../.tmp/storage-test/src/lib/archive.js";
 import { buildRecurringSuccessor, nextRecurrenceDate, normalizeRecurrence, recurrenceValidation } from "../.tmp/storage-test/src/lib/recurrence.js";
 
 const baseCard = {
@@ -111,6 +112,29 @@ assert.equal(inboxSeenAtKey("/work:space", "grace"), "limn:inbox:seenAt:/work:sp
 
 const roundTripped = parseCard(serializeCard(baseCard), baseCard.fileName);
 assert.deepEqual(roundTripped, baseCard);
+
+// Archive metadata round-trips, while legacy archives derive their date and
+// reason from activity. Archive sorting is independent of later card edits.
+const archivedCard = {
+  ...baseCard,
+  archived: true,
+  archivedAt: "2026-07-10T12:00:00.000Z",
+  activity: [
+    { id: "activity_archive", type: "archived", message: "Archived card", createdAt: "2026-07-10T12:00:00.000Z" },
+    ...baseCard.activity
+  ]
+};
+assert.deepEqual(parseCard(serializeCard(archivedCard), archivedCard.fileName), archivedCard);
+assert.equal(archiveTimestamp(archivedCard), "2026-07-10T12:00:00.000Z");
+assert.equal(archiveReason(archivedCard), "Archived card");
+const legacyArchive = { ...archivedCard, id: "legacy_archive", archivedAt: undefined, updatedAt: "2026-07-20T00:00:00.000Z" };
+assert.equal(archiveTimestamp(legacyArchive), "2026-07-10T12:00:00.000Z");
+assert.deepEqual([legacyArchive, { ...archivedCard, id: "newer", archivedAt: "2026-07-12T00:00:00.000Z" }].sort(compareArchivedCards("recent")).map((card) => card.id), ["newer", "legacy_archive"]);
+assert.deepEqual(archiveLocation(archivedCard, [{ id: "board_one", name: "Roadmap", lists: [{ id: "todo", name: "To Do" }] }]), {
+  boardName: "Roadmap",
+  listName: "To Do",
+  available: true
+});
 
 // --- Recurrence: local-calendar cadence, validation, serialization, and copies ---
 assert.equal(nextRecurrenceDate("2026-07-01", { interval: 3, unit: "day" }, "2026-07-01"), "2026-07-04");

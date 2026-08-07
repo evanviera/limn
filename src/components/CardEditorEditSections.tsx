@@ -97,6 +97,7 @@ interface CardEditorFooterProps {
   draft: Card;
   saving: boolean;
   onArchive: (card: Card) => Promise<void>;
+  onRestore: (card: Card) => Promise<void>;
   onDelete: (card: Card) => Promise<void>;
   onSaveAndClose: () => void;
 }
@@ -105,15 +106,22 @@ export function CardEditorFooter({
   draft,
   saving,
   onArchive,
+  onRestore,
   onDelete,
   onSaveAndClose
 }: CardEditorFooterProps) {
   return (
     <footer>
       <div className="destructive-actions">
-        <button data-testid="archive-card" disabled={saving} onClick={() => void onArchive(draft)}>
-          <Icon name="archive" /> Archive
-        </button>
+        {draft.archived ? (
+          <button data-testid="restore-card" disabled={saving} onClick={() => void onRestore(draft)}>
+            <Icon name="refresh" /> Restore
+          </button>
+        ) : (
+          <button data-testid="archive-card" disabled={saving} onClick={() => void onArchive(draft)}>
+            <Icon name="archive" /> Archive
+          </button>
+        )}
         <button data-testid="delete-card" disabled={saving} onClick={() => void onDelete(draft)}>
           <Icon name="trash" /> Delete
         </button>

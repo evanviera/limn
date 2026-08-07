@@ -29,6 +29,7 @@ focused" section before adding code to an existing large file.**
 - `AttachmentLightbox.tsx` — the full-screen image viewer opened by clicking an image attachment; arrow keys / chevrons flip through the card's image attachments.
 - `CardComments.tsx` — the card editor's discussion section: threaded comments, composer, @mention highlighting, and the "who are you?" identity prompt, fully prop-driven.
 - `FilterView.tsx` — the cross-board Filter view: free-text box, facet controls (board / assignee / label / due / status / archive / sort), preset + saved-view chips, due reminder entry point, calendar export, and the results list. Filter state is local; the engine lives in `lib/filter.ts`.
+- `ArchiveView.tsx` — the workspace-wide archive browser plus restore-location dialog. It searches/sorts archived cards, restores to a surviving original list in one click, asks for a new board/list when the original list was deleted, and exposes permanent deletion through the shared context menu.
 - `ConflictReview.tsx` — the in-app conflict review surface: a prop-driven modal
   (reachable from the persistent conflict banner) that lists preserved conflict
   copies, compares each against the current on-disk entity field by field, and
@@ -60,6 +61,7 @@ when the last one closes). The open list + active path persist via the
 - `identity.ts` — the device-local "active member" (who *you* are for comment attribution). Stored in `localStorage` keyed by workspace path, **never** in the synced workspace files, so each person on a shared folder keeps their own identity.
 - `mentions.ts` — pure @mention matching (`matchMention`, `MENTION_SPLIT_PATTERN`, `mentionToken`) used to highlight member references in comments.
 - `filter.ts` — the pure card-filter engine: `filterCards`, `collectLabels`, `filterIsActive`, `matchesDue`, the `EMPTY_FILTER` default, and the built-in `FILTER_PRESETS`. Drives `FilterView`; saved views persist in `WorkspaceSettings.savedViews`.
+- `archive.ts` — pure archive projections: legacy-aware archive timestamps/reasons, location availability, sorting, and relative-date labels for `ArchiveView`.
 - `noteFormat.ts` — note markdown parse/serialize + contenteditable DOM helpers.
 - `updateMessages.ts` — updater banner/settings message builders and `UpdateStatus`.
 - `useModalKeys.ts` — modal focus-trap / Escape hook and the modal stack.
@@ -76,7 +78,7 @@ when the last one closes). The open list + active path persist via the
 cascade order. Never add rules to it. Rules live in `src/styles/`:
 
 `tokens.css` (design tokens) → `base.css` (element resets, buttons, inputs) →
-`shell.css` (titlebar, sidebar, header) → `board.css` → `filter.css`
+`shell.css` (titlebar, sidebar, header) → `board.css` → `filter.css` → `archive.css`
 (cross-board filter) → `feedback.css` (banners/empty states) → `settings.css` →
 `dialogs.css` → `conflicts.css` (conflict review surface) → `card-editor.css` →
 `comments.css` (card discussion + @mentions) → `responsive.css` (media queries).
@@ -118,7 +120,7 @@ order and add new partials to the barrel at the right position.
 ## End-to-end tests (`tests/e2e/`)
 
 - `harness.ts` — shared Playwright page helpers.
-- Feature specs: `board.spec.ts`, `card-editor.spec.ts`, `notes.spec.ts`,
+- Feature specs: `board.spec.ts`, `archive.spec.ts`, `card-editor.spec.ts`, `notes.spec.ts`,
   `discussion.spec.ts`, `filter.spec.ts`, `integrations.spec.ts` (Slack +
   updater), `conflicts.spec.ts` (conflict review + version-checked deletes), plus
   `qa-sweep.spec.ts`.

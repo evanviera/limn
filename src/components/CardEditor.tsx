@@ -62,6 +62,7 @@ export function CardEditor({
   onSave,
   onClose,
   onArchive,
+  onRestore,
   onDelete,
   onAddAttachments,
   onRemoveAttachment,
@@ -86,6 +87,7 @@ export function CardEditor({
   onSave: (card: Card) => Promise<void>;
   onClose: () => void;
   onArchive: (card: Card) => Promise<void>;
+  onRestore: (card: Card) => Promise<void>;
   onDelete: (card: Card) => Promise<void>;
   onAddAttachments: (cardId: string) => Promise<void>;
   onRemoveAttachment: (cardId: string, attachment: Attachment) => Promise<void>;
@@ -761,7 +763,9 @@ export function CardEditor({
       { label: "Copy card link", icon: "copy", onSelect: () => void onCopyText(cardDeepLink(draft.id)) },
       { label: "Close editor", icon: "x", onSelect: onClose },
       { type: "separator" },
-      { label: "Archive card", icon: "archive", disabled: saving, onSelect: () => void onArchive(draft) },
+      draft.archived
+        ? { label: "Restore card", icon: "refresh", disabled: saving, onSelect: () => void onRestore(draft) }
+        : { label: "Archive card", icon: "archive", disabled: saving, onSelect: () => void onArchive(draft) },
       { label: "Delete card", icon: "trash", danger: true, disabled: saving, onSelect: () => void onDelete(draft) }
     ];
   }
@@ -779,7 +783,9 @@ export function CardEditor({
       { label: "Copy card link", icon: "copy", onSelect: () => void onCopyText(cardDeepLink(card.id)) },
       { label: "Close card", icon: "x", onSelect: onClose },
       { type: "separator" },
-      { label: "Archive card", icon: "archive", disabled: saving, onSelect: () => void onArchive(card) },
+      card.archived
+        ? { label: "Restore card", icon: "refresh", disabled: saving, onSelect: () => void onRestore(card) }
+        : { label: "Archive card", icon: "archive", disabled: saving, onSelect: () => void onArchive(card) },
       { label: "Delete card", icon: "trash", danger: true, disabled: saving, onSelect: () => void onDelete(card) }
     ];
   }
@@ -857,6 +863,7 @@ export function CardEditor({
         onRemoveAttachment={(attachment) => void runAttachmentAction(() => onRemoveAttachment(card.id, attachment))}
         onOpenAttachment={openAttachment}
         onArchive={() => void onArchive(card)}
+        onRestore={() => void onRestore(card)}
         onDelete={() => void onDelete(card)}
         onSelectActiveMember={onSelectActiveMember}
         onAddComment={(body) => onAddComment(card.id, body)}
@@ -991,6 +998,7 @@ export function CardEditor({
           draft={draft}
           saving={saving}
           onArchive={onArchive}
+          onRestore={onRestore}
           onDelete={onDelete}
           onSaveAndClose={() => {
             setSaving(true);

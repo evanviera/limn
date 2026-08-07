@@ -71,6 +71,7 @@ export function WelcomeScreen({
 interface WorkspaceSidebarProps {
   activeBoardId: string;
   activeMember: Member | null;
+  archivedCardCount: number;
   boardGroups: BoardGroup[];
   boardNavSections: BoardNavSections;
   boards: Board[];
@@ -95,6 +96,7 @@ interface WorkspaceSidebarProps {
 export function WorkspaceSidebar({
   activeBoardId,
   activeMember,
+  archivedCardCount,
   boardGroups,
   boardNavSections,
   boards,
@@ -201,6 +203,10 @@ export function WorkspaceSidebar({
               {dueReminders}
             </span>
           )}
+        </button>
+        <button className={view === "archive" ? "active" : ""} data-testid="nav-archive" onClick={() => onSetView("archive")}>
+          <Icon name="archive" /> Archive
+          {archivedCardCount > 0 && <span className="nav-badge" data-testid="archive-count">{archivedCardCount}</span>}
         </button>
         <button className={view === "members" ? "active" : ""} data-testid="nav-members" onClick={() => onSetView("members")}>
           <Icon name="users" /> Members

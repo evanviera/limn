@@ -27,6 +27,7 @@ export function CardViewPanel({
   onRemoveAttachment,
   onOpenAttachment,
   onArchive,
+  onRestore,
   onDelete,
   onSelectActiveMember,
   onAddComment,
@@ -60,6 +61,7 @@ export function CardViewPanel({
   onRemoveAttachment: (attachment: Attachment) => void;
   onOpenAttachment: (attachment: Attachment) => void;
   onArchive: () => void;
+  onRestore: () => void;
   onDelete: () => void;
   onSelectActiveMember: (memberId: string) => void;
   onAddComment: (body: string) => Promise<void>;
@@ -100,6 +102,7 @@ export function CardViewPanel({
           onRemoveAttachment={onRemoveAttachment}
           onOpenAttachment={onOpenAttachment}
           onArchive={onArchive}
+          onRestore={onRestore}
           onDelete={onDelete}
           onSelectActiveMember={onSelectActiveMember}
           onAddComment={onAddComment}

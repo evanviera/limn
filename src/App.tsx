@@ -60,6 +60,8 @@ import {
 } from "./updater";
 
 import { BoardView } from "./components/BoardView";
+import { ArchiveToast, ArchiveView, RestoreCardDialog } from "./components/ArchiveView";
+import type { ArchiveToastState } from "./components/ArchiveView";
 import { CardEditor } from "./components/CardEditor";
 import { ConflictReview } from "./components/ConflictReview";
 import type { ConflictChoice } from "./components/ConflictReview";
@@ -175,6 +177,8 @@ export default function App() {
   const [storageHint, setStorageHint] = useState<string | null>(null);
   const [textDialog, setTextDialog] = useState<TextDialogState | null>(null);
   const [confirmDialog, setConfirmDialog] = useState<ConfirmDialogState | null>(null);
+  const [restoreCardRequest, setRestoreCardRequest] = useState<Card | null>(null);
+  const [archiveToast, setArchiveToast] = useState<ArchiveToastState | null>(null);
   const [updateStatus, setUpdateStatus] = useState<UpdateStatus>("idle");
   const [updateInfo, setUpdateInfo] = useState<AppUpdate | null>(null);
   const [updateMessage, setUpdateMessage] = useState("");
@@ -205,6 +209,7 @@ export default function App() {
   // Overdue + due-today count across every board — the reminder nudge shown on
   // the Filter nav item.
   const dueReminders = dueReminderCount(cards);
+  const archivedCardCount = cards.filter((card) => card.archived).length;
   const inboxItems = useMemo(() => buildInboxItems(cards, activeMemberId, members), [cards, activeMemberId, members]);
   const inboxUnread = inboxUnreadCount(inboxItems, inboxSeenAt);
 
@@ -1484,8 +1489,8 @@ export default function App() {
       onConfirm: async () => {
         const now = timestamp();
         const nextCards = cards.map((card) =>
-          card.boardId === board.id && card.listId === list.id
-            ? addActivity({ ...card, archived: true, updatedAt: now }, "archived", `Archived when ${list.name} was deleted`)
+          card.boardId === board.id && card.listId === list.id && !card.archived
+            ? addActivity({ ...card, archived: true, archivedAt: now, updatedAt: now }, "archived", `Archived when ${list.name} was deleted`)
             : card
         );
         const changedCards = nextCards.filter((card, index) => card !== cards[index]);
@@ -1495,6 +1500,16 @@ export default function App() {
           lists: board.lists.filter((item) => item.id !== list.id),
           updatedAt: now
         });
+        if (changedCards.length > 0) {
+          setArchiveToast({
+            message: `${countLabel(changedCards.length, "card")} archived when “${list.name}” was deleted.`,
+            actionLabel: "View archive",
+            onAction: () => {
+              setArchiveToast(null);
+              setView("archive");
+            }
+          });
+        }
       }
     });
   }
@@ -1512,17 +1527,25 @@ export default function App() {
 
     openConfirmDialog({
       title: "Archive all cards",
-      message: `Archive ${countLabel(listCards.length, "card")} in "${list.name}"? Archived cards remain available from Filter.`,
+      message: `Archive ${countLabel(listCards.length, "card")} in "${list.name}"? Archived cards remain available from Archive.`,
       confirmLabel: "Archive all cards",
       onConfirm: async () => {
         const archivedCards = listCards.map((card) =>
-          addActivity({ ...card, archived: true }, "archived", `Archived with all cards in ${list.name}`)
+          addActivity({ ...card, archived: true, archivedAt: timestamp() }, "archived", `Archived with all cards in ${list.name}`)
         );
         await Promise.all(archivedCards.map((card, index) => persistCard(card, listCards[index])));
         const archivedIds = new Set(listCards.map((card) => card.id));
         if (selectedCardIdRef.current && archivedIds.has(selectedCardIdRef.current)) {
           setSelectedCardId(null);
         }
+        setArchiveToast({
+          message: `${countLabel(listCards.length, "card")} archived from “${list.name}”.`,
+          actionLabel: "View archive",
+          onAction: () => {
+            setArchiveToast(null);
+            setView("archive");
+          }
+        });
       }
     });
   }
@@ -1630,13 +1653,91 @@ export default function App() {
     });
   }
 
-  async function archiveCard(card: Card) {
+  async function archiveCard(card: Card, showFeedback = true) {
     try {
-      const archived = addActivity({ ...card, archived: true }, "archived", "Archived card");
-      await persistCard(archived, card);
+      if (card.archived) {
+        setNotice("This card is already archived. Restore it from the Archive view.");
+        setNoticeKind("info");
+        return;
+      }
+      const archived = addActivity({ ...card, archived: true, archivedAt: timestamp() }, "archived", "Archived card");
+      const outcome = await persistCard(archived, card);
       setSelectedCardId(null);
+      if (outcome?.status === "written" && showFeedback) {
+        setArchiveToast({
+          message: `“${card.title}” archived.`,
+          actionLabel: "Undo",
+          onAction: async () => {
+            setArchiveToast(null);
+            try {
+              await restoreCardTo(archived, archived.boardId, archived.listId, false);
+              setArchiveToast({ message: "Archive undone." });
+            } catch (reason) {
+              setError(`Undo failed: ${errorText(reason)}`);
+            }
+          }
+        });
+      }
     } catch (reason) {
       setError(`Archive failed: ${errorText(reason)}`);
+      if (!showFeedback) throw reason;
+    }
+  }
+
+  async function restoreCardTo(card: Card, boardId: string, listId: string, showFeedback = true) {
+    const current = cardsRef.current.find((item) => item.id === card.id) ?? card;
+    const board = boardsRef.current.find((item) => item.id === boardId);
+    const list = board?.lists.find((item) => item.id === listId);
+    if (!board || !list) {
+      throw new Error("Choose an existing board and list before restoring this card.");
+    }
+
+    const returningToOriginalLocation = current.boardId === boardId && current.listId === listId;
+    const listCards = cardsRef.current.filter(
+      (item) => item.id !== current.id && !item.archived && item.boardId === boardId && item.listId === listId
+    );
+    const restored = addActivity({
+      ...current,
+      boardId,
+      listId,
+      order: returningToOriginalLocation ? current.order : nextOrderForList(listCards),
+      archived: false,
+      archivedAt: undefined
+    }, "restored", `Restored to ${board.name} / ${list.name}`);
+    const outcome = await persistCard(restored, current);
+    setRestoreCardRequest(null);
+    if (selectedCardIdRef.current === current.id) {
+      setSelectedCardId(null);
+    }
+    if (outcome?.status === "written" && showFeedback) {
+      setArchiveToast({
+        message: `“${current.title}” restored to ${board.name} / ${list.name}.`,
+        actionLabel: "Undo",
+        onAction: async () => {
+          setArchiveToast(null);
+          try {
+            await archiveCard(restored, false);
+            setArchiveToast({ message: "Restore undone; the card is back in Archive." });
+          } catch (reason) {
+            setError(`Undo failed: ${errorText(reason)}`);
+          }
+        }
+      });
+    }
+  }
+
+  async function requestRestoreCard(card: Card) {
+    const current = cardsRef.current.find((item) => item.id === card.id) ?? card;
+    const board = boardsRef.current.find((item) => item.id === current.boardId);
+    const list = board?.lists.find((item) => item.id === current.listId);
+    if (!board || !list) {
+      setRestoreCardRequest(current);
+      return;
+    }
+    try {
+      await restoreCardTo(current, board.id, list.id);
+    } catch (reason) {
+      setError(`Restore failed: ${errorText(reason)}`);
     }
   }
 
@@ -1645,9 +1746,9 @@ export default function App() {
       return;
     }
     openConfirmDialog({
-      title: "Delete card",
-      message: `Delete card "${card.title}"? This removes the card file from disk.`,
-      confirmLabel: "Delete card",
+      title: "Delete card forever",
+      message: `Delete card "${card.title}" forever? This removes the card file${card.attachments.length > 0 ? ` and ${countLabel(card.attachments.length, "attachment")}` : ""} from disk.`,
+      confirmLabel: "Delete forever",
       destructive: true,
       onConfirm: async () => {
         try {
@@ -2573,6 +2674,7 @@ export default function App() {
           boardGroups={boardGroups}
           boardNavSections={boardNavSections}
           boards={boards}
+          archivedCardCount={archivedCardCount}
           dueReminders={dueReminders}
           inboxUnread={inboxUnread}
           opening={opening}
@@ -2682,10 +2784,23 @@ export default function App() {
             savedViews={savedViews}
             requestedFilter={filterRequest}
             onOpenCard={openCardFromWorkspaceView}
+            onRestoreCard={requestRestoreCard}
             onExportCalendar={exportDueCalendar}
             onSaveView={saveFilterView}
             onRenameView={renameFilterView}
             onDeleteView={deleteFilterView}
+            onOpenContextMenu={openContextMenu}
+            onCopyText={copyText}
+          />
+        )}
+        {view === "archive" && (
+          <ArchiveView
+            cards={cards}
+            boards={boards}
+            members={members}
+            onOpenCard={openCardFromWorkspaceView}
+            onRestoreCard={requestRestoreCard}
+            onDeleteCard={removeCard}
             onOpenContextMenu={openContextMenu}
             onCopyText={copyText}
           />
@@ -2748,6 +2863,7 @@ export default function App() {
             onSave={saveCardFromEditor}
             onClose={() => setSelectedCardId(null)}
             onArchive={archiveCard}
+            onRestore={requestRestoreCard}
             onDelete={removeCard}
             onAddAttachments={attachFilesToCard}
             onRemoveAttachment={removeAttachmentFromCard}
@@ -2790,6 +2906,22 @@ export default function App() {
             }}
           />
         )}
+        {restoreCardRequest && (
+          <RestoreCardDialog
+            card={restoreCardRequest}
+            boards={boards}
+            onCancel={() => setRestoreCardRequest(null)}
+            onRestore={async (card, boardId, listId) => {
+              try {
+                await restoreCardTo(card, boardId, listId);
+              } catch (reason) {
+                setError(`Restore failed: ${errorText(reason)}`);
+                throw reason;
+              }
+            }}
+          />
+        )}
+        {archiveToast && <ArchiveToast toast={archiveToast} onDismiss={() => setArchiveToast(null)} />}
         {contextMenu && (
           <ContextMenu
             menu={contextMenu}

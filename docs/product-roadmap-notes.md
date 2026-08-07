@@ -29,11 +29,11 @@ Kanban boards rely on ordering inside a list as an implicit priority system. Lim
 
 **Shipped.** Cards now carry a manual `order` and can be dragged to any position within a list (an insertion line marks where the card will land). Sorting is order-first with due date as the tiebreaker, so an un-curated list still reads in due-date priority until someone reorders it: cards default to order `0` ("unordered"), and the first in-list drag renormalizes the affected list to spaced, distinct orders. Placement uses fractional midpoints so a typical reorder rewrites only the moved card. The `order` lives in each card's Markdown frontmatter. Still open: cross-list drop position is honored, but reordering via the card editor's List dropdown appends rather than prompting for a position.
 
-### [ ] Archive and Recovery UI
+### [x] Archive and Recovery UI
 
 Archived cards need a visible recovery path: archive browser, unarchive, and possibly recently deleted/trash. Without that, archive acts like a one-way hiding mechanism.
 
-**Partially covered.** The Filter view can include archived cards, so archived work is discoverable, but there is still no dedicated archive browser, unarchive action, or trash/recently deleted workflow.
+**Archive recovery shipped.** A workspace-level **Archive** view in the sidebar shows every archived card, including completed work, with search, board filtering, archive-date sorting, source location, archive reason, labels, assignees, and an archived-card count. Cards restore to their surviving original list in one click; cards orphaned by list deletion open a board/list chooser and append at the destination. Archived cards opened from Filter or a deep link now show **Restore** rather than offering Archive again. Archive and restore events remain in readable card activity, new archives carry an explicit `archivedAt`, and older card files fall back to their archive activity timestamp. Permanent deletion remains available with an explicit file/attachment warning. Still open: a separate soft-delete/trash workflow with retention and purging; Archive deliberately remains preserved content rather than deleted content.
 
 ### [x] Due-Date Workflow
 
@@ -85,8 +85,8 @@ Limn should not rush into accounts, cloud hosting, or heavyweight permissions un
 
 The next major product step should make larger workspaces safer and more portable:
 
-1. Archive recovery, including unarchive and recently deleted/trash.
-2. Conflict review and version history.
+1. Recently deleted/trash, including retention and recovery.
+2. Version history beyond conflict artifacts.
 3. Import, export, and backup tools.
 4. Recurring tasks and card/board templates.
 5. Cross-board overview/dashboard.

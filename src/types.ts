@@ -1,4 +1,4 @@
-export type View = "board" | "inbox" | "filter" | "members" | "settings";
+export type View = "board" | "inbox" | "filter" | "archive" | "members" | "settings";
 
 // One open workspace tab: its folder path plus a display name (the workspace's
 // configured name once loaded, otherwise the folder's base name).
@@ -120,7 +120,7 @@ export interface Board {
 
 export interface ActivityEvent {
   id: string;
-  type: "created" | "updated" | "moved" | "assigned" | "completed" | "archived";
+  type: "created" | "updated" | "moved" | "assigned" | "completed" | "archived" | "restored";
   message: string;
   createdAt: string;
 }
@@ -194,6 +194,9 @@ export interface Card {
   order: number;
   completed: boolean;
   archived: boolean;
+  // When the current archived period began. Older cards predate this field;
+  // the archive view falls back to the latest archived activity event.
+  archivedAt?: string;
   createdAt: string;
   updatedAt: string;
   activity: ActivityEvent[];

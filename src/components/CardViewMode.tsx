@@ -25,6 +25,7 @@ export function CardViewMode({
   onRemoveAttachment,
   onOpenAttachment,
   onArchive,
+  onRestore,
   onDelete,
   onSelectActiveMember,
   onAddComment,
@@ -48,6 +49,7 @@ export function CardViewMode({
   onRemoveAttachment: (attachment: Attachment) => void;
   onOpenAttachment: (attachment: Attachment) => void;
   onArchive: () => void;
+  onRestore: () => void;
   onDelete: () => void;
   onSelectActiveMember: (memberId: string) => void;
   onAddComment: (body: string) => Promise<void>;
@@ -67,6 +69,7 @@ export function CardViewMode({
         <div className="card-view-title-block">
           <p className="eyebrow">{location || "Card details"}</p>
           <h2 data-testid="card-view-title">{card.title || "Untitled card"}</h2>
+          {card.archived && <span className="filter-tag">Archived</span>}
         </div>
         <div className="card-view-actions">
           <button data-testid="edit-card" onClick={onEdit}>
@@ -248,9 +251,15 @@ export function CardViewMode({
 
       <footer className="card-view-footer">
         <div className="destructive-actions">
-          <button data-testid="archive-card" onClick={onArchive}>
-            <Icon name="archive" /> Archive
-          </button>
+          {card.archived ? (
+            <button data-testid="restore-card" onClick={onRestore}>
+              <Icon name="refresh" /> Restore
+            </button>
+          ) : (
+            <button data-testid="archive-card" onClick={onArchive}>
+              <Icon name="archive" /> Archive
+            </button>
+          )}
           <button data-testid="delete-card" onClick={onDelete}>
             <Icon name="trash" /> Delete
           </button>

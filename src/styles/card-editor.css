@@ -138,6 +138,17 @@
   border-color: var(--danger-border);
 }
 
+.card-editor .destructive-actions button[data-testid="restore-card"] {
+  color: var(--accent-link);
+  border-color: var(--accent-border);
+}
+
+.card-editor .destructive-actions button[data-testid="restore-card"]:hover:not(:disabled) {
+  color: var(--text-strong);
+  background: var(--accent-soft);
+  border-color: var(--accent-border);
+}
+
 /* Shared section rhythm for the main column and the metadata rail. */
 .main-section {
   display: grid;
