@@ -1527,6 +1527,31 @@ export default function App() {
     });
   }
 
+  async function sortListCardsByDueDate(list: BoardList) {
+    if (!activeBoard) {
+      return;
+    }
+    const listCards = cards.filter(
+      (card) => card.boardId === activeBoard.id && card.listId === list.id && !card.archived
+    );
+    const manuallyOrderedCards = listCards.filter((card) => card.order !== 0);
+    if (manuallyOrderedCards.length === 0) {
+      return;
+    }
+
+    try {
+      // A shared order of zero opts the list back into its built-in due-date
+      // comparator. Future cards also stay in due-date mode until manually moved.
+      await Promise.all(
+        manuallyOrderedCards.map((card) =>
+          persistCard({ ...card, order: 0, updatedAt: timestamp() }, card)
+        )
+      );
+    } catch (reason) {
+      setError(`Sort by due date failed: ${errorText(reason)}`);
+    }
+  }
+
   async function deleteListCards(list: BoardList) {
     if (!activeBoard || !workspacePath) {
       return;
@@ -2629,6 +2654,7 @@ export default function App() {
             onDeleteBoard={removeBoard}
             onRenameList={renameList}
             onDeleteList={deleteList}
+            onSortListCardsByDueDate={sortListCardsByDueDate}
             onArchiveListCards={archiveListCards}
             onDeleteListCards={deleteListCards}
             onToggleListCollapsed={toggleListCollapsed}

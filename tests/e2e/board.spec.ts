@@ -175,7 +175,7 @@ test.describe("smoke", () => {
     expect((await snapshot(page)).loadWorkspaceCount).toBe(loadCountBeforeBurst + 1);
   });
 
-  test("cards in a list sort by due date", async ({ page }) => {
+  test("a list context menu can sort manually ordered cards by due date", async ({ page }) => {
     await openApp(page);
     await openWorkspace(page);
 
@@ -196,8 +196,34 @@ test.describe("smoke", () => {
     await createDatedCard("Later", "2026-06-16");
     await createDatedCard("Earlier", "2026-06-14");
 
-    const titles = await page.getByTestId("list-todo").locator(".task-card h3").allTextContents();
-    expect(titles).toEqual(["Earlier", "Later"]);
+    const todoList = page.getByTestId("list-todo");
+    const titles = () => todoList.locator(".task-card h3").allTextContents();
+    expect(await titles()).toEqual(["Earlier", "Later"]);
+
+    // Manually put the earlier card last so the due-date action has an explicit
+    // order to replace.
+    const earlier = todoList.locator(".task-card").first();
+    const later = todoList.locator(".task-card").last();
+    const earlierBox = await earlier.boundingBox();
+    const laterBox = await later.boundingBox();
+    if (!earlierBox || !laterBox) {
+      throw new Error("card bounding boxes unavailable");
+    }
+    await page.mouse.move(earlierBox.x + earlierBox.width / 2, earlierBox.y + earlierBox.height / 2);
+    await page.mouse.down();
+    await page.mouse.move(earlierBox.x + earlierBox.width / 2, earlierBox.y + earlierBox.height / 2 + 20);
+    await page.mouse.move(laterBox.x + laterBox.width / 2, laterBox.y + laterBox.height - 2);
+    await page.mouse.up();
+    await expect.poll(titles).toEqual(["Later", "Earlier"]);
+
+    await page.getByTestId("list-title-todo").click({ button: "right" });
+    await page.getByTestId("context-menu").getByRole("menuitem", { name: "Sort cards by due date" }).click();
+
+    await expect.poll(titles).toEqual(["Earlier", "Later"]);
+    await expect.poll(async () => {
+      const state = await snapshot(page);
+      return state.cards.map((file) => Number(file.content.match(/^order:\s*(-?\d+(?:\.\d+)?)$/m)?.[1] ?? NaN));
+    }).toEqual([0, 0]);
   });
 
   test("compact board mode shows only card titles and footer metadata", async ({ page }) => {

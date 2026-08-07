@@ -22,6 +22,7 @@ export interface BoardViewProps {
   onDeleteBoard: (board: Board) => Promise<void>;
   onRenameList: (list: BoardList) => Promise<void>;
   onDeleteList: (list: BoardList) => Promise<void>;
+  onSortListCardsByDueDate: (list: BoardList) => Promise<void>;
   onArchiveListCards: (list: BoardList) => Promise<void>;
   onDeleteListCards: (list: BoardList) => Promise<void>;
   onToggleListCollapsed: (list: BoardList) => Promise<void>;
@@ -483,6 +484,13 @@ export function BoardView(props: BoardViewProps) {
       },
       { label: "Rename list", icon: "edit", onSelect: () => void props.onRenameList(list) },
       { label: "Copy list name", icon: "copy", onSelect: () => void props.onCopyText(list.name) },
+      { type: "separator" },
+      {
+        label: "Sort cards by due date",
+        icon: "calendar",
+        disabled: activeCardCount < 2,
+        onSelect: () => void props.onSortListCardsByDueDate(list)
+      },
       { type: "separator" },
       {
         label: "Archive all cards",
