@@ -47,23 +47,39 @@ test.describe("filter, presets, and saved views", () => {
     await openApp(page);
     await openWorkspace(page);
 
+    await page.getByTestId("nav-members").click();
+    await page.getByTestId("member-name-input").fill("Ada Lovelace");
+    await page.getByTestId("add-member").click();
+    await page.getByTestId("member-name-input").fill("Grace Hopper");
+    await page.getByTestId("add-member").click();
+    const members = (await snapshot(page)).members.members as Array<{ id: string; name: string }>;
+    const ada = members.find((member) => member.name === "Ada Lovelace")!;
+    const grace = members.find((member) => member.name === "Grace Hopper")!;
+    await page.getByTestId("identity-select").click();
+    await page.getByRole("menuitem", { name: "Ada Lovelace" }).click();
+
     await page.getByTestId("create-board").click();
     await page.getByTestId("text-dialog-input").fill("Due Work");
     await page.getByTestId("text-dialog-submit").click();
 
-    await createCard(page, "Overdue task", { due: dueOffset(-2) });
-    await createCard(page, "Today task", { due: dueOffset(0) });
-    await createCard(page, "Future task", { due: dueOffset(30) });
+    await createCard(page, "Overdue task", { due: dueOffset(-2), assigneeId: ada.id });
+    await createCard(page, "Today task", { due: dueOffset(0), assigneeId: ada.id });
+    await createCard(page, "Grace task", { due: dueOffset(0), assigneeId: grace.id });
+    await createCard(page, "Future task", { due: dueOffset(30), assigneeId: ada.id });
     await createCard(page, "Someday");
 
-    // Overdue + due-today count now nudges from the Filter nav item.
+    // Reloading surfaces a personal reminder, excluding another member's due card.
+    await openApp(page, { reset: false });
+    await expect(page.getByText("2 cards assigned to you are overdue or due today. Open Filter to review.")).toBeVisible();
     await expect(page.getByTestId("due-reminder-count")).toHaveText("2");
     await page.getByTestId("due-reminder-count").click();
     await expect(page.getByTestId("filter-due")).toHaveValue("soon");
     await expect(page.getByTestId("filter-sort")).toHaveValue("due");
+    await expect(page.getByTestId(`filter-active-assignee-${ada.id}`)).toContainText("Assignee: Ada Lovelace");
     await expect(rows(page)).toHaveCount(2);
     await expect(rowWith(page, "Overdue task")).toBeVisible();
     await expect(rowWith(page, "Today task")).toBeVisible();
+    await expect(rowWith(page, "Grace task")).toHaveCount(0);
     await expect(rowWith(page, "Future task")).toHaveCount(0);
     await expect(rowWith(page, "Someday")).toHaveCount(0);
 
@@ -73,13 +89,13 @@ test.describe("filter, presets, and saved views", () => {
     await page.keyboard.press("Escape");
     await expect(page.getByTestId("card-view")).toBeHidden();
 
-    // Exporting writes an .ics with a VEVENT per dated card (Someday is skipped).
+    // Exporting remains workspace-wide, with a VEVENT per dated card (Someday is skipped).
     await page.getByTestId("due-export").click();
     await expect.poll(async () => {
       const state = await snapshot(page);
       const ics = state.exports.find((file) => file.path === "exports/limn-due-dates.ics");
       return ics ? (ics.content.match(/BEGIN:VEVENT/g) ?? []).length : 0;
-    }).toBe(3);
+    }).toBe(4);
   });
 
   test("filters cards by text, label, due, and status, then opens a result", async ({ page }) => {

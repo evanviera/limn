@@ -247,20 +247,21 @@ assert.equal(describeDue("2026-07-04", dueNow).label, "Due tomorrow");
 assert.equal(describeDue("2026-07-06", dueNow).status, "soon");
 assert.equal(describeDue("2026-07-20", dueNow).status, "later");
 
-// Reminder count = overdue + due-today among active (not completed/archived).
+// Reminder count = overdue + due-today among the selected member's active cards.
+const reminderCards = [
+  { due: "2026-07-01", completed: false, archived: false, assignees: ["ada"] },
+  { due: "2026-07-03", completed: false, archived: false, assignees: ["ada", "grace"] },
+  { due: "2026-07-03", completed: false, archived: false, assignees: ["grace"] },
+  { due: "2026-07-03", completed: true, archived: false, assignees: ["ada"] },
+  { due: "2026-07-01", completed: false, archived: true, assignees: ["ada"] },
+  { due: "2026-08-01", completed: false, archived: false, assignees: ["ada"] }
+];
 assert.equal(
-  dueReminderCount(
-    [
-      { due: "2026-07-01", completed: false, archived: false },
-      { due: "2026-07-03", completed: false, archived: false },
-      { due: "2026-07-03", completed: true, archived: false },
-      { due: "2026-07-01", completed: false, archived: true },
-      { due: "2026-08-01", completed: false, archived: false }
-    ],
-    dueNow
-  ),
+  dueReminderCount(reminderCards, "ada", dueNow),
   2
 );
+assert.equal(dueReminderCount(reminderCards, "grace", dueNow), 2);
+assert.equal(dueReminderCount(reminderCards, "", dueNow), 0);
 
 // buildCalendar emits one all-day VEVENT per dated entry, escaping TEXT values
 // and skipping entries without a valid due date.

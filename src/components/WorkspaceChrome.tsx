@@ -205,7 +205,7 @@ export function WorkspaceSidebar({
             <span
               className="nav-badge"
               data-testid="due-reminder-count"
-              title={`${countLabel(dueReminders, "card")} overdue or due today. Click to filter by due date.`}
+              title={`${countLabel(dueReminders, "card")} assigned to you ${dueReminders === 1 ? "is" : "are"} overdue or due today. Click to review your cards.`}
             >
               {dueReminders}
             </span>

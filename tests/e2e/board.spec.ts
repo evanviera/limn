@@ -16,7 +16,7 @@ test.describe("smoke", () => {
     await expect(page.getByTestId("nav-settings")).toBeVisible();
   });
 
-  test("board header actions consistently pair icons with visible labels", async ({ page }) => {
+  test("board header uses focused View, More, and Add list actions", async ({ page }) => {
     await openApp(page);
     await openWorkspace(page);
 
@@ -24,13 +24,19 @@ test.describe("smoke", () => {
     await page.getByTestId("text-dialog-input").fill("Editorial Board");
     await page.getByTestId("text-dialog-submit").click();
 
-    await expect(page.getByRole("group", { name: "Board management" })).toBeVisible();
-    await expect(page.getByRole("group", { name: "Card display" })).toBeVisible();
-    await expect(page.getByTestId("rename-board")).toContainText("Rename");
-    await expect(page.getByTestId("delete-board")).toContainText("Delete");
-    await expect(page.getByTestId("compact-board-toggle")).toContainText("Compact");
-    await expect(page.getByTestId("compact-completed-toggle")).toContainText("Compact completed");
+    await expect(page.getByTestId("board-view-menu-toggle")).toContainText("View");
+    await expect(page.getByTestId("board-more-menu")).toContainText("More");
+    await expect(page.getByTestId("compact-board-toggle")).toHaveCount(0);
     await expect(page.getByTestId("add-list")).toContainText("Add list");
+
+    await page.getByTestId("board-view-menu-toggle").click();
+    await expect(page.getByRole("group", { name: "Card display" })).toBeVisible();
+    await expect(page.getByTestId("compact-board-toggle")).toContainText("Compact cards");
+    await expect(page.getByTestId("compact-completed-toggle")).toContainText("Compact completed");
+
+    await page.getByTestId("board-more-menu").click();
+    await expect(page.getByTestId("context-menu").getByRole("menuitem", { name: "Rename board" })).toBeVisible();
+    await expect(page.getByTestId("context-menu").getByRole("menuitem", { name: "Delete board" })).toBeVisible();
   });
 
   test("a plain browser tab (no desktop shell) explains it needs the desktop app", async ({ page }) => {
@@ -308,6 +314,7 @@ test.describe("smoke", () => {
     await expect(card.locator(".card-notes-preview")).toContainText("This note should collapse");
 
     // Selective mode reacts to completion state without shrinking active cards.
+    await page.getByTestId("board-view-menu-toggle").click();
     await page.getByTestId("compact-completed-toggle").click();
     await expect(page.getByTestId("compact-completed-toggle")).toHaveAttribute("aria-pressed", "true");
     await expect(card).not.toHaveClass(/compact/);
@@ -317,6 +324,7 @@ test.describe("smoke", () => {
     await expect(card).toHaveClass(/compact/);
     await expect(card.locator(".label-row")).toHaveCount(0);
 
+    await page.getByTestId("board-view-menu-toggle").click();
     await page.getByTestId("compact-completed-toggle").click();
     await expect(card).not.toHaveClass(/compact/);
     await expect(card.locator(".label-row")).toContainText("Planning");

@@ -83,6 +83,9 @@ export function BoardView(props: BoardViewProps) {
   const [listDropTarget, setListDropTarget] = useState<{ index: number } | null>(null);
   const [compactCards, setCompactCards] = useState(false);
   const [autoCompactCompletedCards, setAutoCompactCompletedCards] = useState(false);
+  const [viewMenuOpen, setViewMenuOpen] = useState(false);
+  const viewMenuRef = useRef<HTMLDivElement | null>(null);
+  const viewMenuToggleRef = useRef<HTMLButtonElement | null>(null);
   const mouseDragCleanupRef = useRef<(() => void) | null>(null);
   const mouseListDragCleanupRef = useRef<(() => void) | null>(null);
   const suppressCardClickRef = useRef<string | null>(null);
@@ -97,6 +100,32 @@ export function BoardView(props: BoardViewProps) {
     },
     []
   );
+
+  useEffect(() => {
+    if (!viewMenuOpen) {
+      return undefined;
+    }
+
+    function closeOnPointerDown(event: PointerEvent) {
+      if (!viewMenuRef.current?.contains(event.target as Node)) {
+        setViewMenuOpen(false);
+      }
+    }
+
+    function closeOnKeyDown(event: KeyboardEvent) {
+      if (event.key === "Escape") {
+        setViewMenuOpen(false);
+        viewMenuToggleRef.current?.focus();
+      }
+    }
+
+    document.addEventListener("pointerdown", closeOnPointerDown);
+    document.addEventListener("keydown", closeOnKeyDown);
+    return () => {
+      document.removeEventListener("pointerdown", closeOnPointerDown);
+      document.removeEventListener("keydown", closeOnKeyDown);
+    };
+  }, [viewMenuOpen]);
 
   function createDragState(element: HTMLElement, cardId: string, clientX: number, clientY: number): DragState {
     const rect = element.getBoundingClientRect();
@@ -465,6 +494,12 @@ export function BoardView(props: BoardViewProps) {
   function boardContextItems(): ContextMenuItem[] {
     return [
       { label: "Add list", icon: "plus", onSelect: () => void props.onAddList() },
+      ...boardMoreContextItems()
+    ];
+  }
+
+  function boardMoreContextItems(): ContextMenuItem[] {
+    return [
       { label: "Rename board", icon: "edit", onSelect: () => void props.onRenameBoard(props.board) },
       { label: "Copy board name", icon: "copy", onSelect: () => void props.onCopyText(props.board.name) },
       { type: "separator" },
@@ -558,34 +593,53 @@ export function BoardView(props: BoardViewProps) {
           <p className="meta-line">{countLabel(props.board.lists.length, "list")} / {countLabel(props.cards.length, "card")}</p>
         </div>
         <div className="header-actions">
-          <div className="board-header-action-group" role="group" aria-label="Board management">
-            <button aria-label="Rename board" data-testid="rename-board" title="Rename board" onClick={() => void props.onRenameBoard(props.board)}>
-              <Icon name="edit" /> Rename
-            </button>
-            <button aria-label="Delete board" data-testid="delete-board" title="Delete board" onClick={() => void props.onDeleteBoard(props.board)}>
-              <Icon name="trash" /> Delete
-            </button>
-          </div>
-          <div className="board-header-action-group" role="group" aria-label="Card display">
+          <div className="board-view-menu" ref={viewMenuRef}>
             <button
-              aria-pressed={compactCards}
-              className={`compact-toggle ${compactCards ? "active" : ""}`}
-              data-testid="compact-board-toggle"
-              title={compactCards ? "Show full cards" : "Show compact cards"}
-              onClick={() => setCompactCards((current) => !current)}
+              ref={viewMenuToggleRef}
+              aria-controls="board-view-options"
+              aria-expanded={viewMenuOpen}
+              data-testid="board-view-menu-toggle"
+              onClick={() => setViewMenuOpen((current) => !current)}
             >
-              <Icon name={compactCards ? "maximize" : "minus"} /> Compact
+              <Icon name="sliders" /> View
             </button>
-            <button
-              aria-pressed={autoCompactCompletedCards}
-              className={`compact-toggle ${autoCompactCompletedCards ? "active" : ""}`}
-              data-testid="compact-completed-toggle"
-              title={autoCompactCompletedCards ? "Show completed cards in full" : "Automatically compact completed cards"}
-              onClick={() => setAutoCompactCompletedCards((current) => !current)}
-            >
-              <Icon name="check" /> Compact completed
-            </button>
+            {viewMenuOpen && (
+              <div className="board-view-popover" id="board-view-options" role="group" aria-label="Card display">
+                <p>Card display</p>
+                <button
+                  aria-pressed={compactCards}
+                  className="board-view-option"
+                  data-testid="compact-board-toggle"
+                  onClick={() => setCompactCards((current) => !current)}
+                >
+                  <span className="board-view-option-copy">
+                    <Icon name={compactCards ? "maximize" : "minus"} />
+                    <span><strong>Compact cards</strong><small>Show titles and key metadata</small></span>
+                  </span>
+                  <span className="board-view-switch" aria-hidden="true" />
+                </button>
+                <button
+                  aria-pressed={autoCompactCompletedCards}
+                  className="board-view-option"
+                  data-testid="compact-completed-toggle"
+                  onClick={() => setAutoCompactCompletedCards((current) => !current)}
+                >
+                  <span className="board-view-option-copy">
+                    <Icon name="check" />
+                    <span><strong>Compact completed</strong><small>Reduce cards when work is done</small></span>
+                  </span>
+                  <span className="board-view-switch" aria-hidden="true" />
+                </button>
+              </div>
+            )}
           </div>
+          <button
+            aria-label="More board actions"
+            data-testid="board-more-menu"
+            onClick={(event) => props.onOpenContextMenu(event, boardMoreContextItems(), props.board.name)}
+          >
+            <Icon name="more-horizontal" /> More
+          </button>
           <button className="primary" data-testid="add-list" onClick={() => void props.onAddList()}>
             <Icon name="plus" /> Add list
           </button>

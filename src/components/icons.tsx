@@ -16,6 +16,7 @@ export type IconName =
   | "folder"
   | "maximize"
   | "minus"
+  | "more-horizontal"
   | "moon"
   | "paperclip"
   | "plus"
@@ -23,6 +24,7 @@ export type IconName =
   | "save"
   | "search"
   | "settings"
+  | "sliders"
   | "sun"
   | "tag"
   | "trash"
@@ -110,6 +112,13 @@ export function Icon({ name }: { name: IconName }) {
     ),
     maximize: <path d="M6 6h12v12H6z" />,
     minus: <path d="M5 12h14" />,
+    "more-horizontal": (
+      <>
+        <circle cx="5" cy="12" r="1" />
+        <circle cx="12" cy="12" r="1" />
+        <circle cx="19" cy="12" r="1" />
+      </>
+    ),
     moon: (
       <>
         <path d="M20 15.3A8 8 0 0 1 8.7 4a7 7 0 1 0 11.3 11.3z" />
@@ -156,6 +165,16 @@ export function Icon({ name }: { name: IconName }) {
         <path d="M12 18v3" />
         <path d="m18.4 5.6-2.1 2.1" />
         <path d="m7.7 16.3-2.1 2.1" />
+      </>
+    ),
+    sliders: (
+      <>
+        <path d="M4 7h10" />
+        <path d="M18 7h2" />
+        <circle cx="16" cy="7" r="2" />
+        <path d="M4 17h2" />
+        <path d="M10 17h10" />
+        <circle cx="8" cy="17" r="2" />
       </>
     ),
     sun: (

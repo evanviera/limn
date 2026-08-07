@@ -107,11 +107,15 @@ export function describeDue(due: string, now: Date = new Date()): DueInfo {
   return { status: "later", days, label: formatShortDate(dueDate, now) };
 }
 
-// Count active cards (not completed, not archived) that are overdue or due
-// today — the reminder surface shown as a badge on the Filter nav item.
-export function dueReminderCount(cards: Card[], now: Date = new Date()): number {
+// Count active cards assigned to the current member that are overdue or due
+// today — the reminder surface shown as a badge on the Filter nav item. Without
+// a selected identity there is no personal queue to remind the user about.
+export function dueReminderCount(cards: Card[], assigneeId: string, now: Date = new Date()): number {
+  if (!assigneeId) {
+    return 0;
+  }
   return cards.filter((card) => {
-    if (card.completed || card.archived) {
+    if (card.completed || card.archived || !card.assignees.includes(assigneeId)) {
       return false;
     }
     const status = describeDue(card.due, now).status;

@@ -101,6 +101,17 @@ const WORKSPACE_WATCH_REFRESH_DELAY_MS = 75;
 const INCREMENTAL_REFRESH_MAX_FILES = 40;
 const CLOUD_HINT_DISMISS_PREFIX = "limn-cloud-hint-dismissed:";
 
+function dueReminderMessage(count: number): string {
+  if (count <= 0) {
+    return "";
+  }
+  return `${countLabel(count, "card")} assigned to you ${count === 1 ? "is" : "are"} overdue or due today. Open Filter to review.`;
+}
+
+function isDueReminderMessage(message: string): boolean {
+  return message.endsWith("overdue or due today. Open Filter to review.");
+}
+
 // Whether the user has dismissed the cloud-storage advisory for this workspace.
 function storageHintDismissed(path: string): boolean {
   try {
@@ -206,9 +217,9 @@ export default function App() {
   const selectedCard = cards.find((card) => card.id === selectedCardId) ?? null;
   const activeMember = resolveActiveMember(members, activeMemberId);
   const updaterAvailable = canUseUpdater();
-  // Overdue + due-today count across every board — the reminder nudge shown on
-  // the Filter nav item.
-  const dueReminders = dueReminderCount(cards);
+  // Personal overdue + due-today count across every board — the reminder nudge
+  // shown on the Filter nav item.
+  const dueReminders = dueReminderCount(cards, activeMember?.id ?? "");
   const archivedCardCount = cards.filter((card) => card.archived).length;
   const inboxItems = useMemo(() => buildInboxItems(cards, activeMemberId, members), [cards, activeMemberId, members]);
   const inboxUnread = inboxUnreadCount(inboxItems, inboxSeenAt);
@@ -598,12 +609,13 @@ export default function App() {
         setSelectedCardId(focusCard.id);
       }
       const diagnostics = [...meta.diagnostics, ...cardData.diagnostics];
-      const reminders = dueReminderCount(cardData.cards);
+      const reminderMemberId = resolveActiveMember(meta.membersFile.members, readActiveMemberId(path))?.id ?? "";
+      const reminders = dueReminderCount(cardData.cards, reminderMemberId);
       if (diagnostics.length > 0) {
         setNotice(diagnostics.join(" "));
         setNoticeKind("warning");
       } else if (reminders > 0) {
-        setNotice(`${countLabel(reminders, "card")} overdue or due today. Open Filter to review.`);
+        setNotice(dueReminderMessage(reminders));
         setNoticeKind("warning");
       } else {
         setNotice("");
@@ -1859,10 +1871,13 @@ export default function App() {
   }
 
   function openDueReminderFilter() {
+    if (!activeMember) {
+      return;
+    }
     setView("filter");
     setFilterRequest((current) => ({
       id: (current?.id ?? 0) + 1,
-      filter: { ...EMPTY_FILTER, due: "soon", sort: "due" }
+      filter: { ...EMPTY_FILTER, assignees: [activeMember.id], due: "soon", sort: "due" }
     }));
   }
 
@@ -2115,6 +2130,14 @@ export default function App() {
   function selectActiveMember(memberId: string) {
     writeActiveMemberId(workspacePath, memberId);
     setActiveMemberId(memberId);
+    // Keep an existing reminder banner synchronized when identity changes, but
+    // never overwrite unrelated diagnostics or command feedback.
+    if (!notice || isDueReminderMessage(notice)) {
+      const nextMemberId = resolveActiveMember(members, memberId)?.id ?? "";
+      const reminders = dueReminderCount(cards, nextMemberId);
+      setNotice(dueReminderMessage(reminders));
+      setNoticeKind(reminders > 0 ? "warning" : "info");
+    }
   }
 
   async function saveCardFromEditor(nextCard: Card) {
