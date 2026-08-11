@@ -3,9 +3,11 @@ use std::{
     fs,
     io::Cursor,
     path::{Path, PathBuf},
-    time::SystemTime,
+    sync::{Arc, OnceLock},
+    time::{Duration, SystemTime},
 };
 use tauri::ipc::Response;
+use tokio::sync::Semaphore;
 
 // A cached, downscaled rendering of an image attachment. `max_dimension` is the
 // longest-side pixel budget; `suffix` distinguishes each tier's cache file so both
@@ -32,6 +34,51 @@ pub(crate) const LIGHTBOX_TIER: PreviewTier = PreviewTier {
 // Cache subfolder under attachments/<card_id>/. Hidden so it reads as scratch data
 // and never collides with a stored attachment name.
 const THUMBNAIL_DIR: &str = ".thumbnails";
+
+// Cloud providers can block a metadata lookup or read indefinitely while they
+// materialize an online-only file. Preview commands are automatic (every visible
+// image card requests one), so never perform that work on Tauri's main IPC thread.
+// Keep the detached blocking work bounded too: timing out a spawn_blocking task
+// cannot cancel an in-flight kernel call, so its permit stays inside the task until
+// the OS operation actually returns.
+const ATTACHMENT_IO_CONCURRENCY: usize = 4;
+const ATTACHMENT_IO_TIMEOUT: Duration = Duration::from_secs(20);
+
+fn attachment_io_semaphore() -> &'static Arc<Semaphore> {
+    static SEMAPHORE: OnceLock<Arc<Semaphore>> = OnceLock::new();
+    SEMAPHORE.get_or_init(|| Arc::new(Semaphore::new(ATTACHMENT_IO_CONCURRENCY)))
+}
+
+pub(crate) async fn run_attachment_io_with_timeout<T, F>(
+    timeout: Duration,
+    operation: F,
+) -> Result<T, String>
+where
+    T: Send + 'static,
+    F: FnOnce() -> Result<T, String> + Send + 'static,
+{
+    let deadline = tokio::time::Instant::now() + timeout;
+    let permit =
+        tokio::time::timeout_at(deadline, attachment_io_semaphore().clone().acquire_owned())
+            .await
+            .map_err(|_| attachment_io_timeout_message())?
+            .map_err(|_| "Attachment preview workers are unavailable".to_string())?;
+
+    let task = tokio::task::spawn_blocking(move || {
+        let _permit = permit;
+        operation()
+    });
+    match tokio::time::timeout_at(deadline, task).await {
+        Ok(Ok(result)) => result,
+        Ok(Err(error)) => Err(format!("Attachment preview task failed: {error}")),
+        Err(_) => Err(attachment_io_timeout_message()),
+    }
+}
+
+fn attachment_io_timeout_message() -> String {
+    "Attachment preview is taking too long to download from cloud storage. Keep this workspace available offline and try again."
+        .to_string()
+}
 
 #[tauri::command]
 pub(crate) fn pick_attachment_files() -> Result<Vec<String>, String> {
@@ -148,42 +195,44 @@ pub(crate) fn reveal_attachment(
 // large attachments in the lightbox instant.
 
 #[tauri::command]
-pub(crate) fn read_attachment_preview(
+pub(crate) async fn read_attachment_preview(
     path: String,
     card_id: String,
     stored_name: String,
 ) -> Result<Response, String> {
-    Ok(Response::new(attachment_preview(&path, &card_id, &stored_name)?))
+    let bytes = run_attachment_io_with_timeout(ATTACHMENT_IO_TIMEOUT, move || {
+        attachment_preview(&path, &card_id, &stored_name)
+    })
+    .await?;
+    Ok(Response::new(bytes))
 }
 
 // The small ~640px cover/row thumbnail.
 #[tauri::command]
-pub(crate) fn read_attachment_thumbnail(
+pub(crate) async fn read_attachment_thumbnail(
     path: String,
     card_id: String,
     stored_name: String,
 ) -> Result<Response, String> {
-    Ok(Response::new(attachment_rendering(
-        &path,
-        &card_id,
-        &stored_name,
-        &THUMBNAIL_TIER,
-    )?))
+    let bytes = run_attachment_io_with_timeout(ATTACHMENT_IO_TIMEOUT, move || {
+        attachment_rendering(&path, &card_id, &stored_name, &THUMBNAIL_TIER)
+    })
+    .await?;
+    Ok(Response::new(bytes))
 }
 
 // The fit-to-screen ~2560px lightbox rendering.
 #[tauri::command]
-pub(crate) fn read_attachment_large_preview(
+pub(crate) async fn read_attachment_large_preview(
     path: String,
     card_id: String,
     stored_name: String,
 ) -> Result<Response, String> {
-    Ok(Response::new(attachment_rendering(
-        &path,
-        &card_id,
-        &stored_name,
-        &LIGHTBOX_TIER,
-    )?))
+    let bytes = run_attachment_io_with_timeout(ATTACHMENT_IO_TIMEOUT, move || {
+        attachment_rendering(&path, &card_id, &stored_name, &LIGHTBOX_TIER)
+    })
+    .await?;
+    Ok(Response::new(bytes))
 }
 
 // Read an image attachment's raw bytes. Used directly for formats we cannot

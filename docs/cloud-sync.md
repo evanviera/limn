@@ -30,6 +30,10 @@ Limn is built to stay responsive even on a cloud vault:
   time. Any single file that can't download in time is skipped with a warning
   instead of hanging the whole load — and you can **Cancel** the card phase at any
   point and reload later.
+- **Non-blocking attachment previews.** Image thumbnail and lightbox reads run on a
+  bounded background pool with a timeout. An online-only attachment may show no
+  preview until it downloads, but it cannot freeze the window or stop card-loading
+  progress and workspace-tab actions.
 - **A cloud-storage hint.** When your workspace path looks like a sync folder,
   Limn shows a one-time banner recommending you keep the folder available offline.
 - **Incremental refresh.** When files change on disk (e.g. another device synced),

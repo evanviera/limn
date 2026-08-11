@@ -1,4 +1,7 @@
-use super::attachments::{attachment_preview, attachment_rendering, LIGHTBOX_TIER, THUMBNAIL_TIER};
+use super::attachments::{
+    attachment_preview, attachment_rendering, run_attachment_io_with_timeout, LIGHTBOX_TIER,
+    THUMBNAIL_TIER,
+};
 use super::*;
 use std::{
     io::{Read, Write},
@@ -489,6 +492,46 @@ fn image_attachment_preview_reads_only_supported_images() {
     assert!(unsupported.contains("supported image"));
 
     let _ = fs::remove_dir_all(root);
+}
+
+#[tokio::test(flavor = "current_thread")]
+async fn attachment_preview_io_does_not_block_the_async_runtime() {
+    let operation = tokio::spawn(run_attachment_io_with_timeout(
+        Duration::from_secs(1),
+        || {
+            thread::sleep(Duration::from_millis(75));
+            Ok(42)
+        },
+    ));
+
+    tokio::time::timeout(
+        Duration::from_millis(30),
+        tokio::time::sleep(Duration::from_millis(5)),
+    )
+    .await
+    .expect("the runtime stays responsive while attachment IO is blocked");
+    assert_eq!(operation.await.expect("preview task joins"), Ok(42));
+}
+
+#[tokio::test]
+async fn attachment_preview_io_times_out_without_waiting_for_the_blocking_task() {
+    let (started_tx, started_rx) = std::sync::mpsc::channel();
+    let (release_tx, release_rx) = std::sync::mpsc::channel();
+    let error = run_attachment_io_with_timeout(Duration::from_millis(50), move || {
+        started_tx.send(()).expect("test observes the blocking task");
+        release_rx.recv().expect("test releases the blocking task");
+        Ok(())
+    })
+    .await
+    .expect_err("slow attachment IO times out");
+
+    assert!(error.contains("cloud storage"));
+    started_rx
+        .recv_timeout(Duration::from_millis(20))
+        .expect("the blocking task started before the timeout");
+    release_tx
+        .send(())
+        .expect("the detached blocking task is still alive after the timeout");
 }
 
 #[test]
