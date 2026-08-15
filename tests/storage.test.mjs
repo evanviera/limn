@@ -27,7 +27,16 @@ import { resolveConflictWrite } from "../.tmp/storage-test/src/lib/mergeWrite.js
 import { buildConflict, buildConflicts } from "../.tmp/storage-test/src/lib/conflicts.js";
 import { listNameTriggersMoveNotification, parseMovedToListNames } from "../.tmp/storage-test/src/lib/notifications.js";
 import { cardDeepLink, parseCardDeepLink } from "../.tmp/storage-test/src/lib/deepLink.js";
-import { buildInboxItems, inboxSeenAtKey, inboxUnreadCount, isInboxItemUnread } from "../.tmp/storage-test/src/lib/inbox.js";
+import {
+  buildInboxItems,
+  inboxSeenAtKey,
+  inboxUnreadCount,
+  isInboxItemUnread,
+  markAllInboxItemsRead,
+  markInboxItemRead,
+  parseInboxReadState,
+  serializeInboxReadState
+} from "../.tmp/storage-test/src/lib/inbox.js";
 import { archiveLocation, archiveReason, archiveTimestamp, compareArchivedCards } from "../.tmp/storage-test/src/lib/archive.js";
 import { buildRecurringSuccessor, nextRecurrenceDate, normalizeRecurrence, recurrenceValidation } from "../.tmp/storage-test/src/lib/recurrence.js";
 
@@ -106,8 +115,13 @@ assert.deepEqual(inboxItems.map((item) => item.kind), ["mention", "comment", "co
 assert.equal(inboxItems[0].label, "Ada Lovelace mentioned you");
 assert.equal(inboxItems[1].label, "Ada Lovelace commented");
 assert.equal(inboxItems.filter((item) => item.kind === "mention").length, 1);
-assert.equal(inboxUnreadCount(inboxItems, "2026-06-27T00:34:00.000Z"), 4);
-assert.equal(isInboxItemUnread(inboxItems.at(-1), "2026-06-27T00:30:00.000Z"), false);
+const legacyInboxReadState = parseInboxReadState("2026-06-27T00:34:00.000Z");
+assert.equal(inboxUnreadCount(inboxItems, legacyInboxReadState), 4);
+assert.equal(isInboxItemUnread(inboxItems.at(-1), parseInboxReadState("2026-06-27T00:30:00.000Z")), false);
+const oneReadInboxState = markInboxItemRead(legacyInboxReadState, inboxItems[0].id);
+assert.equal(inboxUnreadCount(inboxItems, oneReadInboxState), 3);
+assert.deepEqual(parseInboxReadState(serializeInboxReadState(oneReadInboxState)), oneReadInboxState);
+assert.equal(inboxUnreadCount(inboxItems, markAllInboxItemsRead(oneReadInboxState, inboxItems)), 0);
 assert.equal(inboxSeenAtKey("/work:space", "grace"), "limn:inbox:seenAt:/work:space:grace");
 
 const roundTripped = parseCard(serializeCard(baseCard), baseCard.fileName);

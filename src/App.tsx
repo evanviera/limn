@@ -87,7 +87,18 @@ import type { ListWidthMode, SlackNotificationKey, ThemeMode } from "./lib/const
 import { useResizableSidebar } from "./lib/useResizableSidebar";
 import { buildCalendar, dueReminderCount, type CalendarEntry } from "./lib/dueDate";
 import { EMPTY_FILTER } from "./lib/filter";
-import { buildInboxItems, inboxSeenAtKey, inboxUnreadCount } from "./lib/inbox";
+import {
+  buildInboxItems,
+  EMPTY_INBOX_READ_STATE,
+  inboxSeenAtKey,
+  inboxUnreadCount,
+  markAllInboxItemsRead,
+  markInboxItemRead,
+  parseInboxReadState,
+  serializeInboxReadState,
+  type InboxItem,
+  type InboxReadState
+} from "./lib/inbox";
 import { listNameTriggersMoveNotification } from "./lib/notifications";
 import { compareBoardsByOrder, compareCardsByOrder, nextOrderForList, placeInList } from "./lib/ordering";
 import { clampListWidth, countLabel, errorText, initials, readStoredListWidth, readStoredListWidthMode, readStoredThemeMode, sameJson, selectActiveBoardId, slackTag, upsertById, workspaceBaseName } from "./lib/format";
@@ -129,6 +140,28 @@ function rememberStorageHintDismissed(path: string): void {
   }
 }
 
+function readStoredInboxReadState(workspacePath: string, memberId: string): InboxReadState {
+  if (!workspacePath || !memberId) {
+    return EMPTY_INBOX_READ_STATE;
+  }
+  try {
+    return parseInboxReadState(localStorage.getItem(inboxSeenAtKey(workspacePath, memberId)));
+  } catch {
+    return EMPTY_INBOX_READ_STATE;
+  }
+}
+
+function writeStoredInboxReadState(workspacePath: string, memberId: string, state: InboxReadState): void {
+  if (!workspacePath || !memberId) {
+    return;
+  }
+  try {
+    localStorage.setItem(inboxSeenAtKey(workspacePath, memberId), serializeInboxReadState(state));
+  } catch {
+    // Read state is best-effort device-local UI state.
+  }
+}
+
 // Classify a workspace-relative changed path from the watcher. A plain card file
 // can be reloaded incrementally; anything else (boards, settings, members, or a
 // card conflict copy) needs a full reload to stay correct.
@@ -166,7 +199,7 @@ export default function App() {
   const settingsRef = useRef<WorkspaceSettings | null>(null);
   const [members, setMembers] = useState<Member[]>([]);
   const [activeMemberId, setActiveMemberId] = useState("");
-  const [inboxSeenAt, setInboxSeenAt] = useState("");
+  const [inboxReadState, setInboxReadState] = useState<InboxReadState>(EMPTY_INBOX_READ_STATE);
   const [boards, setBoards] = useState<Board[]>([]);
   const [cards, setCards] = useState<Card[]>([]);
   const recurrenceRepairRef = useRef(new Set<string>());
@@ -222,19 +255,7 @@ export default function App() {
   const dueReminders = dueReminderCount(cards, activeMember?.id ?? "");
   const archivedCardCount = cards.filter((card) => card.archived).length;
   const inboxItems = useMemo(() => buildInboxItems(cards, activeMemberId, members), [cards, activeMemberId, members]);
-  const inboxUnread = inboxUnreadCount(inboxItems, inboxSeenAt);
-
-  useEffect(() => {
-    if (!workspacePath || !activeMemberId) {
-      setInboxSeenAt("");
-      return;
-    }
-    try {
-      setInboxSeenAt(localStorage.getItem(inboxSeenAtKey(workspacePath, activeMemberId)) ?? "");
-    } catch {
-      setInboxSeenAt("");
-    }
-  }, [workspacePath, activeMemberId]);
+  const inboxUnread = inboxUnreadCount(inboxItems, inboxReadState);
 
   useLayoutEffect(() => {
     document.documentElement.dataset.platform = platformName();
@@ -567,7 +588,9 @@ export default function App() {
     setSettings(meta.settings);
     setMembers(meta.membersFile.members);
     membersVersionRef.current = meta.membersFile.updatedAt;
-    setActiveMemberId(readActiveMemberId(path));
+    const memberId = readActiveMemberId(path);
+    setActiveMemberId(memberId);
+    setInboxReadState(readStoredInboxReadState(path, memberId));
     setBoards(meta.boards);
     setCards([]);
     setActiveBoardId((current) => selectActiveBoardId(current, meta.boards));
@@ -700,6 +723,8 @@ export default function App() {
     settingsRef.current = null;
     setSettings(null);
     setMembers([]);
+    setActiveMemberId("");
+    setInboxReadState(EMPTY_INBOX_READ_STATE);
     setBoards([]);
     setCards([]);
     setActiveBoardId("");
@@ -1836,6 +1861,19 @@ export default function App() {
     setSelectedCardId(card.id);
   }
 
+  function openInboxItem(item: InboxItem) {
+    const nextReadState = markInboxItemRead(inboxReadState, item.id);
+    setInboxReadState(nextReadState);
+    writeStoredInboxReadState(workspacePath, activeMemberId, nextReadState);
+    openCardFromWorkspaceView(item.card);
+  }
+
+  function markInboxRead() {
+    const nextReadState = markAllInboxItemsRead(inboxReadState, inboxItems);
+    setInboxReadState(nextReadState);
+    writeStoredInboxReadState(workspacePath, activeMemberId, nextReadState);
+  }
+
   function openCardFromBoard(cardId: string) {
     setSelectedCardMode("view");
     setSelectedCardId(cardId);
@@ -2130,6 +2168,7 @@ export default function App() {
   function selectActiveMember(memberId: string) {
     writeActiveMemberId(workspacePath, memberId);
     setActiveMemberId(memberId);
+    setInboxReadState(readStoredInboxReadState(workspacePath, memberId));
     // Keep an existing reminder banner synchronized when identity changes, but
     // never overwrite unrelated diagnostics or command feedback.
     if (!notice || isDueReminderMessage(notice)) {
@@ -2835,18 +2874,10 @@ export default function App() {
             activeMemberId={activeMemberId}
             boards={boards}
             items={inboxItems}
-            seenAt={inboxSeenAt}
+            readState={inboxReadState}
             onChooseIdentity={() => document.querySelector<HTMLElement>("[data-testid='identity-select']")?.click()}
-            onMarkAllRead={() => {
-              const seenAt = new Date().toISOString();
-              setInboxSeenAt(seenAt);
-              try {
-                localStorage.setItem(inboxSeenAtKey(workspacePath, activeMemberId), seenAt);
-              } catch {
-                // Read state is best-effort device-local UI state.
-              }
-            }}
-            onOpenCard={openCardFromWorkspaceView}
+            onMarkAllRead={markInboxRead}
+            onOpenItem={openInboxItem}
           />
         )}
         {view === "members" && (

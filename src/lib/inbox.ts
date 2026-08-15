@@ -14,8 +14,39 @@ export interface InboxItem {
 
 export const INBOX_SEEN_AT_PREFIX = "limn:inbox:seenAt:";
 
+export interface InboxReadState {
+  seenAt: string;
+  readItemIds: string[];
+}
+
+export const EMPTY_INBOX_READ_STATE: InboxReadState = { seenAt: "", readItemIds: [] };
+
 export function inboxSeenAtKey(workspacePath: string, memberId: string): string {
   return `${INBOX_SEEN_AT_PREFIX}${workspacePath}:${memberId}`;
+}
+
+// Inbox read state is device-local, just like the active identity. Older builds
+// stored a bare ISO timestamp under this key; accept that shape so existing read
+// history survives the move to per-item state.
+export function parseInboxReadState(value: string | null): InboxReadState {
+  if (!value) {
+    return EMPTY_INBOX_READ_STATE;
+  }
+  try {
+    const parsed = JSON.parse(value) as Partial<InboxReadState>;
+    return {
+      seenAt: typeof parsed.seenAt === "string" ? parsed.seenAt : "",
+      readItemIds: Array.isArray(parsed.readItemIds)
+        ? [...new Set(parsed.readItemIds.filter((id): id is string => typeof id === "string"))]
+        : []
+    };
+  } catch {
+    return { seenAt: value, readItemIds: [] };
+  }
+}
+
+export function serializeInboxReadState(state: InboxReadState): string {
+  return JSON.stringify(state);
 }
 
 function mentionTargetsMember(body: string, activeMemberId: string, members: Member[]): boolean {
@@ -65,10 +96,25 @@ export function buildInboxItems(cards: Card[], activeMemberId: string, members: 
   return items.sort((left, right) => right.createdAt.localeCompare(left.createdAt) || left.id.localeCompare(right.id));
 }
 
-export function isInboxItemUnread(item: Pick<InboxItem, "createdAt">, seenAt: string): boolean {
-  return !seenAt || item.createdAt > seenAt;
+export function isInboxItemUnread(item: Pick<InboxItem, "id" | "createdAt">, state: InboxReadState): boolean {
+  return !state.readItemIds.includes(item.id) && (!state.seenAt || item.createdAt > state.seenAt);
 }
 
-export function inboxUnreadCount(items: Array<Pick<InboxItem, "createdAt">>, seenAt: string): number {
-  return items.filter((item) => isInboxItemUnread(item, seenAt)).length;
+export function inboxUnreadCount(items: Array<Pick<InboxItem, "id" | "createdAt">>, state: InboxReadState): number {
+  return items.filter((item) => isInboxItemUnread(item, state)).length;
+}
+
+export function markInboxItemRead(state: InboxReadState, itemId: string): InboxReadState {
+  if (state.readItemIds.includes(itemId)) {
+    return state;
+  }
+  return { ...state, readItemIds: [...state.readItemIds, itemId] };
+}
+
+export function markAllInboxItemsRead(state: InboxReadState, items: Array<Pick<InboxItem, "createdAt">>): InboxReadState {
+  const newestItemAt = items.reduce(
+    (latest, item) => item.createdAt > latest ? item.createdAt : latest,
+    state.seenAt
+  );
+  return { seenAt: newestItemAt, readItemIds: [] };
 }

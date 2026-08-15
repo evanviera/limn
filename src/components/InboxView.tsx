@@ -1,16 +1,16 @@
 import { useState } from "react";
-import type { Board, Card } from "../types";
-import type { InboxItem } from "../lib/inbox";
+import type { Board } from "../types";
+import type { InboxItem, InboxReadState } from "../lib/inbox";
 import { isInboxItemUnread } from "../lib/inbox.js";
 
 interface InboxViewProps {
   activeMemberId: string;
   boards: Board[];
   items: InboxItem[];
-  seenAt: string;
+  readState: InboxReadState;
   onChooseIdentity: () => void;
   onMarkAllRead: () => void;
-  onOpenCard: (card: Card) => void;
+  onOpenItem: (item: InboxItem) => void;
 }
 
 type InboxGroup = "Today" | "Yesterday" | "Earlier";
@@ -51,7 +51,7 @@ export function InboxView(props: InboxViewProps) {
   }
 
   const visibleItems = unreadOnly
-    ? props.items.filter((item) => isInboxItemUnread(item, props.seenAt))
+    ? props.items.filter((item) => isInboxItemUnread(item, props.readState))
     : props.items;
   const groups = new Map<InboxGroup, InboxItem[]>();
   for (const item of visibleItems) {
@@ -73,7 +73,7 @@ export function InboxView(props: InboxViewProps) {
             />
             Unread only
           </label>
-          <button data-testid="inbox-mark-all-read" disabled={!props.items.some((item) => isInboxItemUnread(item, props.seenAt))} onClick={props.onMarkAllRead}>Mark all read</button>
+          <button data-testid="inbox-mark-all-read" disabled={!props.items.some((item) => isInboxItemUnread(item, props.readState))} onClick={props.onMarkAllRead}>Mark all read</button>
         </div>
       </header>
       {visibleItems.length === 0 ? <p className="inbox-empty">{unreadOnly && props.items.length > 0 ? "No unread messages." : "You're all caught up."}</p> : (
@@ -83,8 +83,8 @@ export function InboxView(props: InboxViewProps) {
               <h2>{group}</h2>
               <div className="inbox-list">
                 {groups.get(group)!.map((item) => (
-                  <button className="inbox-row" data-testid={`inbox-item-${item.id}`} key={item.id} onClick={() => props.onOpenCard(item.card)}>
-                    <span className={`inbox-unread-dot${isInboxItemUnread(item, props.seenAt) ? " unread" : ""}`} aria-label={isInboxItemUnread(item, props.seenAt) ? "Unread" : undefined} />
+                  <button className="inbox-row" data-testid={`inbox-item-${item.id}`} key={item.id} onClick={() => props.onOpenItem(item)}>
+                    <span className={`inbox-unread-dot${isInboxItemUnread(item, props.readState) ? " unread" : ""}`} aria-label={isInboxItemUnread(item, props.readState) ? "Unread" : undefined} />
                     <span className="inbox-row-copy">
                       <span className="inbox-event-label">{item.label}</span>
                       <span className="inbox-card-context"><strong>{item.card.title}</strong> · {props.boards.find((board) => board.id === item.card.boardId)?.name ?? "Unknown board"}</span>

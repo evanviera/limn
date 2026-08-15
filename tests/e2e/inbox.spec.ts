@@ -52,13 +52,30 @@ test.describe("inbox", () => {
     await expect(page.getByTestId(/inbox-item-/)).toHaveCount(3);
     await page.getByTestId(/inbox-item-mention:/).click();
     await expect(page.getByRole("heading", { name: "Plan the launch" })).toBeVisible();
+    await expect(page.getByTestId("inbox-unread-count")).toHaveText("2");
     await page.getByRole("button", { name: "Close", exact: true }).click();
+    await expect(page.getByTestId(/inbox-item-mention:/)).toHaveCount(0);
+
+    // Reopening the app preserves the individually-read notification.
+    await openApp(page, { reset: false });
+    await expect(page.getByTestId("inbox-unread-count")).toHaveText("2");
+    await page.getByTestId("nav-inbox").click();
+    await page.getByTestId("inbox-unread-only").check();
+    await expect(page.getByTestId(/inbox-item-/)).toHaveCount(2);
 
     await page.getByTestId("inbox-mark-all-read").click();
     await expect(page.getByTestId("inbox-unread-count")).toBeHidden();
     await expect(page.getByText("No unread messages.")).toBeVisible();
     await page.getByTestId("inbox-unread-only").uncheck();
     await expect(page.getByTestId(/inbox-item-/)).toHaveCount(3);
+
+    // Mark-all read state also survives a fresh app session.
+    await openApp(page, { reset: false });
+    await expect(page.getByTestId("nav-inbox")).toBeVisible();
+    await expect(page.getByTestId("inbox-unread-count")).toBeHidden();
+    await page.getByTestId("nav-inbox").click();
+    await page.getByTestId("inbox-unread-only").check();
+    await expect(page.getByText("No unread messages.")).toBeVisible();
   });
 
   test("without an identity the inbox offers the identity picker", async ({ page }) => {
