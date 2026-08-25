@@ -450,6 +450,46 @@ body.is-list-dragging * {
   white-space: nowrap;
 }
 
+.task-card-attachments {
+  display: grid;
+  gap: var(--space-1);
+  min-width: 0;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.task-card-attachments li {
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr) auto;
+  align-items: center;
+  gap: var(--space-2);
+  min-width: 0;
+  padding: var(--space-1) var(--space-2);
+  color: var(--text-strong);
+  background: var(--subtle-bg);
+  border-radius: var(--radius-sm);
+  font-size: var(--text-sm);
+}
+
+.task-card-attachments .icon {
+  width: 15px;
+  height: 15px;
+  color: var(--text-muted);
+}
+
+.task-card-attachment-name {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.task-card-attachment-size {
+  color: var(--text-muted);
+  font-variant-numeric: tabular-nums;
+}
+
 /* Ghost affordance — reads as part of the list rather than a heavy button, and
    materialises into a card-like surface on hover. */
 .add-card {

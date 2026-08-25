@@ -196,6 +196,10 @@ test.describe("smoke", () => {
     await expect.poll(async () => (await snapshot(page)).externalLinks.some((link) => link.startsWith("attachment://"))).toBe(true);
 
     await page.getByRole("button", { name: "Close", exact: true }).click();
+    const cardAttachments = page.getByTestId(/card-.*-attachments/);
+    await expect(cardAttachments).toContainText("screenshot.png");
+    await expect(cardAttachments).toContainText("design-spec.pdf");
+    await expect(cardAttachments).toContainText("final-cover.jpg");
     const cardCover = page.getByTestId(/card-.*-image-cover/);
     await expect(cardCover).toBeVisible();
     await expect(cardCover).toHaveAttribute("alt", "final-cover.jpg");

@@ -1,7 +1,7 @@
 import type { Card, Member } from "../types";
 import { openExternal } from "../storage";
 import { latestImageAttachment } from "../lib/attachments";
-import { initials } from "../lib/format";
+import { formatFileSize, initials } from "../lib/format";
 import { describeDue } from "../lib/dueDate";
 import { AttachmentImagePreview } from "./AttachmentImagePreview";
 import { Icon } from "./icons";
@@ -80,6 +80,21 @@ export function TaskCardBody({
             <span key={label}>{label}</span>
           ))}
         </div>
+      )}
+      {!compact && card.attachments.length > 0 && (
+        <ul
+          aria-label="Attachments"
+          className="task-card-attachments"
+          data-testid={`card-${card.id}-attachments`}
+        >
+          {card.attachments.map((attachment) => (
+            <li key={attachment.id} title={attachment.name}>
+              <Icon name="paperclip" />
+              <span className="task-card-attachment-name">{attachment.name}</span>
+              <span className="task-card-attachment-size">{formatFileSize(attachment.size)}</span>
+            </li>
+          ))}
+        </ul>
       )}
       {!compact && card.subtasks.length > 0 && (
         <ul className="card-subtasks">
