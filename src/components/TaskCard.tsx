@@ -1,4 +1,4 @@
-import type { Card, Member } from "../types";
+import type { Attachment, Card, Member } from "../types";
 import { openExternal } from "../storage";
 import { latestImageAttachment } from "../lib/attachments";
 import { formatFileSize, initials } from "../lib/format";
@@ -15,6 +15,8 @@ export function TaskCardBody({
   compact = false,
   onOpen,
   onToggleSubtask,
+  onOpenAttachment,
+  onRevealAttachment,
   onOpenContextMenu,
   onCopyText
 }: {
@@ -24,6 +26,8 @@ export function TaskCardBody({
   compact?: boolean;
   onOpen?: (cardId: string) => void;
   onToggleSubtask?: (cardId: string, subtaskId: string, completed: boolean) => void;
+  onOpenAttachment?: (cardId: string, attachment: Attachment) => void;
+  onRevealAttachment?: (cardId: string, attachment: Attachment) => void;
   onOpenContextMenu?: OpenContextMenu;
   onCopyText?: (text: string) => Promise<void>;
 }) {
@@ -88,7 +92,32 @@ export function TaskCardBody({
           data-testid={`card-${card.id}-attachments`}
         >
           {card.attachments.map((attachment) => (
-            <li key={attachment.id} title={attachment.name}>
+            <li
+              key={attachment.id}
+              data-testid={`card-${card.id}-attachment-${attachment.id}`}
+              title={attachment.name}
+              onContextMenu={(event) => {
+                if (!onOpenContextMenu) {
+                  return;
+                }
+                onOpenContextMenu(event, [
+                  {
+                    label: "Open attachment",
+                    icon: "chevron-up-right",
+                    disabled: !onOpenAttachment,
+                    onSelect: () => onOpenAttachment?.(card.id, attachment)
+                  },
+                  {
+                    label: "Show in file manager",
+                    icon: "folder",
+                    disabled: !onRevealAttachment,
+                    onSelect: () => onRevealAttachment?.(card.id, attachment)
+                  },
+                  { label: "Copy file name", icon: "copy", onSelect: () => void onCopyText?.(attachment.name) },
+                  { label: "Open card", icon: "edit", disabled: !onOpen, onSelect: () => onOpen?.(card.id) }
+                ], attachment.name);
+              }}
+            >
               <Icon name="paperclip" />
               <span className="task-card-attachment-name">{attachment.name}</span>
               <span className="task-card-attachment-size">{formatFileSize(attachment.size)}</span>

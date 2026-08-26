@@ -24,6 +24,7 @@ export function CardViewMode({
   onAddAttachments,
   onRemoveAttachment,
   onOpenAttachment,
+  onRevealAttachment,
   onArchive,
   onRestore,
   onDelete,
@@ -48,6 +49,7 @@ export function CardViewMode({
   onAddAttachments: () => void;
   onRemoveAttachment: (attachment: Attachment) => void;
   onOpenAttachment: (attachment: Attachment) => void;
+  onRevealAttachment: (attachment: Attachment) => void;
   onArchive: () => void;
   onRestore: () => void;
   onDelete: () => void;
@@ -181,6 +183,7 @@ export function CardViewMode({
           busy={attachmentBusy}
           onAdd={onAddAttachments}
           onOpen={onOpenAttachment}
+          onReveal={onRevealAttachment}
           onRemove={onRemoveAttachment}
           onOpenContextMenu={onOpenContextMenu}
           onCopyText={onCopyText}

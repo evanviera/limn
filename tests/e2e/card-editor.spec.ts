@@ -290,6 +290,41 @@ test.describe("smoke", () => {
     await expect(page.getByTestId("add-attachment")).toBeVisible();
   });
 
+  test("right-clicking an attachment reveals it in the file manager", async ({ page }) => {
+    await openApp(page);
+    await openWorkspace(page);
+
+    await page.getByTestId("create-board").click();
+    await page.getByTestId("text-dialog-input").fill("Reveal Board");
+    await page.getByTestId("text-dialog-submit").click();
+
+    await page.getByTestId("add-card-todo").click();
+    await page.getByTestId("text-dialog-input").fill("Reveal card");
+    await page.getByTestId("text-dialog-submit").click();
+
+    await queueAttachmentPick(page, ["/mock/uploads/spec.pdf"]);
+    await page.getByTestId("add-attachment").click();
+
+    // The editor's attachment row exposes the reveal action on right-click.
+    const contextMenu = page.getByTestId("context-menu");
+    await page.locator(".attachment-row", { hasText: "spec.pdf" }).click({ button: "right" });
+    await expect(contextMenu).toBeVisible();
+    await contextMenu.getByRole("menuitem", { name: "Show in file manager" }).click();
+    await expect
+      .poll(async () => (await snapshot(page)).externalLinks.filter((link) => link.startsWith("reveal://")).length)
+      .toBe(1);
+
+    await page.getByRole("button", { name: "Close", exact: true }).click();
+
+    // So does the attachment row listed on the board card itself.
+    await page.locator(".task-card-attachments li", { hasText: "spec.pdf" }).click({ button: "right" });
+    await expect(contextMenu).toBeVisible();
+    await contextMenu.getByRole("menuitem", { name: "Show in file manager" }).click();
+    await expect
+      .poll(async () => (await snapshot(page)).externalLinks.filter((link) => link.startsWith("reveal://")).length)
+      .toBe(2);
+  });
+
   test("files dropped onto a board card are attached to that card", async ({ page }) => {
     await openApp(page);
     await openWorkspace(page);

@@ -2829,6 +2829,8 @@ export default function App() {
             onMoveCard={moveCard}
             onOpenCard={openCardFromBoard}
             onToggleSubtask={toggleSubtask}
+            onOpenAttachment={openCardAttachment}
+            onRevealAttachment={revealCardAttachment}
             onToggleCardCompleted={toggleCardCompleted}
             onArchiveCard={archiveCard}
             onDeleteCard={removeCard}

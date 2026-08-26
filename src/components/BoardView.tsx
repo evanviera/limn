@@ -1,6 +1,6 @@
 import { Fragment, useEffect, useRef, useState } from "react";
 import type { MouseEvent as ReactMouseEvent, PointerEvent as ReactPointerEvent } from "react";
-import type { Board, BoardList, Card, Member } from "../types";
+import type { Attachment, Board, BoardList, Card, Member } from "../types";
 import { countLabel } from "../lib/format";
 import { cardDeepLink } from "../lib/deepLink";
 import { compareCardsByOrder } from "../lib/ordering";
@@ -34,6 +34,8 @@ export interface BoardViewProps {
   onMoveCard: (cardId: string, listId: string, index?: number) => Promise<void>;
   onOpenCard: (cardId: string) => void;
   onToggleSubtask: (cardId: string, subtaskId: string, completed: boolean) => Promise<void>;
+  onOpenAttachment: (cardId: string, attachment: Attachment) => Promise<void>;
+  onRevealAttachment: (cardId: string, attachment: Attachment) => Promise<void>;
   onToggleCardCompleted: (card: Card) => Promise<void>;
   onArchiveCard: (card: Card) => Promise<void>;
   onDeleteCard: (card: Card) => Promise<void>;
@@ -809,6 +811,8 @@ export function BoardView(props: BoardViewProps) {
                           workspacePath={props.workspacePath}
                           onOpen={openCard}
                           onToggleSubtask={props.onToggleSubtask}
+                          onOpenAttachment={(cardId, attachment) => void props.onOpenAttachment(cardId, attachment)}
+                          onRevealAttachment={(cardId, attachment) => void props.onRevealAttachment(cardId, attachment)}
                           onOpenContextMenu={props.onOpenContextMenu}
                           onCopyText={props.onCopyText}
                         />

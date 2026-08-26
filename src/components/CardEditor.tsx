@@ -933,6 +933,7 @@ export function CardEditor({
               busy={attachmentBusy}
               onAdd={() => void runAttachmentAction(() => onAddAttachments(card.id))}
               onOpen={openAttachment}
+              onReveal={(attachment) => void onRevealAttachment(card.id, attachment)}
               onRemove={(attachment) => void runAttachmentAction(() => onRemoveAttachment(card.id, attachment))}
               onOpenContextMenu={onOpenContextMenu}
               onCopyText={onCopyText}

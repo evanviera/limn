@@ -101,6 +101,7 @@ export function CardViewPanel({
           onAddAttachments={onAddAttachments}
           onRemoveAttachment={onRemoveAttachment}
           onOpenAttachment={onOpenAttachment}
+          onRevealAttachment={onRevealAttachment}
           onArchive={onArchive}
           onRestore={onRestore}
           onDelete={onDelete}

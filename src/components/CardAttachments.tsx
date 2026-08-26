@@ -15,6 +15,7 @@ export function CardAttachments({
   busy,
   onAdd,
   onOpen,
+  onReveal,
   onRemove,
   onOpenContextMenu,
   onCopyText
@@ -25,6 +26,7 @@ export function CardAttachments({
   busy: boolean;
   onAdd: () => void;
   onOpen: (attachment: Attachment) => void;
+  onReveal: (attachment: Attachment) => void;
   onRemove: (attachment: Attachment) => void;
   onOpenContextMenu: OpenContextMenu;
   onCopyText: (text: string) => Promise<void>;
@@ -32,6 +34,7 @@ export function CardAttachments({
   function attachmentContextItems(attachment: Attachment): ContextMenuItem[] {
     return [
       { label: "Open attachment", icon: "chevron-up-right", onSelect: () => onOpen(attachment) },
+      { label: "Show in file manager", icon: "folder", onSelect: () => onReveal(attachment) },
       { label: "Copy file name", icon: "copy", disabled: !attachment.name.trim(), onSelect: () => void onCopyText(attachment.name) },
       { type: "separator" },
       { label: "Remove attachment", icon: "trash", danger: true, onSelect: () => onRemove(attachment) }
