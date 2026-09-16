@@ -115,6 +115,13 @@ order and add new partials to the barrel at the right position.
   (`list_conflicts` / `delete_conflict`). Card write-conflict copies land beside the
   card in `cards/`; delete-conflict copies and all other entities in
   `.workspace/conflicts/`.
+- `card_repair.rs` — lossless auto-repair for card files cut off on this computer
+  (typically by a sync client). Every intact card read or written is snapshotted
+  to the app data folder (`card-snapshots/`, never synced). On load, a card with
+  unclosed frontmatter is restored only when it is a byte-for-byte prefix of its
+  snapshot that already includes the full `updatedAt` line — proof it is the same
+  version — with the damaged original kept in `.workspace/damaged/`. Anything it
+  can't prove is left untouched and reported.
 - `menu.rs` — the native application menu (`build_app_menu` + `item`).
 - `tests.rs` — `#[cfg(test)]` integration tests (workspace round-trips, Slack posts).
 

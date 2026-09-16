@@ -474,7 +474,14 @@ function parseCardFiles(files: Array<{ file_name: string; content: string }>, di
     if (card?.id) {
       cards.push(card);
     } else {
-      diagnostics.push(`cards/${file.file_name} could not be loaded.`);
+      // No closing frontmatter usually means the file was cut off locally (e.g. by
+      // a sync client); Limn restores those itself when it can prove it losslessly.
+      const cutOff = !/\n---(\r?\n|$)/.test(file.content);
+      diagnostics.push(
+        cutOff
+          ? `cards/${file.file_name} could not be loaded: the file is incomplete on this computer, likely cut off while syncing. The copy in your cloud storage (or its version history) may still be intact.`
+          : `cards/${file.file_name} could not be loaded.`
+      );
     }
   }
   return cards;

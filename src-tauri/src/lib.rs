@@ -23,6 +23,7 @@ const FILE_READ_CONCURRENCY: usize = 24;
 const FILE_READ_TIMEOUT: Duration = Duration::from_secs(20);
 
 mod attachments;
+mod card_repair;
 mod menu;
 mod open_workspaces;
 mod persist;
@@ -158,8 +159,13 @@ async fn load_workspace(path: String) -> Result<WorkspaceFiles, String> {
     let board_paths = list_data_files(&root.join("boards"), "json");
     let card_paths = list_data_files(&root.join("cards"), "md");
     let (boards, board_warnings) = read_files_parallel(board_paths, None).await;
-    let (cards, card_warnings) = read_files_parallel(card_paths, None).await;
-    let warnings = board_warnings.into_iter().chain(card_warnings).collect();
+    let (mut cards, card_warnings) = read_files_parallel(card_paths, None).await;
+    let repair_warnings = card_repair::process_loaded_cards(&path, &root, &mut cards).await;
+    let warnings = board_warnings
+        .into_iter()
+        .chain(card_warnings)
+        .chain(repair_warnings)
+        .collect();
 
     Ok(WorkspaceFiles {
         settings: read_to_string(root.join(".workspace/settings.json"))?,
@@ -199,7 +205,8 @@ async fn load_workspace_meta(path: String) -> Result<WorkspaceMeta, String> {
 async fn load_workspace_cards(path: String, window: Window) -> Result<WorkspaceCards, String> {
     let root = workspace_root(&path)?;
     let card_paths = list_data_files(&root.join("cards"), "md");
-    let (cards, warnings) = read_files_parallel(card_paths, Some(window)).await;
+    let (mut cards, mut warnings) = read_files_parallel(card_paths, Some(window)).await;
+    warnings.extend(card_repair::process_loaded_cards(&path, &root, &mut cards).await);
     Ok(WorkspaceCards { cards, warnings })
 }
 
@@ -425,6 +432,9 @@ fn write_card_file(
         &content,
         expected_updated_at.as_deref(),
     )?;
+    if matches!(outcome, WriteOutcome::Written) {
+        card_repair::record_written_card(&path, &file_name, &content);
+    }
     Ok(finish_write(outcome, format!("cards/{file_name}")))
 }
 
@@ -707,6 +717,9 @@ pub fn run() {
             }
         })
         .setup(|app| {
+            if let Ok(dir) = app.path().app_data_dir() {
+                card_repair::init_snapshot_root(dir.join("card-snapshots"));
+            }
             #[cfg(target_os = "windows")]
             if let Some(window) = app.get_webview_window("main") {
                 let _ = window.set_decorations(false);
@@ -819,7 +832,12 @@ fn atomic_write(path: &Path, content: String) -> Result<(), String> {
         .and_then(|value| value.to_str())
         .ok_or_else(|| "Invalid file name".to_string())?;
     let tmp = path.with_file_name(format!(".{file_name}.tmp"));
-    fs::write(&tmp, content).map_err(display_err)?;
+    // Flush to disk before the rename so a crash can never leave a renamed but
+    // partially written file for a sync client to pick up.
+    let mut file = fs::File::create(&tmp).map_err(display_err)?;
+    std::io::Write::write_all(&mut file, content.as_bytes()).map_err(display_err)?;
+    file.sync_all().map_err(display_err)?;
+    drop(file);
     fs::rename(tmp, path).map_err(display_err)
 }
 

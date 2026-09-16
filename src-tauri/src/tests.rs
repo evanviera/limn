@@ -874,3 +874,93 @@ impl TestHttpServer {
         self.handle.join().expect("test server joins")
     }
 }
+
+fn repair_card_fixture(updated_at: &str) -> String {
+    format!(
+        "---\nid: \"card_a\"\ntitle: \"Layout\"\nupdatedAt: \"{updated_at}\"\nsubtasks: [{{\"id\":\"s1\",\"title\":\"One\"}},{{\"id\":\"s2\",\"title\":\"Two\"}}]\ncomments: []\n---\nNotes\n"
+    )
+}
+
+#[test]
+fn card_repair_restores_a_truncated_copy_of_the_snapshot_version() {
+    let root = test_workspace("card_repair_restore");
+    let store = root.join("snapshots");
+    fs::create_dir_all(root.join("cards")).expect("cards dir");
+    let workspace = root.to_string_lossy().to_string();
+    let full = repair_card_fixture("2026-09-15T20:24:51.524Z");
+
+    // First load records the intact card as a snapshot.
+    let mut content = full.clone();
+    let warnings = card_repair::snapshot_and_restore(
+        &store,
+        &workspace,
+        &root,
+        &mut [("card_a.md", &mut content)],
+    );
+    assert!(warnings.is_empty());
+
+    // The file is later cut off mid-line after the updatedAt line.
+    let damaged = full[..full.find("\"s2\"").unwrap()].to_string();
+    fs::write(root.join("cards/card_a.md"), &damaged).expect("write damaged");
+    let mut content = damaged.clone();
+    let warnings = card_repair::snapshot_and_restore(
+        &store,
+        &workspace,
+        &root,
+        &mut [("card_a.md", &mut content)],
+    );
+
+    assert_eq!(warnings.len(), 1);
+    assert_eq!(content, full);
+    assert_eq!(fs::read_to_string(root.join("cards/card_a.md")).unwrap(), full);
+    let backups: Vec<_> = fs::read_dir(root.join(".workspace/damaged"))
+        .expect("backup dir")
+        .flatten()
+        .collect();
+    assert_eq!(backups.len(), 1);
+    assert_eq!(fs::read_to_string(backups[0].path()).unwrap(), damaged);
+
+    let _ = fs::remove_dir_all(root);
+}
+
+#[test]
+fn card_repair_leaves_damage_it_cannot_prove_lossless() {
+    let root = test_workspace("card_repair_refuse");
+    let store = root.join("snapshots");
+    fs::create_dir_all(root.join("cards")).expect("cards dir");
+    let workspace = root.to_string_lossy().to_string();
+    let old = repair_card_fixture("2026-09-01T00:00:00.000Z");
+    let mut content = old.clone();
+    card_repair::snapshot_and_restore(&store, &workspace, &root, &mut [("card_a.md", &mut content)]);
+
+    // A newer version cut off: its prefix differs from the older snapshot.
+    let newer = repair_card_fixture("2026-09-15T20:24:51.524Z");
+    let damaged_newer = newer[..newer.find("\"s2\"").unwrap()].to_string();
+    // The same version cut before updatedAt: its version can't be confirmed.
+    let damaged_early = old[..old.find("updatedAt").unwrap()].to_string();
+
+    for damaged in [damaged_newer, damaged_early] {
+        fs::write(root.join("cards/card_a.md"), &damaged).expect("write damaged");
+        let mut content = damaged.clone();
+        let warnings = card_repair::snapshot_and_restore(
+            &store,
+            &workspace,
+            &root,
+            &mut [("card_a.md", &mut content)],
+        );
+        assert!(warnings.is_empty());
+        assert_eq!(content, damaged);
+        assert_eq!(fs::read_to_string(root.join("cards/card_a.md")).unwrap(), damaged);
+    }
+    assert!(!root.join(".workspace/damaged").exists());
+
+    let _ = fs::remove_dir_all(root);
+}
+
+#[test]
+fn card_repair_detects_unclosed_frontmatter() {
+    assert!(card_repair::is_intact_card(&repair_card_fixture("x")));
+    assert!(card_repair::is_intact_card("---\r\nid: \"a\"\r\n---\r\n"));
+    assert!(!card_repair::is_intact_card("---\nid: \"a\"\nsubtasks: [{"));
+    assert!(!card_repair::is_intact_card(""));
+}
