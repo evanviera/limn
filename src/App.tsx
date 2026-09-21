@@ -85,6 +85,7 @@ import { WelcomeScreen, WorkspaceBanners, WorkspaceSidebar } from "./components/
 import { LIST_WIDTH_MODE_STORAGE_KEY, LIST_WIDTH_STORAGE_KEY, MAX_SIDEBAR_WIDTH, MIN_SIDEBAR_WIDTH, THEME_STORAGE_KEY } from "./lib/constants";
 import type { ListWidthMode, SlackNotificationKey, ThemeMode } from "./lib/constants";
 import { useResizableSidebar } from "./lib/useResizableSidebar";
+import { useEmptyArchive } from "./lib/useEmptyArchive.js";
 import { buildCalendar, dueReminderCount, type CalendarEntry } from "./lib/dueDate";
 import { EMPTY_FILTER } from "./lib/filter";
 import {
@@ -312,6 +313,20 @@ export default function App() {
   // True while a progressive open's card phase is still streaming in, so a
   // watch-driven refresh defers rather than racing the card apply.
   const progressiveLoadInFlightRef = useRef(false);
+  const emptyArchive = useEmptyArchive({
+    workspacePath, cards, onConfirm: openConfirmDialog,
+    onStart: () => setArchiveToast(null),
+    onDeleted: (ids) => {
+      setCards((current) => current.filter((card) => !ids.has(card.id)));
+      setSelectedCardId((current) => current && ids.has(current) ? null : current);
+    },
+    onFinished: async (message, warning) => {
+      setNotice(message);
+      setNoticeKind(warning ? "warning" : "info");
+      await refreshWorkspace(false);
+    },
+    onError: (message) => setError(`Empty archive failed: ${message}`)
+  });
   const visibleCards = useMemo(
     () => cards.filter((card) => !card.archived && card.boardId === activeBoard?.id),
     [activeBoard?.id, cards]
@@ -942,8 +957,8 @@ export default function App() {
     if (watchRefreshInFlightRef.current) {
       return;
     }
-    // Don't race the card-apply of an in-flight progressive open; retry shortly.
-    if (progressiveLoadInFlightRef.current) {
+    // Defer while loading or deleting in bulk; reload after the batch settles.
+    if (progressiveLoadInFlightRef.current || emptyArchive.running.current) {
       watchRefreshTimerRef.current = window.setTimeout(() => {
         watchRefreshTimerRef.current = null;
         void runScheduledWatchRefresh();
@@ -2867,6 +2882,10 @@ export default function App() {
             onOpenCard={openCardFromWorkspaceView}
             onRestoreCard={requestRestoreCard}
             onDeleteCard={removeCard}
+            onEmptyArchive={emptyArchive.requestEmptyArchive}
+            emptying={emptyArchive.emptying}
+            loading={cardsLoading !== null || opening}
+            emptyProgress={emptyArchive.progress}
             onOpenContextMenu={openContextMenu}
             onCopyText={copyText}
           />

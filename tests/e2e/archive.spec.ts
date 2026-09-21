@@ -1,5 +1,5 @@
 import { test, expect, type Page } from "@playwright/test";
-import { openApp, openWorkspace, snapshot } from "./harness";
+import { openApp, openWorkspace, queueAttachmentPick, snapshot } from "./harness";
 
 async function createBoard(page: Page, name: string): Promise<string> {
   await page.getByTestId("create-board").click();
@@ -107,5 +107,108 @@ test.describe("archive recovery", () => {
     await page.getByTestId("confirm-dialog-submit").click();
     await expect.poll(async () => (await snapshot(page)).cards).toHaveLength(0);
     await expect(page.getByTestId("archive-empty")).toBeVisible();
+  });
+
+  test("empties 1,000 archived cards across filters, removes attachments, and keeps active cards", async ({ page }) => {
+    test.setTimeout(90_000);
+    await openApp(page);
+    await openWorkspace(page);
+    await createBoard(page, "Large archive");
+    const activeId = await createCard(page, "Keep active");
+    const archivedId = await createCard(page, "Discard attachment");
+    await page.getByTestId(`card-open-${archivedId}`).click();
+    await queueAttachmentPick(page, ["/mock/uploads/old.pdf"]);
+    await page.getByTestId("add-attachment").click();
+    await expect.poll(async () => (await snapshot(page)).attachments.length).toBe(1);
+    await page.getByTestId("archive-card").click();
+    const template = (await snapshot(page)).cards.find((file) => file.file_name === `${archivedId}.md`)!;
+    await page.evaluate(({ content, originalId }) => {
+      const api = (window as unknown as { __LIMN_E2E__: { externalEditCard(name: string, content: string, silent?: boolean): void } }).__LIMN_E2E__;
+      for (let index = 1; index < 1000; index++) {
+        const id = `card_archive_${index}`;
+        api.externalEditCard(`${id}.md`, content.replaceAll(originalId, id)
+          .replace(/^title: .*$/m, `title: "Old card ${index}"`)
+          .replace(/^boardId: .*$/m, 'boardId: "deleted-board"'), index < 999);
+      }
+    }, { content: template.content, originalId: archivedId });
+    // The silent fixture writes intentionally bypass incremental watch events.
+    await openApp(page, { reset: false });
+    await page.getByTestId("nav-archive").click();
+    await expect(page.getByTestId("archive-count")).toHaveText("1000");
+    await page.getByTestId("archive-search").fill("Discard attachment");
+    await expect(page.getByTestId("archive-result-count")).toContainText("1 archived card ·");
+    await page.getByTestId("empty-archive").click();
+    const dialog = page.getByRole("dialog", { name: "Empty archive?" });
+    await expect(dialog).toContainText("all 1000 archived cards");
+    await expect(dialog).toContainText("attachments from disk");
+    await expect(dialog).toContainText("cannot be undone");
+    await page.keyboard.press("Escape");
+    expect((await snapshot(page)).cards).toHaveLength(1001);
+    await page.getByTestId("empty-archive").click();
+    await page.getByTestId("confirm-dialog-submit").click();
+    await expect.poll(async () => (await snapshot(page)).cards.length, { timeout: 60_000 }).toBe(1);
+    expect((await snapshot(page)).cards[0].file_name).toBe(`${activeId}.md`);
+    expect((await snapshot(page)).attachments).toHaveLength(0);
+    await expect(page.getByTestId("archive-empty")).toContainText("No archived cards");
+    await expect(page.getByTestId("empty-archive")).toBeDisabled();
+    await expect(page.getByText("Permanently deleted 1000 archived cards.", { exact: true })).toBeVisible();
+    await openApp(page, { reset: false });
+    await page.getByTestId("nav-archive").click();
+    await expect(page.getByTestId("archive-empty")).toContainText("No archived cards");
+  });
+
+  test("keeps a card restored on another device after confirmation opens", async ({ page }) => {
+    await openApp(page);
+    await openWorkspace(page);
+    await createBoard(page, "Concurrent archive");
+    const changedId = await createCard(page, "Restored elsewhere");
+    await archiveCard(page, changedId);
+    const removedId = await createCard(page, "Unchanged archive");
+    await archiveCard(page, removedId);
+    await page.getByTestId("nav-archive").click();
+    await page.getByTestId("empty-archive").click();
+    const changed = (await snapshot(page)).cards.find((file) => file.file_name === `${changedId}.md`)!;
+    await page.evaluate(({ file_name, content }) => {
+      const api = (window as unknown as { __LIMN_E2E__: { externalEditCard(name: string, content: string, silent?: boolean): void } }).__LIMN_E2E__;
+      api.externalEditCard(file_name, content.replace(/^archived: .*$/m, "archived: false")
+        .replace(/^updatedAt: .*$/m, 'updatedAt: "2099-01-01T00:00:00.000Z"'), true);
+    }, changed);
+    await page.getByTestId("confirm-dialog-submit").click();
+    await expect.poll(async () => (await snapshot(page)).cards.length).toBe(1);
+    expect((await snapshot(page)).cards[0].file_name).toBe(changed.file_name);
+    await expect(page.getByText(/1 card changed on disk and was kept/)).toBeVisible();
+    await expect(page.getByTestId("conflict-banner")).toBeVisible();
+  });
+
+  test("reports partial failures and can retry remaining cards", async ({ page }) => {
+    await openApp(page);
+    await openWorkspace(page);
+    await createBoard(page, "Partial archive");
+    const failedId = await createCard(page, "Retry me");
+    await archiveCard(page, failedId);
+    const removedId = await createCard(page, "Delete me");
+    await archiveCard(page, removedId);
+    await page.getByTestId("nav-archive").click();
+    await page.evaluate((id) => {
+      const ipc = (window as unknown as { __LIMN_TEST_IPC__: { invoke(command: string, args?: Record<string, unknown>): Promise<unknown> } }).__LIMN_TEST_IPC__;
+      const original = ipc.invoke.bind(ipc);
+      let failOnce = true;
+      ipc.invoke = async (command, args) => {
+        if (command === "delete_card_file" && args?.fileName === `${id}.md` && failOnce) {
+          failOnce = false;
+          throw new Error("Disk unavailable");
+        }
+        return original(command, args);
+      };
+    }, failedId);
+    await page.getByTestId("empty-archive").click();
+    await page.getByTestId("confirm-dialog-submit").click();
+    await expect(page.getByText(/1 card could not be deleted/)).toBeVisible();
+    expect((await snapshot(page)).cards.map((file) => file.file_name)).toEqual([`${failedId}.md`]);
+    await expect(page.getByTestId("empty-archive")).toBeEnabled();
+    await page.getByTestId("empty-archive").click();
+    await page.getByTestId("confirm-dialog-submit").click();
+    await expect(page.getByTestId("archive-empty")).toBeVisible();
+    expect((await snapshot(page)).cards).toHaveLength(0);
   });
 });

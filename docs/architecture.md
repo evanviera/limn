@@ -29,7 +29,7 @@ focused" section before adding code to an existing large file.**
 - `AttachmentLightbox.tsx` — the full-screen image viewer opened by clicking an image attachment; arrow keys / chevrons flip through the card's image attachments.
 - `CardComments.tsx` — the card editor's discussion section: threaded comments, composer, @mention highlighting, and the "who are you?" identity prompt, fully prop-driven.
 - `FilterView.tsx` — the cross-board Filter view: free-text box, facet controls (board / assignee / label / due / status / archive / sort), preset + saved-view chips, due reminder entry point, calendar export, and the results list. Filter state is local; the engine lives in `lib/filter.ts`.
-- `ArchiveView.tsx` — the workspace-wide archive browser plus restore-location dialog. It searches/sorts archived cards, restores to a surviving original list in one click, asks for a new board/list when the original list was deleted, and exposes permanent deletion through the shared context menu.
+- `ArchiveView.tsx` — the workspace-wide archive browser plus restore-location dialog. It searches/sorts archived cards, restores to a surviving original list in one click, asks for a new board/list when the original list was deleted, and exposes permanent deletion through the shared context menu and a confirmed Empty archive action.
 - `ConflictReview.tsx` — the in-app conflict review surface: a prop-driven modal
   (reachable from the persistent conflict banner) that lists preserved conflict
   copies, compares each against the current on-disk entity field by field, and
@@ -62,6 +62,7 @@ when the last one closes). The open list + active path persist via the
 - `mentions.ts` — pure @mention matching (`matchMention`, `MENTION_SPLIT_PATTERN`, `mentionToken`) used to highlight member references in comments.
 - `filter.ts` — the pure card-filter engine: `filterCards`, `collectLabels`, `filterIsActive`, `matchesDue`, the `EMPTY_FILTER` default, and the built-in `FILTER_PRESETS`. Drives `FilterView`; saved views persist in `WorkspaceSettings.savedViews`.
 - `archive.ts` — pure archive projections: legacy-aware archive timestamps/reasons, location availability, sorting, and relative-date labels for `ArchiveView`.
+- `useEmptyArchive.ts` — confirmed workspace-wide archive deletion in bounded batches, with progress, version-checked deletes, and partial-failure reporting. Search filters do not limit the captured deletion scope.
 - `noteFormat.ts` — note markdown parse/serialize + contenteditable DOM helpers.
 - `updateMessages.ts` — updater banner/settings message builders and `UpdateStatus`.
 - `useModalKeys.ts` — modal focus-trap / Escape hook and the modal stack.

@@ -21,6 +21,10 @@ interface ArchiveViewProps {
   onOpenCard: (card: Card) => void;
   onRestoreCard: (card: Card) => Promise<void>;
   onDeleteCard: (card: Card) => Promise<void>;
+  onEmptyArchive: () => void;
+  emptying: boolean;
+  loading: boolean;
+  emptyProgress: { done: number; total: number } | null;
   onOpenContextMenu: OpenContextMenu;
   onCopyText: (text: string) => Promise<void>;
 }
@@ -90,9 +94,14 @@ export function ArchiveView(props: ArchiveViewProps) {
           </p>
         </div>
         <div className="header-actions">
+          <button className="danger" data-testid="empty-archive" disabled={props.emptying || props.loading || archivedCards.length === 0} onClick={props.onEmptyArchive}>
+            <Icon name="trash" /> {props.emptying ? "Emptying archive…" : "Empty archive…"}
+          </button>
           <button data-testid="archive-help" onClick={() => setHelpOpen(true)}>How archiving works</button>
         </div>
       </header>
+
+      {props.emptyProgress && <p className="archive-guidance" role="status">Emptying archive… {props.emptyProgress.done} of {props.emptyProgress.total} cards processed.</p>}
 
       <div className="archive-toolbar">
         <label className="archive-search">
@@ -140,8 +149,8 @@ export function ArchiveView(props: ArchiveViewProps) {
             const assignees = props.members.filter((member) => card.assignees.includes(member.id));
             const items = archiveMenuItems(props, card);
             return (
-              <li className="archive-row" data-testid={`archive-row-${card.id}`} key={card.id} onContextMenu={(event) => props.onOpenContextMenu(event, items, card.title)}>
-                <button className="archive-row-open" type="button" onClick={() => props.onOpenCard(card)}>
+              <li className="archive-row" data-testid={`archive-row-${card.id}`} key={card.id} onContextMenu={(event) => { if (props.emptying) event.preventDefault(); else props.onOpenContextMenu(event, items, card.title); }}>
+                <button className="archive-row-open" disabled={props.emptying} type="button" onClick={() => props.onOpenCard(card)}>
                   <span className="archive-row-title">
                     <strong>{card.title}</strong>
                     {card.completed && <span className="archive-state completed">Completed</span>}
@@ -164,6 +173,7 @@ export function ArchiveView(props: ArchiveViewProps) {
                   {assignees.length > 0 && <MemberDots members={assignees} />}
                   <button
                     className="archive-restore"
+                    disabled={props.emptying}
                     data-testid={`restore-card-${card.id}`}
                     type="button"
                     onClick={() => void props.onRestoreCard(card)}
@@ -173,6 +183,7 @@ export function ArchiveView(props: ArchiveViewProps) {
                   <button
                     aria-label={`More actions for ${card.title}`}
                     className="icon-button archive-more"
+                    disabled={props.emptying}
                     data-testid={`archive-more-${card.id}`}
                     type="button"
                     onClick={(event) => props.onOpenContextMenu(event, items, card.title)}
@@ -199,6 +210,7 @@ function ArchiveHelpDialog({ onClose }: { onClose: () => void }) {
       <div aria-labelledby="archive-help-title" aria-modal="true" className="text-dialog" ref={dialogRef} role="dialog" tabIndex={-1} onMouseDown={(event) => event.stopPropagation()}>
         <header><h2 id="archive-help-title">How archiving works</h2><button type="button" onClick={onClose}>Close</button></header>
         <p>Archived cards leave active boards but keep their notes, comments, attachments, and history. Restore returns a card to its previous list, or lets you choose a new location if that list was removed.</p>
+        <p>Empty archive permanently deletes every archived card and its attachments from disk across all boards in this workspace. Search and board filters do not limit this action. It cannot be undone.</p>
         <footer><button className="primary" type="button" onClick={onClose}>Got it</button></footer>
       </div>
     </div>
