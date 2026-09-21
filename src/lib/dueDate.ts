@@ -9,9 +9,13 @@ export function dueSortValue(card: Card): string {
   return card.due || "9999-12-31";
 }
 
-// Compare two cards by due date, breaking ties by creation time then title so
-// the ordering is stable and deterministic.
+// Keep completed cards below active cards, then compare by due date, breaking
+// ties by creation time then title so the ordering is stable and deterministic.
 export function compareCardsByDueDate(left: Card, right: Card): number {
+  if (left.completed !== right.completed) {
+    return left.completed ? 1 : -1;
+  }
+
   const dueComparison = dueSortValue(left).localeCompare(dueSortValue(right));
   if (dueComparison !== 0) {
     return dueComparison;
