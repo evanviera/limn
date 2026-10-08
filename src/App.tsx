@@ -60,6 +60,10 @@ import {
 } from "./updater";
 
 import { BoardView } from "./components/BoardView";
+import { BoardNameDialog, type BoardNameRequest } from "./components/BoardNameDialog.js";
+import { boardCategoryMoveError, boardChoices, boardNameError, effectiveBoardGroupId } from "./lib/boardNames.js";
+import { MoveCardDialog } from "./components/MoveCardDialog.js";
+import { useCardBoardMoves } from "./lib/useCardBoardMoves.js";
 import { ArchiveToast, ArchiveView, RestoreCardDialog } from "./components/ArchiveView";
 import type { ArchiveToastState } from "./components/ArchiveView";
 import { CardEditor } from "./components/CardEditor";
@@ -223,6 +227,7 @@ export default function App() {
   const [textDialog, setTextDialog] = useState<TextDialogState | null>(null);
   const [confirmDialog, setConfirmDialog] = useState<ConfirmDialogState | null>(null);
   const [restoreCardRequest, setRestoreCardRequest] = useState<Card | null>(null);
+  const [boardNameRequest, setBoardNameRequest] = useState<BoardNameRequest | null>(null);
   const [archiveToast, setArchiveToast] = useState<ArchiveToastState | null>(null);
   const [updateStatus, setUpdateStatus] = useState<UpdateStatus>("idle");
   const [updateInfo, setUpdateInfo] = useState<AppUpdate | null>(null);
@@ -270,6 +275,16 @@ export default function App() {
   cardsRef.current = cards;
   const boardsRef = useRef(boards);
   boardsRef.current = boards;
+  const cardBoardMoves = useCardBoardMoves({
+    workspacePath, cards: cardsRef, boards: boardsRef, persistCard, onError: setError,
+    onMoved: (card, board) => {
+      if (selectedCardIdRef.current === card.id) setSelectedCardId(null);
+      const list = board.lists.find((item) => item.id === card.listId);
+      setNotice(`“${card.title}” moved to ${board.name} / ${list?.name ?? "Unknown list"}.`);
+      setNoticeKind("info");
+    }
+  });
+  const cardMoveRequest = cards.find((card) => card.id === cardBoardMoves.requestCardId) ?? null;
   // Lets the once-subscribed deep-link listener read the active workspace path
   // without re-subscribing or closing over a stale value.
   const workspacePathRef = useRef(workspacePath);
@@ -336,6 +351,7 @@ export default function App() {
     [activeBoard?.id, cards]
   );
   const boardGroups = settings?.boardGroups ?? [];
+  const boardChoiceViews = useMemo(() => boardChoices(boards, boardGroups), [boards, boardGroups]);
   const boardNavSections = useMemo(() => {
     const validGroupIds = new Set(boardGroups.map((group) => group.id));
     const sorted = [...boards].sort(compareBoardsByOrder);
@@ -478,14 +494,21 @@ export default function App() {
       }
     }
 
+    function closeOnOutsideScroll(event: Event) {
+      // Long category menus scroll internally. Keep the menu open while the
+      // user reaches a destination farther down its list.
+      if (event.target instanceof Element && event.target.closest(".context-menu")) return;
+      closeContextMenu();
+    }
+
     window.addEventListener("pointerdown", closeContextMenu);
     window.addEventListener("resize", closeContextMenu);
-    window.addEventListener("scroll", closeContextMenu, true);
+    window.addEventListener("scroll", closeOnOutsideScroll, true);
     window.addEventListener("keydown", closeOnEscape);
     return () => {
       window.removeEventListener("pointerdown", closeContextMenu);
       window.removeEventListener("resize", closeContextMenu);
-      window.removeEventListener("scroll", closeContextMenu, true);
+      window.removeEventListener("scroll", closeOnOutsideScroll, true);
       window.removeEventListener("keydown", closeOnEscape);
     };
   }, [contextMenu]);
@@ -610,6 +633,7 @@ export default function App() {
     setCards([]);
     setActiveBoardId((current) => selectActiveBoardId(current, meta.boards));
     setSelectedCardId(null);
+    setBoardNameRequest(null);
     setSelectedCardMode("view");
     setView("board");
     setFilterRequest(null);
@@ -743,6 +767,7 @@ export default function App() {
     setBoards([]);
     setCards([]);
     setActiveBoardId("");
+    setBoardNameRequest(null);
     setSelectedCardId(null);
     setView("board");
     setFilterRequest(null);
@@ -1282,41 +1307,29 @@ export default function App() {
   }, [cards, workspacePath]);
 
   async function addBoard(groupId?: string) {
-    openTextDialog({
-      title: "Create board",
-      label: "Board name",
-      value: "",
-      confirmLabel: "Create board",
-      validate: (name) =>
-        boards.some((board) => board.name.trim().toLowerCase() === name.toLowerCase())
-          ? "A board with this name already exists."
-          : null,
-      onSubmit: async (name) => {
-        // Append below the boards already in the target category so a new board
-        // lands at the bottom of a manually-curated list instead of the top.
-        const scope = boardsRef.current.filter((item) => effectiveGroupId(item) === groupId);
-        const board = { ...createBoard(name), groupId, order: nextOrderForList(scope) };
-        await persistBoard(board);
-        setActiveBoardId(board.id);
-        setView("board");
-      }
-    });
+    setBoardNameRequest({ groupId });
   }
 
   async function renameBoard(board: Board) {
-    openTextDialog({
-      title: "Rename board",
-      label: "Board name",
-      value: board.name,
-      confirmLabel: "Save board",
-      validate: (name) =>
-        boards.some((item) => item.id !== board.id && item.name.trim().toLowerCase() === name.toLowerCase())
-          ? "A board with this name already exists."
-          : null,
-      onSubmit: async (name) => {
-        await persistBoard({ ...board, name, updatedAt: timestamp() });
-      }
-    });
+    setBoardNameRequest({ boardId: board.id });
+  }
+
+  async function saveBoardName(name: string, groupId?: string, boardId?: string) {
+    const groups = settingsRef.current?.boardGroups ?? [];
+    const current = boardsRef.current.find((board) => board.id === boardId);
+    if (boardId && !current) throw new Error("This board no longer exists.");
+    const target = effectiveBoardGroupId(current ?? { groupId }, groups);
+    const problem = boardNameError(boardsRef.current, groups, name, target, boardId);
+    if (problem) throw new Error(problem);
+    setError("");
+    const scope = boardsRef.current.filter((board) => effectiveBoardGroupId(board, groups) === target);
+    const board = current ? { ...current, name, updatedAt: timestamp() }
+      : { ...createBoard(name), groupId: target, order: nextOrderForList(scope) };
+    await persistBoard(board);
+    if (!current) {
+      setActiveBoardId(board.id);
+      setView("board");
+    }
   }
 
   async function removeBoard(board: Board) {
@@ -1403,18 +1416,23 @@ export default function App() {
     }
 
     const groupedBoards = boards.filter((board) => board.groupId === group.id);
+    const problem = boardCategoryMoveError(boardsRef.current, boardGroups, groupedBoards.map((board) => board.id));
+    if (problem) { setError(problem); return; }
     openConfirmDialog({
       title: "Delete category",
       message: `Delete category "${group.name}"? Its boards will move to Ungrouped.`,
       confirmLabel: "Delete category",
       destructive: true,
       onConfirm: async () => {
+        const latestBoards = boardsRef.current.filter((board) => board.groupId === group.id);
+        const problem = boardCategoryMoveError(boardsRef.current, settingsRef.current?.boardGroups ?? [], latestBoards.map((board) => board.id));
+        if (problem) throw new Error(problem);
         const nextSettings = {
           ...settings,
           boardGroups: boardGroups.filter((item) => item.id !== group.id)
         };
         const now = timestamp();
-        const nextBoards = groupedBoards.map((board) => ({ ...board, groupId: undefined, updatedAt: now }));
+        const nextBoards = latestBoards.map((board) => ({ ...board, groupId: undefined, updatedAt: now }));
         await Promise.all([
           persistWorkspaceSettings(nextSettings, "Category deleted."),
           ...nextBoards.map((board) => persistBoard(board))
@@ -1427,14 +1445,19 @@ export default function App() {
     if (board.groupId === groupId) {
       return;
     }
-    await persistBoard({ ...board, groupId, updatedAt: timestamp() });
+    const current = boardsRef.current.find((item) => item.id === board.id);
+    if (!current) return;
+    const problem = boardCategoryMoveError(boardsRef.current, settingsRef.current?.boardGroups ?? [], [board.id], groupId);
+    if (problem) { setError(problem); return; }
+    setError("");
+    await persistBoard({ ...current, groupId, updatedAt: timestamp() });
   }
 
   // The category a board actually renders under: its `groupId`, or undefined when
   // that group no longer exists (such boards fall into the "Ungrouped" section).
   // Mirrors the split in `boardNavSections`.
   function effectiveGroupId(board: Board): string | undefined {
-    return board.groupId && boardGroups.some((group) => group.id === board.groupId) ? board.groupId : undefined;
+    return effectiveBoardGroupId(board, settingsRef.current?.boardGroups ?? []);
   }
 
   // Reorder a board within the sidebar when it's dragged, optionally moving it
@@ -1449,6 +1472,9 @@ export default function App() {
     }
     const targetGroupId = groupId && boardGroups.some((group) => group.id === groupId) ? groupId : undefined;
     const sameGroup = effectiveGroupId(board) === targetGroupId;
+    const problem = !sameGroup && boardCategoryMoveError(boardsRef.current, settingsRef.current?.boardGroups ?? [], [boardId], targetGroupId);
+    if (problem) { setError(problem); return; }
+    setError("");
 
     const siblings = boardsRef.current
       .filter((item) => item.id !== boardId && effectiveGroupId(item) === targetGroupId)
@@ -2747,6 +2773,7 @@ export default function App() {
       >
         <WorkspaceSidebar
           activeBoardId={activeBoard?.id ?? ""}
+          cardDropBoardId={cardBoardMoves.dropBoardId}
           activeMember={activeMember}
           boardGroups={boardGroups}
           boardNavSections={boardNavSections}
@@ -2842,6 +2869,9 @@ export default function App() {
             onMoveList={moveList}
             onAddCard={addCard}
             onMoveCard={moveCard}
+            onMoveCardToBoard={cardBoardMoves.moveCardToBoard}
+            onRequestMoveCard={cardBoardMoves.requestMove}
+            onCardDropBoardChange={cardBoardMoves.setDropBoardId}
             onOpenCard={openCardFromBoard}
             onToggleSubtask={toggleSubtask}
             onOpenAttachment={openCardAttachment}
@@ -2859,7 +2889,7 @@ export default function App() {
         {view === "filter" && (
           <FilterView
             cards={cards}
-            boards={boards}
+            boards={boardChoiceViews}
             members={members}
             activeMemberId={activeMemberId}
             savedViews={savedViews}
@@ -2877,7 +2907,7 @@ export default function App() {
         {view === "archive" && (
           <ArchiveView
             cards={cards}
-            boards={boards}
+            boards={boardChoiceViews}
             members={members}
             onOpenCard={openCardFromWorkspaceView}
             onRestoreCard={requestRestoreCard}
@@ -2893,7 +2923,7 @@ export default function App() {
         {view === "inbox" && (
           <InboxView
             activeMemberId={activeMemberId}
-            boards={boards}
+            boards={boardChoiceViews}
             items={inboxItems}
             readState={inboxReadState}
             onChooseIdentity={() => document.querySelector<HTMLElement>("[data-testid='identity-select']")?.click()}
@@ -2932,7 +2962,7 @@ export default function App() {
           <CardEditor
             card={selectedCard}
             workspacePath={workspacePath}
-            boards={boards}
+            boards={boardChoiceViews}
             members={members}
             activeMember={activeMember}
             fileDragActive={fileDragActive}
@@ -2953,6 +2983,15 @@ export default function App() {
             onOpenContextMenu={openContextMenu}
             onCopyText={copyText}
           />
+        )}
+        {boardNameRequest && (
+          <BoardNameDialog key={`${workspacePath}:${boardNameRequest.boardId ?? "new"}:${boardNameRequest.groupId ?? ""}`}
+            request={boardNameRequest} boards={boards} groups={boardGroups}
+            onCancel={() => setBoardNameRequest(null)} onSave={saveBoardName} />
+        )}
+        {cardMoveRequest && (
+          <MoveCardDialog key={cardMoveRequest.id} card={cardMoveRequest} boards={boardChoiceViews}
+            onCancel={() => cardBoardMoves.requestMove(null)} onMove={cardBoardMoves.moveCardToBoard} />
         )}
         {textDialog && (
           <TextDialog
@@ -2986,7 +3025,7 @@ export default function App() {
         {restoreCardRequest && (
           <RestoreCardDialog
             card={restoreCardRequest}
-            boards={boards}
+            boards={boardChoiceViews}
             onCancel={() => setRestoreCardRequest(null)}
             onRestore={async (card, boardId, listId) => {
               try {

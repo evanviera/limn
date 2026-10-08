@@ -3,6 +3,7 @@ import { mkdtemp, mkdir, readFile, readdir, rm, unlink, writeFile } from "node:f
 import { join } from "node:path";
 import { tmpdir } from "node:os";
 import { addActivity, attachmentDisplayName, attachmentStoredName, createBoard, createCard, createComment, parseCard, parseWorkspace, serializeCard } from "../.tmp/storage-test/src/storage.js";
+import { boardNameError, boardCategoryMoveError, boardChoices, effectiveBoardGroupId } from "../.tmp/storage-test/src/lib/boardNames.js";
 import { ORDER_STEP, compareCardsByOrder, nextOrderForList, placeInList } from "../.tmp/storage-test/src/lib/ordering.js";
 import { buildCalendar, describeDue, dueReminderCount } from "../.tmp/storage-test/src/lib/dueDate.js";
 import {
@@ -967,6 +968,28 @@ assert.equal(parseCardDeepLink("limn://board/b1"), null);
 assert.equal(parseCardDeepLink("https://example.com/card/x"), null);
 assert.equal(parseCardDeepLink("limn://card/..%2Fetc"), null);
 assert.equal(parseCardDeepLink("limn://card/a%2Fb"), null);
+
+// Board names belong to a category; dangling category ids render as Ungrouped.
+{
+  const groups = [{ id: "two", name: "Two Embers" }, { id: "soah", name: "SOAH" }];
+  const boards = [
+    { ...createBoard("Tasks"), id: "one", groupId: "two" },
+    { ...createBoard("tasks"), id: "two", groupId: "soah" },
+    { ...createBoard("Other"), id: "other", groupId: "two" },
+    { ...createBoard("Archive"), id: "archive", groupId: "deleted-category" }
+  ];
+  assert.equal(boardNameError(boards, groups, " TASKS ", "two"), "A board with this name already exists in this category.");
+  assert.equal(boardNameError(boards, groups, "Tasks"), null);
+  assert.equal(boardNameError(boards, groups, "TASKS", "soah", "two"), null);
+  assert.equal(boardNameError(boards, groups, "archive"), "A board with this name already exists in this category.");
+  assert.equal(effectiveBoardGroupId(boards[3], groups), undefined);
+  assert.match(boardCategoryMoveError(boards, groups, ["one"], "soah"), /Tasks.*SOAH/);
+  assert.equal(boardCategoryMoveError(boards, groups, ["one"]), null);
+  assert.match(boardCategoryMoveError(boards, groups, ["one", "two"]), /already exists in Ungrouped/);
+  assert.equal(boardCategoryMoveError(boards, groups, ["other"], "soah"), null);
+  assert.deepEqual(boardChoices(boards, groups).map((board) => board.name), ["Two Embers / Tasks", "SOAH / tasks", "Other", "Archive"]);
+  assert.deepEqual(boards.map((board) => board.name), ["Tasks", "tasks", "Other", "Archive"]);
+}
 
 console.log("storage tests passed");
 

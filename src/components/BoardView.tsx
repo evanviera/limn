@@ -32,6 +32,9 @@ export interface BoardViewProps {
   // `index` is where the card should land among the *other* cards already in the
   // target list (0 = top, omitted = append to the bottom).
   onMoveCard: (cardId: string, listId: string, index?: number) => Promise<void>;
+  onMoveCardToBoard: (cardId: string, boardId: string) => Promise<boolean>;
+  onRequestMoveCard: (cardId: string) => void;
+  onCardDropBoardChange: (boardId: string | null) => void;
   onOpenCard: (cardId: string) => void;
   onToggleSubtask: (cardId: string, subtaskId: string, completed: boolean) => Promise<void>;
   onOpenAttachment: (cardId: string, attachment: Attachment) => Promise<void>;
@@ -152,22 +155,35 @@ export function BoardView(props: BoardViewProps) {
     };
   }
 
+  useEffect(() => () => props.onCardDropBoardChange(null), [props.onCardDropBoardChange]);
+
+  function computeBoardDropTarget(clientX: number, clientY: number): { boardId: string; right: number } | null {
+    const element = document.elementFromPoint(clientX, clientY)?.closest<HTMLElement>("[data-card-drop-board-id]");
+    const boardId = element?.dataset.cardDropBoardId;
+    return element && boardId && boardId !== props.board.id
+      ? { boardId, right: element.getBoundingClientRect().right } : null;
+  }
+
   function updateDragPreview(drag: DragState, clientX: number, clientY: number) {
     document.body.classList.add("is-card-dragging");
+    const boardTarget = computeBoardDropTarget(clientX, clientY);
     setDragPreview({
       cardId: drag.cardId,
-      left: clientX - drag.offsetX,
+      // Keep the destination board name and its highlight visible.
+      left: boardTarget ? boardTarget.right + 24 : clientX - drag.offsetX,
       top: clientY - drag.offsetY,
       width: drag.width,
       height: drag.height
     });
-    setDropTarget(computeDropTarget(clientX, clientY, drag.cardId));
+    props.onCardDropBoardChange(boardTarget?.boardId ?? null);
+    setDropTarget(boardTarget ? null : computeDropTarget(clientX, clientY, drag.cardId));
   }
 
   function clearDragPreview() {
     document.body.classList.remove("is-card-dragging");
     setDragPreview(null);
     setDropTarget(null);
+    props.onCardDropBoardChange(null);
   }
 
   function createListDragState(listId: string, clientX: number, clientY: number): ListDragState {
@@ -254,9 +270,12 @@ export function BoardView(props: BoardViewProps) {
       }
     }, 0);
 
+    const boardId = computeBoardDropTarget(clientX, clientY)?.boardId;
     const target = computeDropTarget(clientX, clientY, cardId);
     clearDragPreview();
-    if (target) {
+    if (boardId) {
+      void props.onMoveCardToBoard(cardId, boardId);
+    } else if (target) {
       void props.onMoveCard(cardId, target.listId, target.index);
     }
   }
@@ -575,7 +594,9 @@ export function BoardView(props: BoardViewProps) {
       },
       { label: "Copy title", icon: "copy", onSelect: () => void props.onCopyText(card.title) },
       { label: "Copy card link", icon: "copy", onSelect: () => void props.onCopyText(cardDeepLink(card.id)) },
-      ...(moveItems.length > 0 ? [{ type: "separator" } satisfies ContextMenuItem, ...moveItems] : []),
+      { type: "separator" },
+      { label: "Move to board…", icon: "chevron-up-right", onSelect: () => props.onRequestMoveCard(card.id) },
+      ...moveItems,
       { type: "separator" },
       { label: "Archive card", icon: "archive", onSelect: () => void props.onArchiveCard(card) },
       { label: "Delete card", icon: "trash", danger: true, onSelect: () => void props.onDeleteCard(card) }

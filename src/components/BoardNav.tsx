@@ -15,6 +15,7 @@ interface BoardNavProps {
   hasGroups: boolean;
   totalBoards: number;
   activeBoardId: string;
+  cardDropBoardId: string | null;
   isBoardView: boolean;
   workspacePath: string;
   onSelectBoard: (boardId: string) => void;
@@ -53,6 +54,7 @@ export function BoardNav({
   hasGroups,
   totalBoards,
   activeBoardId,
+  cardDropBoardId,
   isBoardView,
   workspacePath,
   onSelectBoard,
@@ -206,6 +208,7 @@ export function BoardNav({
     const classes = [
       active ? "active" : "",
       dragging ? "dragging" : "",
+      board.id === cardDropBoardId ? "card-drop-target" : "",
       board.id === marker.before ? "drop-before" : "",
       board.id === marker.after ? "drop-after" : ""
     ]
@@ -216,6 +219,8 @@ export function BoardNav({
         className={`board-nav-item${classes ? ` ${classes}` : ""}`}
         data-testid={`board-nav-${board.id}`}
         data-board-id={board.id}
+        data-card-drop-board-id={board.lists.length > 0 ? board.id : undefined}
+        title={board.id === cardDropBoardId ? `Move card to ${board.name}` : undefined}
         key={board.id}
         onContextMenu={(event) => onBoardContextMenu(event, board)}
         onPointerDown={(event) => beginDrag(event, board.id)}

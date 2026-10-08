@@ -1,5 +1,5 @@
-import { test, expect } from "@playwright/test";
-import { openApp, openWorkspace, setUpdaterMode, snapshot } from "./harness";
+import { test, expect, type Page } from "@playwright/test";
+import { openApp, openWorkspace, setUpdaterMode, snapshot, queueAttachmentPick } from "./harness";
 
 test.describe("smoke", () => {
   test("welcome screen renders", async ({ page }) => {
@@ -744,4 +744,388 @@ test.describe("smoke", () => {
     await expect(todoList).not.toHaveClass(/collapsed/);
     await expect(page.getByTestId("add-card-todo")).toHaveCount(1);
   });
+});
+
+
+test.describe("moving cards between boards", () => {
+  async function createBoard(page: Page, name: string) {
+    await page.getByTestId("create-board").click();
+    await page.getByTestId("text-dialog-input").fill(name);
+    await page.getByTestId("text-dialog-submit").click();
+    await expect(page.locator(".board-nav-item", { hasText: name })).toBeVisible();
+    const state = await snapshot(page);
+    return JSON.parse(state.boards.find((file) => JSON.parse(file.content).name === name)!.content);
+  }
+
+  async function createCard(page: Page, title: string, listId = "todo") {
+    await page.getByTestId(`add-card-${listId}`).click();
+    await page.getByTestId("text-dialog-input").fill(title);
+    await page.getByTestId("text-dialog-submit").click();
+    await expect(page.getByTestId("card-title-input")).toHaveValue(title);
+  }
+
+  async function editBoard(page: Page, board: { id: string; lists: Array<{ id: string; name: string }> }) {
+    const file = (await snapshot(page)).boards.find((item) => JSON.parse(item.content).id === board.id)!;
+    await page.evaluate(({ fileName, next }) => {
+      document.dispatchEvent(new CustomEvent("limn-e2e-command", { detail: {
+        type: "externalEditBoard", fileName, board: { ...next, updatedAt: "2026-12-01T00:00:00.000Z" }
+      } }));
+    }, { fileName: file.file_name, next: board });
+  }
+
+  function location(content: string) {
+    return {
+      boardId: JSON.parse(content.match(/^boardId: (.*)$/m)![1]),
+      listId: JSON.parse(content.match(/^listId: (.*)$/m)![1])
+    };
+  }
+
+  function preservedContent(content: string) {
+    return content.replace(/^(boardId|listId|order|updatedAt|activity): .*\n/gm, "");
+  }
+
+  for (const pointer of ["mouse", "pen"] as const) {
+    test(`${pointer} drag to a sidebar board preserves the card and appends it to the destination`, async ({ page }) => {
+      await openApp(page);
+      await openWorkspace(page);
+      const source = await createBoard(page, "Source");
+      await createCard(page, "Move this", "in-progress");
+      await page.getByTestId("card-notes-input").fill("Keep the brief and https://example.com/reference");
+      await page.getByTestId("card-due-input").fill("2027-01-15");
+      await page.getByTestId("card-labels-input").fill("SOAH, casting");
+      await page.getByTestId("add-subtask").click();
+      await page.locator('[data-testid^="subtask-"][data-testid$="-title"]').last().fill("Keep this checklist");
+      await queueAttachmentPick(page, ["/mock/brief.pdf"]);
+      await page.getByTestId("add-attachment").click();
+      await expect(page.locator(".attachment-name", { hasText: "brief.pdf" })).toBeVisible();
+      await page.getByTestId("save-card").click();
+      await expect(page.getByTestId("card-title-input")).toBeHidden();
+      const before = (await snapshot(page)).cards[0];
+
+      const target = await createBoard(page, "Destination");
+      await createCard(page, "Already here");
+      await page.getByTestId("save-card").click();
+      // Give the destination different list ids. Mouse matches by name; pen
+      // has no match and falls back to the first list, even with a shared id.
+      const targetListId = "todo";
+      await editBoard(page, { ...target, lists: [
+        { id: targetListId, name: pointer === "mouse" ? " in PROGRESS " : "Incoming" },
+        { id: "review", name: "Review" }
+      ] });
+      await expect(page.getByTestId(`list-${targetListId}`)).toBeVisible();
+      await page.getByTestId(`board-nav-${source.id}`).click();
+      const movedCard = page.getByTestId("list-in-progress").locator(".task-card");
+      await expect(movedCard).toHaveCount(1);
+      if (pointer === "pen") {
+        await page.evaluate(() => Object.defineProperty(PointerEvent.prototype, "pointerType", { configurable: true, get: () => "pen" }));
+      }
+      const cardBox = (await movedCard.boundingBox())!;
+      const sourceBox = (await page.getByTestId(`board-nav-${source.id}`).boundingBox())!;
+      const targetBox = (await page.getByTestId(`board-nav-${target.id}`).boundingBox())!;
+      await page.mouse.move(cardBox.x + cardBox.width / 2, cardBox.y + 20);
+      await page.mouse.down();
+      await page.mouse.move(sourceBox.x + sourceBox.width / 2, sourceBox.y + sourceBox.height / 2);
+      await expect(page.locator(".card-drop-target")).toHaveCount(0);
+      await page.mouse.move(targetBox.x + targetBox.width / 2, targetBox.y + targetBox.height / 2);
+      await expect(page.getByTestId(`board-nav-${target.id}`)).toHaveClass(/card-drop-target/);
+      await expect.poll(async () => (await page.getByTestId("card-drag-preview").boundingBox())!.x).toBeGreaterThan(targetBox.x + targetBox.width);
+      await expect(page.locator(".drop-indicator")).toHaveCount(0);
+      await page.mouse.up();
+      await expect(movedCard).toHaveCount(0);
+      await expect(page.locator(".card-drop-target, body.is-card-dragging")).toHaveCount(0);
+      await expect(page.getByTestId(`board-nav-${source.id}`)).toHaveClass(/active/);
+      await expect(page.locator(".banner")).toContainText("moved to Destination");
+      await expect.poll(async () => location((await snapshot(page)).cards.find((file) => file.file_name === before.file_name)!.content))
+        .toEqual({ boardId: target.id, listId: targetListId });
+      const after = await snapshot(page);
+      expect(after.cards).toHaveLength(2);
+      expect(preservedContent(after.cards.find((file) => file.file_name === before.file_name)!.content)).toBe(preservedContent(before.content));
+      expect(after.cards.find((file) => file.file_name === before.file_name)!.content).toContain("Moved from Source / In Progress to Destination");
+      expect(after.attachments).toHaveLength(1);
+
+      await openApp(page, { reset: false });
+      await page.getByTestId(`board-nav-${target.id}`).click();
+      const titles = page.getByTestId(`list-${targetListId}`).locator(".task-card h3");
+      await expect(titles).toHaveText(["Already here", "Move this"]);
+    });
+  }
+
+  test("right-click move chooses the board and list, supports Escape, and survives reload", async ({ page }) => {
+    await openApp(page);
+    await openWorkspace(page);
+    const source = await createBoard(page, "Source");
+    await createCard(page, "Choose a location");
+    await page.getByTestId("save-card").click();
+    const target = await createBoard(page, "Destination");
+    const third = await createBoard(page, "Another board");
+    await page.getByTestId(`board-nav-${source.id}`).click();
+    const card = page.locator(".task-card");
+    async function openMove() {
+      await card.click({ button: "right" });
+      await page.getByTestId("context-menu").getByRole("menuitem", { name: "Move to board…", exact: true }).click();
+      await expect(page.getByTestId("move-card-dialog")).toBeVisible();
+    }
+    await openMove();
+    await expect(page.getByTestId("move-card-board")).toBeFocused();
+    await page.keyboard.press("Escape");
+    await expect(page.getByTestId("move-card-dialog")).toBeHidden();
+    expect(location((await snapshot(page)).cards[0].content).boardId).toBe(source.id);
+    await openMove();
+    await page.getByTestId("move-card-board").selectOption(third.id);
+    await page.getByTestId("move-card-list").selectOption("done");
+    await page.getByTestId("move-card-board").selectOption(target.id);
+    await expect(page.getByTestId("move-card-list")).toHaveValue("todo");
+    await page.getByTestId("move-card-list").selectOption("in-progress");
+    await page.getByTestId("move-card-submit").click();
+    await expect(page.getByTestId("move-card-dialog")).toBeHidden();
+    await expect(card).toHaveCount(0);
+    expect(location((await snapshot(page)).cards[0].content)).toEqual({ boardId: target.id, listId: "in-progress" });
+    await openApp(page, { reset: false });
+    await page.getByTestId(`board-nav-${target.id}`).click();
+    await expect(page.getByTestId("list-in-progress").locator(".task-card h3")).toHaveText("Choose a location");
+  });
+
+  test("a board losing its lists while the move dialog is open blocks submission", async ({ page }) => {
+    await openApp(page);
+    await openWorkspace(page);
+    const source = await createBoard(page, "Source");
+    await createCard(page, "Stay here");
+    await page.getByTestId("save-card").click();
+    const target = await createBoard(page, "Destination");
+    await page.getByTestId(`board-nav-${source.id}`).click();
+    await page.locator(".task-card").click({ button: "right" });
+    await page.getByTestId("context-menu").getByRole("menuitem", { name: "Move to board…", exact: true }).click();
+    await editBoard(page, { ...target, lists: [] });
+    await expect(page.getByTestId("move-card-list")).toBeDisabled();
+    await expect(page.getByTestId("move-card-submit")).toBeDisabled();
+    await expect(page.getByTestId("move-card-dialog")).toContainText("Add a list to this board");
+    await page.keyboard.press("Escape");
+    expect(location((await snapshot(page)).cards[0].content).boardId).toBe(source.id);
+    const targetNav = page.getByTestId(`board-nav-${target.id}`);
+    await expect(targetNav).not.toHaveAttribute("data-card-drop-board-id");
+    const cardBox = (await page.locator(".task-card").boundingBox())!;
+    const targetBox = (await targetNav.boundingBox())!;
+    await page.mouse.move(cardBox.x + cardBox.width / 2, cardBox.y + 20);
+    await page.mouse.down();
+    await page.mouse.move(targetBox.x + targetBox.width / 2, targetBox.y + targetBox.height / 2);
+    await expect(page.locator(".card-drop-target")).toHaveCount(0);
+    await page.mouse.up();
+    expect(location((await snapshot(page)).cards[0].content).boardId).toBe(source.id);
+    await expect(page.locator("body.is-card-dragging")).toHaveCount(0);
+  });
+
+  test("failed moves keep the card in place and retries merge remote comments and assignments", async ({ page }) => {
+    await openApp(page);
+    await openWorkspace(page);
+    const source = await createBoard(page, "Source");
+    await createCard(page, "Retry this move");
+    await page.getByTestId("save-card").click();
+    const before = (await snapshot(page)).cards[0];
+    const target = await createBoard(page, "Destination");
+    await page.getByTestId(`board-nav-${source.id}`).click();
+    await page.locator(".task-card").click({ button: "right" });
+    await page.getByTestId("context-menu").getByRole("menuitem", { name: "Move to board…", exact: true }).click();
+    // Refuse one write as the real backend could do for an unavailable drive.
+    await page.evaluate(() => {
+      const ipc = (window as any).__LIMN_TEST_IPC__;
+      const invoke = ipc.invoke.bind(ipc);
+      let failOnce = true;
+      ipc.invoke = async (command: string, args: unknown) => {
+        if (command === "write_card_file" && failOnce) {
+          failOnce = false;
+          throw new Error("Drive unavailable");
+        }
+        return invoke(command, args);
+      };
+    });
+    await page.getByTestId("move-card-submit").click();
+    await expect(page.getByTestId("move-card-dialog")).toBeVisible();
+    await expect(page.getByTestId("move-card-dialog").getByRole("alert")).toContainText("could not be completed");
+    await expect(page.locator(".banner")).toContainText("Drive unavailable");
+    expect((await snapshot(page)).cards[0]).toEqual(before);
+    // A sync edit lands while the app still has the old version. The move must
+    // go through the normal three-way save path rather than overwrite it.
+    const remoteComment = { id: "remote-comment", authorId: "remote-member", authorName: "Jenny", body: "Keep this discussion", createdAt: "2026-12-01T00:00:00.000Z" };
+    const remote = before.content
+      .replace(/^assignees: .*$/m, 'assignees: ["remote-member"]')
+      .replace(/^comments: .*$/m, `comments: ${JSON.stringify([remoteComment])}`)
+      .replace(/^updatedAt: .*$/m, 'updatedAt: "2026-12-01T00:00:00.000Z"');
+    await page.evaluate(({ fileName, content }) => (window as any).__LIMN_E2E__.externalEditCard(fileName, content, true),
+      { fileName: before.file_name, content: remote });
+    await page.getByTestId("move-card-submit").click();
+    await expect(page.getByTestId("move-card-dialog")).toBeHidden();
+    await expect(page.locator(".banner-error")).toHaveCount(0);
+    await expect(page.locator(".task-card")).toHaveCount(0);
+    const after = (await snapshot(page)).cards[0];
+    expect(after.file_name).toBe(before.file_name);
+    expect(location(after.content)).toEqual({ boardId: target.id, listId: "todo" });
+    expect(after.content).toContain('assignees: ["remote-member"]');
+    expect(after.content).toContain(JSON.stringify(remoteComment));
+    expect((await snapshot(page)).conflicts).toHaveLength(0);
+  });
+
+});
+
+
+test.describe("board names within categories", () => {
+  async function createCategory(page: Page, name: string) {
+    await page.getByTestId("create-board-category").click();
+    await page.getByTestId("text-dialog-input").fill(name);
+    await page.getByTestId("text-dialog-submit").click();
+    await expect(page.getByTestId("text-dialog-input")).toBeHidden();
+    return ((await snapshot(page)).settings.boardGroups as Array<{ id: string; name: string }>).find((group) => group.name === name)!;
+  }
+
+  async function createBoard(page: Page, name: string, groupId = "") {
+    await page.getByTestId("create-board").click();
+    await page.getByTestId("text-dialog-input").fill(name);
+    await page.getByTestId("board-name-category").selectOption(groupId);
+    await page.getByTestId("text-dialog-submit").click();
+    await expect(page.getByTestId("board-name-dialog")).toBeHidden();
+    return (await snapshot(page)).boards.map((file) => JSON.parse(file.content))
+      .find((board) => board.name === name && (board.groupId ?? "") === groupId);
+  }
+
+  async function renameBoard(page: Page, id: string, name: string) {
+    await page.getByTestId(`board-nav-${id}`).click({ button: "right" });
+    await page.getByTestId("context-menu").getByRole("menuitem", { name: "Rename board" }).click();
+    await page.getByTestId("text-dialog-input").fill(name);
+    await page.getByTestId("text-dialog-submit").click();
+  }
+
+  test("creates same-named boards in different categories and Ungrouped with independent storage", async ({ page }) => {
+    await openApp(page);
+    await openWorkspace(page);
+    const two = await createCategory(page, "Two Embers");
+    const soah = await createCategory(page, "SOAH");
+    const first = await createBoard(page, "Tasks", two.id);
+    // Reject a case/space variant in the same category, then permit it as soon
+    // as the user chooses another category in the very same creation dialog.
+    await page.getByTestId("create-board").click();
+    await page.getByTestId("text-dialog-input").fill(" TASKS ");
+    await page.getByTestId("board-name-category").selectOption(two.id);
+    await page.getByTestId("text-dialog-submit").click();
+    await expect(page.getByTestId("board-name-dialog").getByRole("alert")).toContainText("already exists in this category");
+    await page.getByTestId("board-name-category").selectOption(soah.id);
+    await expect(page.getByTestId("board-name-dialog").getByRole("alert")).toHaveCount(0);
+    await page.getByTestId("text-dialog-input").fill("Tasks");
+    await page.getByTestId("text-dialog-submit").click();
+    await expect(page.getByTestId("board-name-dialog")).toBeHidden();
+    const second = (await snapshot(page)).boards.map((file) => JSON.parse(file.content)).find((board) => board.groupId === soah.id);
+    const third = await createBoard(page, "Tasks");
+    const saved = await snapshot(page);
+    expect(saved.boards).toHaveLength(3);
+    expect(new Set(saved.boards.map((file) => file.file_name)).size).toBe(3);
+    expect(new Set([first.id, second.id, third.id]).size).toBe(3);
+    // Cards on identically named boards are still kept separate by board id.
+    await page.getByTestId(`board-nav-${first.id}`).click();
+    await page.getByTestId("add-card-todo").click();
+    await page.getByTestId("text-dialog-input").fill("Two Embers task");
+    await page.getByTestId("text-dialog-submit").click();
+    await page.getByTestId("save-card").click();
+    await page.getByTestId(`board-nav-${second.id}`).click();
+    await expect(page.locator(".task-card")).toHaveCount(0);
+    await openApp(page, { reset: false });
+    await page.getByTestId(`board-nav-${first.id}`).click();
+    await expect(page.locator(".task-card h3")).toHaveText("Two Embers task");
+    await page.locator(".task-card").click({ button: "right" });
+    await page.getByTestId("context-menu").getByRole("menuitem", { name: "Move to board…", exact: true }).click();
+    await expect(page.getByTestId("move-card-board").locator("option")).toHaveText(["SOAH / Tasks", "Ungrouped / Tasks"]);
+    await page.keyboard.press("Escape");
+    await page.getByTestId("nav-filter").click();
+    await expect(page.getByTestId("filter-board").locator("option")).toHaveText(["All boards", "Two Embers / Tasks", "SOAH / Tasks", "Ungrouped / Tasks"]);
+    await page.getByTestId("create-board").click();
+    await page.getByTestId("text-dialog-input").fill("tasks");
+    await page.getByTestId("text-dialog-submit").click();
+    await expect(page.getByTestId("board-name-dialog").getByRole("alert")).toContainText("already exists in this category");
+    expect((await snapshot(page)).boards).toHaveLength(3);
+  });
+
+  test("renames within a category while allowing names already used in other categories", async ({ page }) => {
+    await openApp(page);
+    await openWorkspace(page);
+    const two = await createCategory(page, "Two Embers");
+    const soah = await createCategory(page, "SOAH");
+    await createBoard(page, "Evan", two.id);
+    const renamed = await createBoard(page, "Evan - SOAH", soah.id);
+    const other = await createBoard(page, "Other", soah.id);
+    await renameBoard(page, renamed.id, "Evan");
+    await expect(page.getByTestId("board-name-dialog")).toBeHidden();
+    await expect(page.getByTestId(`board-nav-${renamed.id}`)).toHaveText("Evan");
+    await renameBoard(page, other.id, " evan ");
+    await expect(page.getByTestId("board-name-dialog").getByRole("alert")).toContainText("already exists in this category");
+    await page.keyboard.press("Escape");
+    await renameBoard(page, renamed.id, "EVAN");
+    await expect(page.getByTestId("board-name-dialog")).toBeHidden();
+    const boards = (await snapshot(page)).boards.map((file) => JSON.parse(file.content));
+    expect(boards.find((board) => board.id === other.id).name).toBe("Other");
+    expect(boards.find((board) => board.id === renamed.id)).toMatchObject({ name: "EVAN", groupId: soah.id });
+  });
+
+  test("category moves and deletion preserve category-local name uniqueness", async ({ page }) => {
+    // Keep the board/group targets visible for precise pointer-based checks.
+    await page.setViewportSize({ width: 1280, height: 1000 });
+    await openApp(page);
+    await openWorkspace(page);
+    const two = await createCategory(page, "Two Embers");
+    const soah = await createCategory(page, "SOAH");
+    const empty = await createCategory(page, "Empty");
+    const first = await createBoard(page, "Tasks", two.id);
+    const second = await createBoard(page, "Tasks", soah.id);
+    await createBoard(page, "Tasks");
+    await page.getByTestId(`board-nav-${second.id}`).click({ button: "right" });
+    await page.getByTestId("context-menu").getByRole("menuitem", { name: "Move to Two Embers" }).click();
+    await expect(page.locator(".banner-error")).toContainText("already exists in Two Embers");
+    const from = (await page.getByTestId(`board-nav-${second.id}`).boundingBox())!;
+    const to = (await page.getByTestId(`board-nav-${first.id}`).boundingBox())!;
+    await page.mouse.move(from.x + 40, from.y + from.height / 2);
+    await page.mouse.down();
+    await page.mouse.move(to.x + 40, to.y + to.height / 2, { steps: 10 });
+    await page.mouse.up();
+    expect((await snapshot(page)).boards.map((file) => JSON.parse(file.content)).find((board) => board.id === second.id).groupId).toBe(soah.id);
+    await page.getByTestId(`board-group-${soah.id}`).click({ button: "right" });
+    await page.getByTestId("context-menu").getByRole("menuitem", { name: "Delete category" }).click();
+    await expect(page.locator(".banner-error")).toContainText("already exists in Ungrouped");
+    await expect(page.getByTestId("confirm-dialog-submit")).toHaveCount(0);
+    await page.getByTestId(`board-nav-${second.id}`).click({ button: "right" });
+    await page.getByTestId("context-menu").getByRole("menuitem", { name: "Move to Empty" }).click();
+    await expect.poll(async () => (await snapshot(page)).boards.map((file) => JSON.parse(file.content)).find((board) => board.id === second.id).groupId).toBe(empty.id);
+    await expect(page.locator(".banner-error")).toHaveCount(0);
+  });
+
+  test("creation rechecks names after a remote board arrives while the dialog is open", async ({ page }) => {
+    await openApp(page);
+    await openWorkspace(page);
+    const group = await createCategory(page, "SOAH");
+    const existing = await createBoard(page, "Existing", group.id);
+    await page.getByTestId("create-board").click();
+    await page.getByTestId("text-dialog-input").fill("Tasks");
+    await page.getByTestId("board-name-category").selectOption(group.id);
+    await page.evaluate((board) => {
+      document.dispatchEvent(new CustomEvent("limn-e2e-command", { detail: {
+        type: "externalEditBoard", fileName: "remote-board.json", board: { ...board, id: "remote-board", name: "Tasks" }
+      } }));
+    }, existing);
+    await expect(page.getByTestId("board-nav-remote-board")).toBeVisible();
+    await page.getByTestId("text-dialog-submit").click();
+    await expect(page.getByTestId("board-name-dialog").getByRole("alert")).toContainText("already exists in this category");
+    expect((await snapshot(page)).boards).toHaveLength(2);
+  });
+
+  test("long category menus remain open while scrolling to another destination", async ({ page }) => {
+    // Isolate scrolling inside the menu from sidebar scroll-to-focus events.
+    await page.setViewportSize({ width: 1280, height: 1600 });
+    await openApp(page);
+    await openWorkspace(page);
+    for (let index = 1; index <= 10; index += 1) await createCategory(page, `Category ${index}`);
+    const board = await createBoard(page, "Tasks");
+    await page.getByTestId(`board-nav-${board.id}`).click({ button: "right" });
+    const menu = page.getByTestId("context-menu");
+    await expect(menu).toBeVisible();
+    await menu.evaluate((element) => { element.scrollTop = element.scrollHeight; });
+    await expect(menu).toBeVisible();
+    await menu.getByRole("menuitem", { name: "Move to Category 10", exact: true }).click();
+    await expect.poll(async () => (await snapshot(page)).boards.map((file) => JSON.parse(file.content))[0].groupId).toBeTruthy();
+  });
+
 });

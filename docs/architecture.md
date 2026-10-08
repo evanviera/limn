@@ -22,7 +22,9 @@ focused" section before adding code to an existing large file.**
   text-input context-menu helpers (`isEditableTextControl`, `textControlContextItems`, …).
 - `dialogs.tsx` — `EmptyState`, `TextDialog`, `ConfirmDialog` and their state types.
 - `RichNoteText.tsx` — renders card note text (inline links / bold / italic).
-- `BoardView.tsx` — board columns, drag-and-drop, `TaskCardBody`, `MemberDots`.
+- `BoardView.tsx` — board columns and card/list drag-and-drop, including card drops onto sidebar boards.
+- `BoardNameDialog.tsx` — create/rename board dialog with category selection on creation and category-local name validation.
+- `MoveCardDialog.tsx` — the card context menu’s cross-board location chooser, with board/list selection and validation.
 - `CardAttachments.tsx` — the card editor's attachments section (list / add / open / remove), fully prop-driven.
 - `RecurrenceControl.tsx` — the compact, progressively disclosed interval editor beside card due-date controls.
 - `AttachmentImagePreview.tsx` — the inline image thumbnail shown for image attachments (loads bytes via `useAttachmentObjectUrl`).
@@ -61,6 +63,9 @@ when the last one closes). The open list + active path persist via the
 - `identity.ts` — the device-local "active member" (who *you* are for comment attribution). Stored in `localStorage` keyed by workspace path, **never** in the synced workspace files, so each person on a shared folder keeps their own identity.
 - `mentions.ts` — pure @mention matching (`matchMention`, `MENTION_SPLIT_PATTERN`, `mentionToken`) used to highlight member references in comments.
 - `filter.ts` — the pure card-filter engine: `filterCards`, `collectLabels`, `filterIsActive`, `matchesDue`, the `EMPTY_FILTER` default, and the built-in `FILTER_PRESETS`. Drives `FilterView`; saved views persist in `WorkspaceSettings.savedViews`.
+- `boardNames.ts` — category-local board name checks, relocation collision checks, and qualified display names for cross-board views.
+- `cardMove.ts` — chooses the default destination list for a cross-board move by matching the source list name, falling back to the first destination list.
+- `useCardBoardMoves.ts` — cross-board card move persistence, activity, duplicate-submit prevention, and chooser/drag-target state.
 - `archive.ts` — pure archive projections: legacy-aware archive timestamps/reasons, location availability, sorting, and relative-date labels for `ArchiveView`.
 - `useEmptyArchive.ts` — confirmed workspace-wide archive deletion in bounded batches, with progress, version-checked deletes, and partial-failure reporting. Search filters do not limit the captured deletion scope.
 - `noteFormat.ts` — note markdown parse/serialize + contenteditable DOM helpers.

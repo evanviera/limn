@@ -70,6 +70,7 @@ export function WelcomeScreen({
 
 interface WorkspaceSidebarProps {
   activeBoardId: string;
+  cardDropBoardId: string | null;
   activeMember: Member | null;
   archivedCardCount: number;
   boardGroups: BoardGroup[];
@@ -97,6 +98,7 @@ interface WorkspaceSidebarProps {
 
 export function WorkspaceSidebar({
   activeBoardId,
+  cardDropBoardId,
   activeMember,
   archivedCardCount,
   boardGroups,
@@ -144,6 +146,7 @@ export function WorkspaceSidebar({
         hasGroups={boardGroups.length > 0}
         totalBoards={boards.length}
         activeBoardId={activeBoardId}
+        cardDropBoardId={cardDropBoardId}
         isBoardView={view === "board"}
         workspacePath={workspacePath}
         onSelectBoard={onSelectBoard}
