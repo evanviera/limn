@@ -14,43 +14,53 @@
     grid-template-rows: auto minmax(0, 1fr);
   }
 
+  .sidebar-resizer { display: none; }
+
   .sidebar {
     z-index: 2;
-    grid-template-areas:
-      "open"
-      "boards"
-      "bottom";
-    grid-template-columns: minmax(0, 1fr);
-    grid-template-rows: auto minmax(0, 1fr) auto;
-    max-height: 44vh;
-    overflow: auto;
+    grid-template-areas: "open boards" "bottom bottom";
+    grid-template-columns: minmax(140px, 0.8fr) minmax(0, 1.2fr);
+    grid-template-rows: minmax(0, 1fr) auto;
+    gap: 12px;
+    max-height: 210px;
+    padding: 12px;
+    overflow: hidden;
     border-right: 0;
     border-bottom: 1px solid var(--border-soft);
   }
 
   .sidebar-action {
     grid-area: open;
-    width: auto;
+    align-self: start;
+    width: 100%;
     white-space: nowrap;
   }
 
   .board-nav {
     grid-area: boards;
-    grid-template-columns: auto;
-    overflow: visible;
-    padding-right: 0;
+    max-height: 110px;
+    overflow: auto;
+    padding: 2px 3px;
   }
 
-  .board-nav > button,
-  .sidebar-bottom {
-    min-width: 0;
-  }
+  .board-nav .nav-heading { padding-bottom: 4px; }
 
   .sidebar-bottom {
     grid-area: bottom;
-    grid-template-columns: repeat(3, minmax(0, 1fr));
-    padding-top: var(--space-3);
+    display: flex;
+    gap: 6px;
+    overflow-x: auto;
+    padding: 8px 3px 3px;
   }
+
+  .sidebar-bottom button {
+    flex: 0 0 auto;
+    width: auto;
+    min-height: 36px;
+  }
+
+  .sidebar-bottom .identity-select { min-height: 36px !important; margin: 0; }
+  .sidebar-bottom .identity-select-label { display: none; }
 
   .workspace {
     padding: var(--space-5);
@@ -149,15 +159,7 @@
   }
 
   .content-header h1 {
-    font-size: var(--text-lg);
-  }
-
-  .column-header {
-    grid-template-columns: minmax(0, 1fr) auto;
-  }
-
-  .column-header button {
-    grid-column: span 1;
+    font-size: var(--text-xl);
   }
 
   .banner,
@@ -214,4 +216,24 @@
   .card-editor footer .primary {
     width: 100%;
   }
+}
+
+@media (hover: none) {
+  .column-header .list-action,
+  .column-header .list-drag-handle,
+  .column-header .list-collapse-toggle { opacity: 1; }
+}
+
+@media (max-width: 800px) {
+  .workspace { padding: 18px 16px 12px; }
+  .content-header { gap: 12px; margin-bottom: 16px; padding-bottom: 16px; }
+  .board-view-popover { width: min(300px, calc(100vw - 32px)); right: auto; left: 0; }
+  .card-editor-body { padding: 20px 16px; }
+  .card-view-header { padding: 18px 16px; }
+  .card-view-body { padding: 20px 16px; }
+}
+
+@media (max-height: 650px) and (max-width: 800px) {
+  .sidebar { max-height: 160px; }
+  .board-nav { max-height: 65px; }
 }

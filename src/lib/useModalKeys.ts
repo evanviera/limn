@@ -1,4 +1,4 @@
-import { useEffect, useRef } from "react";
+import { useLayoutEffect, useRef } from "react";
 
 // Tracks the order in which modals open so that only the topmost one responds
 // to Escape/Tab. Without this, stacked dialogs (e.g. the card editor with a
@@ -10,10 +10,10 @@ export function useModalKeys(containerRef: { readonly current: HTMLElement | nul
   const onCloseRef = useRef(onClose);
   onCloseRef.current = onClose;
 
-  useEffect(() => {
+  useLayoutEffect(() => {
     const id = Symbol("modal");
     modalStack.push(id);
-    // Remember what was focused before the modal opened so we can restore it.
+    // Capture before passive autofocus effects move focus into the modal.
     const previousActive = document.activeElement as HTMLElement | null;
 
     function isTopmost() {
@@ -40,8 +40,10 @@ export function useModalKeys(containerRef: { readonly current: HTMLElement | nul
         node.querySelectorAll<HTMLElement>(
           'a[href], button, input, select, textarea, [tabindex]:not([tabindex="-1"])'
         )
-      ).filter((element) => !element.hasAttribute("disabled") && element.tabIndex !== -1);
+      ).filter((element) => !element.matches(':disabled, [hidden], [aria-hidden="true"]') && element.tabIndex !== -1 && element.getClientRects().length > 0);
       if (focusable.length === 0) {
+        event.preventDefault();
+        node.focus();
         return;
       }
       const first = focusable[0];
@@ -50,7 +52,7 @@ export function useModalKeys(containerRef: { readonly current: HTMLElement | nul
       if (event.shiftKey && (active === first || !node.contains(active))) {
         event.preventDefault();
         last.focus();
-      } else if (!event.shiftKey && active === last) {
+      } else if (!event.shiftKey && (active === last || !node.contains(active))) {
         event.preventDefault();
         first.focus();
       }
@@ -58,12 +60,13 @@ export function useModalKeys(containerRef: { readonly current: HTMLElement | nul
     document.addEventListener("keydown", handleKeyDown);
     return () => {
       document.removeEventListener("keydown", handleKeyDown);
+      const wasTopmost = isTopmost();
       const index = modalStack.lastIndexOf(id);
       if (index !== -1) {
         modalStack.splice(index, 1);
       }
       // Return focus to the opener so keyboard/screen-reader users keep their place.
-      if (previousActive && document.contains(previousActive)) {
+      if (wasTopmost && previousActive && document.contains(previousActive)) {
         previousActive.focus();
       }
     };

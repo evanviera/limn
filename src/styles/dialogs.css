@@ -6,7 +6,7 @@
   justify-content: flex-end;
   background: var(--overlay-bg);
   backdrop-filter: blur(8px);
-  animation: fade-in var(--transition) ease;
+  animation: fade-in var(--transition);
 }
 
 .dialog-backdrop {
@@ -18,7 +18,7 @@
   padding: var(--space-6);
   background: var(--overlay-bg);
   backdrop-filter: blur(8px);
-  animation: fade-in var(--transition) ease;
+  animation: fade-in var(--transition);
 }
 
 @keyframes fade-in {

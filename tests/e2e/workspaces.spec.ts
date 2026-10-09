@@ -120,3 +120,27 @@ test.describe("workspace tabs", () => {
     await expect.poll(async () => (await snapshot(page)).openWorkspaces.paths).toEqual([WORKSPACE_A]);
   });
 });
+
+test("workspace tabs support arrow navigation and keyboard activation", async ({ page }) => {
+  await openApp(page);
+  await openWorkspace(page);
+  await queueWorkspacePick(page, WORKSPACE_B);
+  await page.getByTestId("workspace-tab-add").click();
+  const tabA = page.getByTestId(`workspace-tab-${WORKSPACE_A}`);
+  const tabB = page.getByTestId(`workspace-tab-${WORKSPACE_B}`);
+  await expect(tabB).toHaveAttribute("aria-selected", "true");
+  await tabB.focus();
+  await page.keyboard.press("ArrowLeft");
+  await expect(tabA).toBeFocused();
+  // Moving focus does not switch a workspace until it is activated.
+  await expect(tabB).toHaveAttribute("aria-selected", "true");
+  await page.keyboard.press("Enter");
+  await expect(tabA).toHaveAttribute("aria-selected", "true");
+  await expect.poll(async () => (await snapshot(page)).openWorkspaces.active).toBe(WORKSPACE_A);
+  await page.keyboard.press("End");
+  await expect(tabB).toBeFocused();
+  await page.keyboard.press("Space");
+  await expect(tabB).toHaveAttribute("aria-selected", "true");
+  await page.keyboard.press("Home");
+  await expect(tabA).toBeFocused();
+});

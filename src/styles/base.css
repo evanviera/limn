@@ -48,7 +48,7 @@ button {
   align-items: center;
   justify-content: center;
   gap: var(--space-3);
-  min-height: 34px;
+  min-height: 36px;
   padding: 0 11px;
   color: var(--text-muted);
   background: transparent;
@@ -127,7 +127,7 @@ button[data-testid="delete-board"]:hover:not(:disabled),
 button[data-testid^="delete-list"]:hover:not(:disabled),
 button[data-testid="delete-card"]:hover:not(:disabled),
 .destructive-actions button:hover:not(:disabled) {
-  color: var(--text-strong);
+  color: var(--danger);
   background: var(--danger-soft);
   border-color: var(--danger-border);
 }
@@ -139,6 +139,7 @@ button.danger {
 }
 
 button.danger:hover:not(:disabled) {
+  color: var(--danger);
   background: var(--danger-soft);
 }
 
@@ -226,7 +227,7 @@ textarea {
 
 input,
 select {
-  height: 34px;
+  height: 38px;
   padding: 0 10px;
 }
 
@@ -325,4 +326,14 @@ label {
   to {
     transform: rotate(360deg);
   }
+}
+
+/* Keep readable focus indicators on native links and editable note fields. */
+a:focus-visible, [contenteditable="true"]:focus-visible {
+  outline: 2px solid var(--focus-color);
+  outline-offset: 3px;
+}
+
+input:hover:not(:disabled):not(:focus), select:hover:not(:disabled):not(:focus), textarea:hover:not(:disabled):not(:focus) {
+  border-color: var(--border);
 }

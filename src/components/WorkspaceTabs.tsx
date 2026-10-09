@@ -149,7 +149,7 @@ export function WorkspaceTabs({ workspaces, activePath, opening, onSelect, onClo
   const indicatorAtEnd = dropIndex !== null && dropIndex >= visibleOrder.length;
 
   return (
-    <div className="workspace-tabs" data-testid="workspace-tabs" role="tablist" ref={stripRef}>
+    <div className="workspace-tabs" data-testid="workspace-tabs" role="tablist" aria-label="Open workspaces" ref={stripRef}>
       {workspaces.map((workspace) => {
         const active = workspace.path === activePath;
         const dragging = workspace.path === draggingPath;
@@ -163,6 +163,26 @@ export function WorkspaceTabs({ workspaces, activePath, opening, onSelect, onClo
             data-tab-path={workspace.path}
             role="tab"
             aria-selected={active}
+            aria-label={workspace.name}
+            tabIndex={active ? 0 : -1}
+            onKeyDown={(event) => {
+              if (event.target !== event.currentTarget) return;
+              const tabs = Array.from(stripRef.current?.querySelectorAll<HTMLElement>('[role="tab"]') ?? []);
+              const index = tabs.indexOf(event.currentTarget);
+              let nextIndex = index;
+              if (event.key === "ArrowRight") nextIndex = (index + 1) % tabs.length;
+              else if (event.key === "ArrowLeft") nextIndex = (index - 1 + tabs.length) % tabs.length;
+              else if (event.key === "Home") nextIndex = 0;
+              else if (event.key === "End") nextIndex = tabs.length - 1;
+              else if (event.key === "Enter" || event.key === " ") {
+                event.preventDefault();
+                handleSelect(workspace.path);
+                return;
+              } else return;
+              event.preventDefault();
+              tabs[nextIndex]?.focus();
+              tabs[nextIndex]?.scrollIntoView({ block: "nearest", inline: "nearest" });
+            }}
             title={workspace.path}
             onMouseDown={(event) => handleAuxClick(event, workspace.path)}
             onPointerDown={(event) => beginDrag(event, workspace.path)}

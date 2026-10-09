@@ -1,4 +1,5 @@
 import { useEffect, useRef, useState } from "react";
+import { Icon } from "./icons.js";
 import { MAX_NAME_LENGTH } from "../lib/constants";
 import { useModalKeys } from "../lib/useModalKeys";
 
@@ -79,7 +80,7 @@ export function TextDialog({
       >
         <header>
           <h2 id="text-dialog-title">{dialog.title}</h2>
-          <button type="button" onClick={onCancel}>Cancel</button>
+          <button aria-label="Close dialog" className="icon-button" type="button" onClick={onCancel}><Icon name="x" /></button>
         </header>
         <label>
           {dialog.label}
@@ -146,7 +147,7 @@ export function ConfirmDialog({
       >
         <header>
           <h2 id="confirm-dialog-title">{dialog.title}</h2>
-          <button type="button" onClick={onCancel}>Cancel</button>
+          <button aria-label="Close dialog" className="icon-button" type="button" onClick={onCancel}><Icon name="x" /></button>
         </header>
         <p id="confirm-dialog-message">{dialog.message}</p>
         <footer>

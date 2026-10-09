@@ -1,4 +1,5 @@
 import { useState } from "react";
+import { Icon } from "./icons.js";
 import type { Board } from "../types";
 import type { InboxItem, InboxReadState } from "../lib/inbox";
 import { isInboxItemUnread } from "../lib/inbox.js";
@@ -43,9 +44,16 @@ export function InboxView(props: InboxViewProps) {
 
   if (!props.activeMemberId) {
     return (
-      <section className="inbox-view inbox-empty" data-testid="inbox-no-identity">
-        <p>Choose who you are to see your mentions and assignments</p>
-        <button className="primary" onClick={props.onChooseIdentity}>Choose who you are</button>
+      <section className="inbox-view" data-testid="inbox-no-identity">
+        <header className="inbox-header content-header">
+          <div><p className="eyebrow">Workspace</p><h1>Inbox</h1></div>
+        </header>
+        <div className="inbox-empty">
+          <span className="inbox-empty-icon" aria-hidden="true"><Icon name="chat" /></span>
+          <h2>Your updates, in one place.</h2>
+          <p>Choose who you are to see your mentions and assignments.</p>
+          <button className="primary" onClick={props.onChooseIdentity}>Choose who you are</button>
+        </div>
       </section>
     );
   }
@@ -61,8 +69,8 @@ export function InboxView(props: InboxViewProps) {
 
   return (
     <section className="inbox-view" data-testid="inbox-view">
-      <header className="inbox-header">
-        <div><p className="eyebrow">Awareness</p><h1>Inbox</h1></div>
+      <header className="inbox-header content-header">
+        <div><p className="eyebrow">Workspace</p><h1>Inbox</h1></div>
         <div className="inbox-header-actions">
           <label className="inbox-unread-filter">
             <input

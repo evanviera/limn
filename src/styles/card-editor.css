@@ -4,6 +4,7 @@
   grid-template-rows: auto minmax(0, 1fr) auto;
   width: min(1040px, 100vw);
   height: 100vh;
+  height: 100dvh;
   overflow: hidden;
   color: var(--text);
   background: var(--editor-bg);
@@ -93,7 +94,7 @@
 .card-editor-splitter:hover::before,
 .card-editor-splitter:focus-visible::before,
 .card-editor.is-resizing-columns .card-editor-splitter::before {
-  background: var(--focus);
+  background: var(--focus-color);
   box-shadow: 0 0 0 3px var(--focus-soft);
 }
 
@@ -489,7 +490,7 @@
 }
 
 .notes-rich-input:focus {
-  border-color: var(--focus);
+  border-color: var(--focus-color);
   box-shadow: 0 0 0 3px var(--focus-soft);
 }
 

@@ -219,6 +219,7 @@ export function BoardNav({
         className={`board-nav-item${classes ? ` ${classes}` : ""}`}
         data-testid={`board-nav-${board.id}`}
         data-board-id={board.id}
+        aria-current={isBoardView && board.id === activeBoardId ? "page" : undefined}
         data-card-drop-board-id={board.lists.length > 0 ? board.id : undefined}
         title={board.id === cardDropBoardId ? `Move card to ${board.name}` : undefined}
         key={board.id}
@@ -254,7 +255,7 @@ export function BoardNav({
   const flatMarker = hasGroups ? { before: null, after: null, intoEmpty: false } : sectionMarker(undefined, sections.ungrouped);
 
   return (
-    <nav className="board-nav" ref={navRef}>
+    <nav className="board-nav" aria-label="Boards" ref={navRef}>
       <div className="nav-heading">
         <span>Boards</span>
         <div className="nav-heading-actions">

@@ -427,10 +427,15 @@ button.filter-state-chip .icon {
 
 @media (max-width: 520px) {
   .filter-checkin {
-    grid-template-columns: 1fr;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
   }
 
   .filter-checkin-item {
     min-height: 58px;
   }
+}
+
+@media (max-width: 520px) {
+  .filter-checkin-item { padding: 12px; }
+  .filter-selects { grid-template-columns: repeat(2, minmax(0, 1fr)); }
 }

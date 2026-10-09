@@ -35,7 +35,7 @@ export function WelcomeScreen({
     <main className="welcome" onContextMenu={onContextMenu}>
       <section className="welcome-panel">
         <p className="eyebrow">Limn</p>
-        <h1>Local-first boards for a small trusted team.</h1>
+        <h1>Make space for good work.</h1>
         {desktopRequired ? (
           <>
             <p className="muted">
@@ -49,7 +49,7 @@ export function WelcomeScreen({
           </>
         ) : (
           <>
-            <p className="muted">Choose a folder to create or open a workspace. Limn writes boards and cards as readable files.</p>
+            <p className="muted">Your tasks, notes, and team — in one calm space. Open a folder to get started. Everything stays in readable files you own.</p>
             <button className="primary" data-testid="welcome-open-workspace" disabled={opening} onClick={onOpenWorkspace}>
               {opening ? (
                 <>
@@ -124,7 +124,7 @@ export function WorkspaceSidebar({
   onToggleTheme
 }: WorkspaceSidebarProps) {
   return (
-    <aside className="sidebar">
+    <aside className="sidebar" aria-label="Workspace navigation">
       <button className="sidebar-action" data-testid="open-workspace" disabled={opening} onClick={onOpenWorkspace}>
         {opening ? (
           <>
@@ -188,7 +188,7 @@ export function WorkspaceSidebar({
         </button>
         <button
           className={view === "inbox" ? "active" : ""}
-          data-testid="nav-inbox"
+          aria-current={view === "inbox" ? "page" : undefined} data-testid="nav-inbox"
           onClick={() => onSetView("inbox")}
         >
           <Icon name="chat" /> Inbox
@@ -196,7 +196,7 @@ export function WorkspaceSidebar({
         </button>
         <button
           className={view === "filter" ? "active" : ""}
-          data-testid="nav-filter"
+          aria-current={view === "filter" ? "page" : undefined} data-testid="nav-filter"
           onClick={(event) => {
             const target = event.target as HTMLElement;
             if (target.closest("[data-testid='due-reminder-count']")) {
@@ -217,14 +217,14 @@ export function WorkspaceSidebar({
             </span>
           )}
         </button>
-        <button className={view === "archive" ? "active" : ""} data-testid="nav-archive" onClick={() => onSetView("archive")}>
+        <button className={view === "archive" ? "active" : ""} aria-current={view === "archive" ? "page" : undefined} data-testid="nav-archive" onClick={() => onSetView("archive")}>
           <Icon name="archive" /> Archive
           {archivedCardCount > 0 && <span className="nav-badge" data-testid="archive-count">{archivedCardCount}</span>}
         </button>
-        <button className={view === "members" ? "active" : ""} data-testid="nav-members" onClick={() => onSetView("members")}>
+        <button className={view === "members" ? "active" : ""} aria-current={view === "members" ? "page" : undefined} data-testid="nav-members" onClick={() => onSetView("members")}>
           <Icon name="users" /> Members
         </button>
-        <button className={view === "settings" ? "active" : ""} data-testid="nav-settings" onClick={() => onSetView("settings")}>
+        <button className={view === "settings" ? "active" : ""} aria-current={view === "settings" ? "page" : undefined} data-testid="nav-settings" onClick={() => onSetView("settings")}>
           <Icon name="settings" /> Settings
         </button>
       </div>

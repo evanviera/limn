@@ -1,5 +1,6 @@
 import { useEffect, useRef, useState } from "react";
 import type { Board, BoardGroup } from "../types";
+import { Icon } from "./icons.js";
 import { MAX_NAME_LENGTH } from "../lib/constants.js";
 import { boardNameError, effectiveBoardGroupId } from "../lib/boardNames.js";
 import { useModalKeys } from "../lib/useModalKeys.js";
@@ -58,7 +59,7 @@ export function BoardNameDialog({ request, boards, groups, onCancel, onSave }: {
         onSubmit={(event) => { event.preventDefault(); void submit(); }}>
         <header>
           <h2 id="board-name-title">{editing ? "Rename board" : "Create board"}</h2>
-          <button disabled={saving} type="button" onClick={close}>Cancel</button>
+          <button aria-label="Close dialog" className="icon-button" disabled={saving} type="button" onClick={close}><Icon name="x" /></button>
         </header>
         <label>Board name
           <input ref={inputRef} data-testid="text-dialog-input" maxLength={MAX_NAME_LENGTH} disabled={saving}
