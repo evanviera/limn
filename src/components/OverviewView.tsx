@@ -1,27 +1,24 @@
 import { useEffect, useId, useMemo, useState } from "react";
 import type { Board, Card } from "../types";
 import type { BoardNavSections } from "./WorkspaceChrome";
-import type { BoardViewProps } from "./BoardView";
+import { BoardView } from "./BoardView.js";
+import type { BoardViewProps, CardDropTarget } from "./BoardView";
 import { countLabel } from "../lib/format.js";
-import { compareCardsByOrder } from "../lib/ordering.js";
 import { readOverviewCollapsedIds, writeOverviewCollapsedIds } from "../lib/viewPreferences.js";
 import { EmptyState } from "./dialogs.js";
 import { Icon } from "./icons.js";
-import { TaskCardBody } from "./TaskCard.js";
 
-type OverviewViewProps = Pick<BoardViewProps,
-  "members" | "dropTargetCardId" | "onToggleSubtask" | "onOpenAttachment" |
-  "onRevealAttachment" | "onOpenContextMenu" | "onCopyText"
-> & {
+interface OverviewViewProps {
   sections: BoardNavSections;
   cards: Card[];
   workspacePath: string;
-  onOpenCard: (card: Card) => void;
+  boardProps: (board: Board) => BoardViewProps;
   onCreateBoard: () => void;
-};
+}
 
 export function OverviewView(props: OverviewViewProps) {
   const idPrefix = useId();
+  const [cardDropTarget, setCardDropTarget] = useState<CardDropTarget | null>(null);
   const [collapsedIds, setCollapsedIds] = useState(() => readOverviewCollapsedIds(props.workspacePath));
   useEffect(() => {
     writeOverviewCollapsedIds(props.workspacePath, collapsedIds);
@@ -30,6 +27,8 @@ export function OverviewView(props: OverviewViewProps) {
   const boards = useMemo(() => [
     ...props.sections.grouped.flatMap(section => section.boards), ...props.sections.ungrouped
   ], [props.sections]);
+  const boardViews = useMemo(() => new Map(boards.map(board => [board.id, props.boardProps(board)])),
+    [boards, props.boardProps]);
   // List IDs can repeat across boards (including the default "todo"). Keep
   // both IDs in the index so every card stays in its actual board and list.
   const cardsByBoard = useMemo(() => {
@@ -38,7 +37,6 @@ export function OverviewView(props: OverviewViewProps) {
     for (const card of props.cards) {
       if (!card.archived) index.get(card.boardId)?.get(card.listId)?.push(card);
     }
-    for (const lists of index.values()) for (const cards of lists.values()) cards.sort(compareCardsByOrder);
     return index;
   }, [boards, props.cards]);
   const cardCount = [...cardsByBoard.values()].reduce((total, lists) =>
@@ -71,28 +69,8 @@ export function OverviewView(props: OverviewViewProps) {
           </button>
         </h3>
         <div id={contentId} hidden={collapsed}>
-          {!collapsed && (board.lists.length === 0 ? <p className="muted">No lists in this board.</p> : (
-            <div className="columns overview-columns">
-              {board.lists.map(list => (
-                <section className="column overview-column" key={list.id} aria-label={`${board.name}: ${list.name}`}>
-                  <header className="overview-list-heading"><h4>{list.name}</h4><span>{listCards.get(list.id)!.length}</span></header>
-                  <div className="card-stack overview-card-stack">
-                    {listCards.get(list.id)!.length === 0 && <p className="overview-empty-list">No cards</p>}
-                    {listCards.get(list.id)!.map(card => (
-                      <article key={card.id} aria-label={`${card.title}${card.completed ? " (completed)" : ""}`}
-                        className={`task-card${card.completed ? " completed" : ""}${props.dropTargetCardId === card.id ? " drop-target" : ""}`}
-                        data-card-id={card.id} data-testid={`card-${card.id}`} onClick={() => props.onOpenCard(card)}>
-                        <TaskCardBody card={card} members={props.members} workspacePath={props.workspacePath}
-                          onOpen={() => props.onOpenCard(card)} onToggleSubtask={props.onToggleSubtask}
-                          onOpenAttachment={props.onOpenAttachment} onRevealAttachment={props.onRevealAttachment}
-                          onOpenContextMenu={props.onOpenContextMenu} onCopyText={props.onCopyText} />
-                      </article>
-                    ))}
-                  </div>
-                </section>
-              ))}
-            </div>
-          ))}
+          {!collapsed && <BoardView {...boardViews.get(board.id)!} embedded
+            cardDropTarget={cardDropTarget} onCardDropListChange={setCardDropTarget} />}
         </div>
       </article>
     );

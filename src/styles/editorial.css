@@ -151,7 +151,7 @@
 }
 
 .column-header { min-height: 30px; padding: 0 0 2px; gap: 4px; }
-.column-header h2 { font-size: var(--text-base); font-weight: var(--weight-semibold); }
+.column-header .list-title { font-size: var(--text-base); font-weight: var(--weight-semibold); }
 .column-header span { font-variant-numeric: tabular-nums; opacity: 1; }
 .card-stack { gap: 10px; padding: 2px 3px 4px; }
 .task-card { gap: 10px; padding: 12px; border-radius: var(--radius-md); }

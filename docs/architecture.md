@@ -22,8 +22,8 @@ focused" section before adding code to an existing large file.**
   text-input context-menu helpers (`isEditableTextControl`, `textControlContextItems`, …).
 - `dialogs.tsx` — `EmptyState`, `TextDialog`, `ConfirmDialog` and their state types.
 - `RichNoteText.tsx` — renders card note text (inline links / bold / italic).
-- `BoardView.tsx` — board columns and card/list drag-and-drop, including card drops onto sidebar boards.
-- `OverviewView.tsx` — all boards stacked in sidebar order with category and board folds stored per workspace on this device. Shows active cards in each board's lists; opens the shared card editor with the correct board context.
+- `BoardView.tsx` — shared board controls, list rails, card rendering and context menus. Used standalone and embedded in Overview; pointer interactions live in `useBoardInteraction`.
+- `OverviewView.tsx` — all boards stacked in sidebar order with category and board folds stored per workspace on this device. Embeds the full `BoardView` so card/list authoring and dragging behave the same in both views; shares board-qualified card drop targets across the stack.
 - `BoardNameDialog.tsx` — create/rename board dialog with category selection on creation and category-local name validation.
 - `MoveCardDialog.tsx` — the card context menu’s cross-board location chooser, with board/list selection and validation.
 - `CardAttachments.tsx` — the card editor's attachments section (list / add / open / remove), fully prop-driven.
@@ -67,6 +67,9 @@ when the last one closes). The open list + active path persist via the
 - `boardNames.ts` — category-local board name checks, relocation collision checks, and qualified display names for cross-board views.
 - `cardMove.ts` — chooses the default destination list for a cross-board move by matching the source list name, falling back to the first destination list.
 - `useCardBoardMoves.ts` — cross-board card move persistence, activity, duplicate-submit prevention, and chooser/drag-target state.
+- `useBoardInteraction.ts` — shared mouse/pen card and list dragging, previews, insertion feedback, and synchronized device-local display controls. List drop targets include both board and list IDs; Overview can drop into an exact position on another board.
+- `useBoardListActions.ts` — board-scoped card creation and list add/rename/collapse/reorder/archive/delete actions, extracted from App. Each action names its board rather than relying on the selected board.
+- `boardViewProps.ts` — binds the shared board and list callbacks to a specific board for both standalone and embedded `BoardView` instances.
 - `archive.ts` — pure archive projections: legacy-aware archive timestamps/reasons, location availability, sorting, and relative-date labels for `ArchiveView`.
 - `useEmptyArchive.ts` — confirmed workspace-wide archive deletion in bounded batches, with progress, version-checked deletes, and partial-failure reporting. Search filters do not limit the captured deletion scope.
 - `noteFormat.ts` — note markdown parse/serialize + contenteditable DOM helpers.

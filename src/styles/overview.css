@@ -39,26 +39,17 @@
 .overview-board + .overview-board { margin-top: var(--space-6); }
 .overview-board-toggle { color: var(--text-strong); font-size: var(--text-lg); }
 
-/* Reuse the board's column sizing, list padding and card spacing. Overview
-   only changes vertical flow so every board grows to show all of its cards. */
-.overview-column {
-  grid-template-rows: auto auto;
-  max-height: none;
+/* Embedded boards retain the normal board controls and fixed list widths,
+   while their card stacks grow naturally inside Overview's vertical scroll. */
+.overview-view .embedded-board-view { display: block; overflow: visible; }
+.overview-view .embedded-board-view > .content-header {
+  justify-content: flex-end;
+  margin-bottom: var(--space-4);
+  padding-bottom: var(--space-4);
+  border-bottom: 0;
 }
-.overview-list-heading { display: flex; align-items: center; gap: var(--space-4); min-height: 30px; padding-bottom: 2px; }
-.overview-list-heading h4 { margin: 0; overflow-wrap: anywhere; font-size: var(--text-base); font-weight: var(--weight-semibold); }
-.overview-list-heading > span { margin-left: auto; color: var(--text-faint); font-size: var(--text-sm); }
-.overview-card-stack { overflow-y: visible; }
-.overview-card-stack .task-card, .overview-card-stack .task-card:active { cursor: pointer; }
-.overview-empty-list {
-  margin: 0;
-  padding: var(--space-5);
-  color: var(--text-muted);
-  text-align: center;
-  font-size: var(--text-sm);
-  border: 1px dashed var(--border-soft);
-  border-radius: var(--radius-sm);
-}
+.overview-view .column { max-height: none; }
+.overview-view .card-stack { overflow-y: visible; }
 @media (max-width: 520px) {
   .overview-fold { flex-wrap: wrap; }
   .overview-count { margin-left: 24px; }

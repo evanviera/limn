@@ -16,7 +16,6 @@ import {
   attachmentDisplayName,
   attachmentStoredName,
   createBoard,
-  createCard,
   createComment,
   createDefaultSettings,
   deleteAttachmentFile,
@@ -49,7 +48,7 @@ import {
   watchWorkspace,
   type SaveOutcome
 } from "./storage";
-import { Attachment, Board, BoardGroup, BoardList, Card, CardFilter, Member, MembersFile, OpenWorkspaceRef, SavedView, Subtask, SubtaskListItem, View, WorkspaceChanged, WorkspaceLoadProgress, WorkspaceSettings } from "./types";
+import { Attachment, Board, BoardGroup, Card, CardFilter, Member, MembersFile, OpenWorkspaceRef, SavedView, Subtask, SubtaskListItem, View, WorkspaceChanged, WorkspaceLoadProgress, WorkspaceSettings } from "./types";
 import {
   canUseUpdater,
   checkForUpdate,
@@ -65,6 +64,8 @@ import { BoardNameDialog, type BoardNameRequest } from "./components/BoardNameDi
 import { boardCategoryMoveError, boardChoices, boardNameError, effectiveBoardGroupId } from "./lib/boardNames.js";
 import { MoveCardDialog } from "./components/MoveCardDialog.js";
 import { useCardBoardMoves } from "./lib/useCardBoardMoves.js";
+import { useBoardListActions } from "./lib/useBoardListActions.js";
+import { createBoardViewProps } from "./lib/boardViewProps.js";
 import { ArchiveToast, ArchiveView, RestoreCardDialog } from "./components/ArchiveView";
 import type { ArchiveToastState } from "./components/ArchiveView";
 import { CardEditor } from "./components/CardEditor";
@@ -285,6 +286,16 @@ export default function App() {
       setNoticeKind("info");
     }
   });
+  const boardListActions = useBoardListActions({
+    workspacePath, boards: boardsRef, cards: cardsRef, selectedCardIdRef,
+    persistBoard, persistCard, openTextDialog, openConfirmDialog, setArchiveToast,
+    setView, setSelectedCardId, setCards, setError, handleSaveOutcome,
+    onCreatedCard: (card) => {
+      setActiveBoardId(card.boardId);
+      setSelectedCardMode("edit");
+      setSelectedCardId(card.id);
+    }
+  });
   const cardMoveRequest = cards.find((card) => card.id === cardBoardMoves.requestCardId) ?? null;
   // Lets the once-subscribed deep-link listener read the active workspace path
   // without re-subscribing or closing over a stale value.
@@ -343,14 +354,6 @@ export default function App() {
     },
     onError: (message) => setError(`Empty archive failed: ${message}`)
   });
-  const visibleCards = useMemo(
-    () => cards.filter((card) => !card.archived && card.boardId === activeBoard?.id),
-    [activeBoard?.id, cards]
-  );
-  const activeBoardCards = useMemo(
-    () => cards.filter((card) => card.boardId === activeBoard?.id),
-    [activeBoard?.id, cards]
-  );
   const boardGroups = settings?.boardGroups ?? [];
   const boardChoiceViews = useMemo(() => boardChoices(boards, boardGroups), [boards, boardGroups]);
   const boardNavSections = useMemo(() => {
@@ -1499,239 +1502,6 @@ export default function App() {
     }
   }
 
-  async function addList() {
-    if (!activeBoard) {
-      return;
-    }
-    openTextDialog({
-      title: "Add list",
-      label: "List name",
-      value: "",
-      confirmLabel: "Add list",
-      validate: (name) =>
-        activeBoard.lists.some((item) => item.name.trim().toLowerCase() === name.toLowerCase())
-          ? "A list with this name already exists."
-          : null,
-      onSubmit: async (name) => {
-        const list: BoardList = { id: makeId("list"), name };
-        await persistBoard({ ...activeBoard, lists: [...activeBoard.lists, list], updatedAt: timestamp() });
-      }
-    });
-  }
-
-  async function renameList(list: BoardList) {
-    if (!activeBoard) {
-      return;
-    }
-    openTextDialog({
-      title: "Rename list",
-      label: "List name",
-      value: list.name,
-      confirmLabel: "Save list",
-      validate: (name) =>
-        activeBoard.lists.some((item) => item.id !== list.id && item.name.trim().toLowerCase() === name.toLowerCase())
-          ? "A list with this name already exists."
-          : null,
-      onSubmit: async (name) => {
-        await persistBoard({
-          ...activeBoard,
-          lists: activeBoard.lists.map((item) => (item.id === list.id ? { ...item, name } : item)),
-          updatedAt: timestamp()
-        });
-      }
-    });
-  }
-
-  async function toggleListCollapsed(list: BoardList) {
-    if (!activeBoard) {
-      return;
-    }
-    await persistBoard({
-      ...activeBoard,
-      lists: activeBoard.lists.map((item) =>
-        item.id === list.id ? { ...item, collapsed: !item.collapsed } : item
-      ),
-      updatedAt: timestamp()
-    });
-  }
-
-  async function deleteList(list: BoardList) {
-    if (!activeBoard) {
-      return;
-    }
-    const board = activeBoard;
-    openConfirmDialog({
-      title: "Delete list",
-      message: `Delete list "${list.name}"? Cards in this list will be archived.`,
-      confirmLabel: "Delete list",
-      destructive: true,
-      onConfirm: async () => {
-        const now = timestamp();
-        const nextCards = cards.map((card) =>
-          card.boardId === board.id && card.listId === list.id && !card.archived
-            ? addActivity({ ...card, archived: true, archivedAt: now, updatedAt: now }, "archived", `Archived when ${list.name} was deleted`)
-            : card
-        );
-        const changedCards = nextCards.filter((card, index) => card !== cards[index]);
-        await Promise.all(changedCards.map((card) => persistCard(card, cards.find((item) => item.id === card.id))));
-        await persistBoard({
-          ...board,
-          lists: board.lists.filter((item) => item.id !== list.id),
-          updatedAt: now
-        });
-        if (changedCards.length > 0) {
-          setArchiveToast({
-            message: `${countLabel(changedCards.length, "card")} archived when “${list.name}” was deleted.`,
-            actionLabel: "View archive",
-            onAction: () => {
-              setArchiveToast(null);
-              setView("archive");
-            }
-          });
-        }
-      }
-    });
-  }
-
-  async function archiveListCards(list: BoardList) {
-    if (!activeBoard) {
-      return;
-    }
-    const listCards = cards.filter(
-      (card) => card.boardId === activeBoard.id && card.listId === list.id && !card.archived
-    );
-    if (listCards.length === 0) {
-      return;
-    }
-
-    openConfirmDialog({
-      title: "Archive all cards",
-      message: `Archive ${countLabel(listCards.length, "card")} in "${list.name}"? Archived cards remain available from Archive.`,
-      confirmLabel: "Archive all cards",
-      onConfirm: async () => {
-        const archivedCards = listCards.map((card) =>
-          addActivity({ ...card, archived: true, archivedAt: timestamp() }, "archived", `Archived with all cards in ${list.name}`)
-        );
-        await Promise.all(archivedCards.map((card, index) => persistCard(card, listCards[index])));
-        const archivedIds = new Set(listCards.map((card) => card.id));
-        if (selectedCardIdRef.current && archivedIds.has(selectedCardIdRef.current)) {
-          setSelectedCardId(null);
-        }
-        setArchiveToast({
-          message: `${countLabel(listCards.length, "card")} archived from “${list.name}”.`,
-          actionLabel: "View archive",
-          onAction: () => {
-            setArchiveToast(null);
-            setView("archive");
-          }
-        });
-      }
-    });
-  }
-
-  async function sortListCardsByDueDate(list: BoardList) {
-    if (!activeBoard) {
-      return;
-    }
-    const listCards = cards.filter(
-      (card) => card.boardId === activeBoard.id && card.listId === list.id && !card.archived
-    );
-    const manuallyOrderedCards = listCards.filter((card) => card.order !== 0);
-    if (manuallyOrderedCards.length === 0) {
-      return;
-    }
-
-    try {
-      // A shared order of zero opts the list back into its built-in due-date
-      // comparator. Future cards also stay in due-date mode until manually moved.
-      await Promise.all(
-        manuallyOrderedCards.map((card) =>
-          persistCard({ ...card, order: 0, updatedAt: timestamp() }, card)
-        )
-      );
-    } catch (reason) {
-      setError(`Sort by due date failed: ${errorText(reason)}`);
-    }
-  }
-
-  async function deleteListCards(list: BoardList) {
-    if (!activeBoard || !workspacePath) {
-      return;
-    }
-    // Archived cards retain their list id, so deleting every card in a list also
-    // removes cards that were archived earlier and are currently hidden here.
-    const listCards = cards.filter((card) => card.boardId === activeBoard.id && card.listId === list.id);
-    if (listCards.length === 0) {
-      return;
-    }
-
-    openConfirmDialog({
-      title: "Delete all cards",
-      message: `Permanently delete ${countLabel(listCards.length, "card")} in "${list.name}"? This removes their card files and attachments from disk.`,
-      confirmLabel: "Delete all cards",
-      destructive: true,
-      onConfirm: async () => {
-        const outcomes = await Promise.all(listCards.map((card) => deleteCard(workspacePath, card)));
-        const conflict = outcomes.find((outcome) => outcome.status === "conflict");
-        if (conflict) {
-          // Some independent deletes may already have succeeded. Reload so the
-          // board reflects exactly which cards remain after the refused delete.
-          await handleSaveOutcome(conflict, "card batch", "delete");
-          return;
-        }
-        const deletedIds = new Set(listCards.map((card) => card.id));
-        setCards((current) => current.filter((card) => !deletedIds.has(card.id)));
-        if (selectedCardIdRef.current && deletedIds.has(selectedCardIdRef.current)) {
-          setSelectedCardId(null);
-        }
-      }
-    });
-  }
-
-  async function moveList(listId: string, index: number) {
-    if (!activeBoard) {
-      return;
-    }
-    const list = activeBoard.lists.find((item) => item.id === listId);
-    if (!list) {
-      return;
-    }
-
-    const otherLists = activeBoard.lists.filter((item) => item.id !== listId);
-    const clampedIndex = Math.max(0, Math.min(index, otherLists.length));
-    const nextLists = [...otherLists];
-    nextLists.splice(clampedIndex, 0, list);
-
-    if (nextLists.every((item, position) => item.id === activeBoard.lists[position]?.id)) {
-      return;
-    }
-
-    try {
-      await persistBoard({ ...activeBoard, lists: nextLists, updatedAt: timestamp() });
-    } catch (reason) {
-      setError(`Move list failed: ${errorText(reason)}`);
-    }
-  }
-
-  async function addCard(listId: string) {
-    if (!activeBoard) {
-      return;
-    }
-    openTextDialog({
-      title: "Add card",
-      label: "Card title",
-      value: "",
-      confirmLabel: "Add card",
-      onSubmit: async (title) => {
-        const listCards = cards.filter((item) => item.boardId === activeBoard.id && item.listId === listId && !item.archived);
-        const card = { ...createCard(activeBoard.id, listId, title), order: nextOrderForList(listCards) };
-        await persistCard(card);
-        setSelectedCardMode("edit");
-        setSelectedCardId(card.id);
-      }
-    });
-  }
-
   async function archiveCard(card: Card, showFeedback = true) {
     try {
       if (card.archived) {
@@ -1855,14 +1625,15 @@ export default function App() {
   // reordering: the moved card gets a new `order`, and any siblings that must
   // shift to keep the sequence distinct are rewritten silently first.
   async function moveCard(cardId: string, listId: string, index?: number) {
-    const card = cards.find((item) => item.id === cardId);
-    if (!card || !activeBoard) {
+    const card = cardsRef.current.find((item) => item.id === cardId);
+    const sourceBoard = boardsRef.current.find((board) => board.id === card?.boardId);
+    if (!card || card.archived || !sourceBoard || !sourceBoard.lists.some(list => list.id === listId)) {
       return;
     }
 
     const sameList = card.listId === listId;
-    const siblings = cards
-      .filter((item) => item.boardId === activeBoard.id && item.listId === listId && !item.archived && item.id !== cardId)
+    const siblings = cardsRef.current
+      .filter((item) => item.boardId === sourceBoard.id && item.listId === listId && !item.archived && item.id !== cardId)
       .sort(compareCardsByOrder);
     const placement = placeInList(siblings, index ?? siblings.length);
 
@@ -1870,11 +1641,11 @@ export default function App() {
       return;
     }
 
-    const list = activeBoard.lists.find((item) => item.id === listId);
-    const previousList = activeBoard.lists.find((item) => item.id === card.listId);
+    const list = sourceBoard.lists.find((item) => item.id === listId);
+    const previousList = sourceBoard.lists.find((item) => item.id === card.listId);
     try {
       for (const change of placement.rebalance) {
-        const sibling = cards.find((item) => item.id === change.id);
+        const sibling = cardsRef.current.find((item) => item.id === change.id);
         if (sibling) {
           await persistCard({ ...sibling, order: change.order, updatedAt: timestamp() }, sibling);
         }
@@ -1888,15 +1659,28 @@ export default function App() {
       const movedListName = list?.name ?? "";
       const configuredListNames = settingsRef.current?.slackMovedToListNames ?? "";
       if (result && result.status !== "conflict" && !sameList && listNameTriggersMoveNotification(movedListName, configuredListNames)) {
-        await sendSlack(null, `➡️ Card moved to ${movedListName}: ${moved.title}\nAssigned to: ${assigneeSlackTags(moved)}\nBoard: ${activeBoard.name}${actorSlackLine()}`);
+        await sendSlack(null, `➡️ Card moved to ${movedListName}: ${moved.title}\nAssigned to: ${assigneeSlackTags(moved)}\nBoard: ${sourceBoard.name}${actorSlackLine()}`);
       }
     } catch (reason) {
       setError(`Move failed: ${errorText(reason)}`);
     }
   }
 
-  // Open a card from a cross-board view: focus its board so the
-  // editor has the right board/list context, then open the editor over the view.
+  function boardViewProps(board: Board) {
+    return createBoardViewProps(board, cards, boardListActions, {
+      members, workspacePath, dropTargetCardId: dragOverCardId,
+      onRenameBoard: renameBoard, onDeleteBoard: removeBoard,
+      onMoveCard: moveCard, onMoveCardToBoard: cardBoardMoves.moveCardToBoard,
+      onRequestMoveCard: cardBoardMoves.requestMove,
+      onCardDropBoardChange: cardBoardMoves.setDropBoardId,
+      onToggleSubtask: toggleSubtask, onOpenAttachment: openCardAttachment,
+      onRevealAttachment: revealCardAttachment, onToggleCardCompleted: toggleCardCompleted,
+      onArchiveCard: archiveCard, onDeleteCard: removeCard,
+      onOpenContextMenu: openContextMenu, onCopyText: copyText
+    }, openCardFromWorkspaceView);
+  }
+
+  // Keep the editor in the card's actual board/list context without leaving Overview.
   function openCardFromWorkspaceView(card: Card) {
     setActiveBoardId(card.boardId);
     setSelectedCardMode("view");
@@ -1914,11 +1698,6 @@ export default function App() {
     const nextReadState = markAllInboxItemsRead(inboxReadState, inboxItems);
     setInboxReadState(nextReadState);
     writeStoredInboxReadState(workspacePath, activeMemberId, nextReadState);
-  }
-
-  function openCardFromBoard(cardId: string) {
-    setSelectedCardMode("view");
-    setSelectedCardId(cardId);
   }
 
   // Resolve a shared card link (`limn://card/<id>`) and open the card. The link
@@ -2598,7 +2377,7 @@ export default function App() {
             showCommandNotice("Select a board before adding a list.", "warning");
             return;
           }
-          await addList();
+          await boardListActions.addList(activeBoardId);
           return;
         case "new-card":
           await addCardFromMenu();
@@ -2690,7 +2469,7 @@ export default function App() {
       showCommandNotice("Add a list before creating a card.", "warning");
       return;
     }
-    await addCard(firstList.id);
+    await boardListActions.addCard(activeBoardId, firstList.id);
   }
 
   async function toggleSelectedCardCompleted() {
@@ -2851,49 +2630,13 @@ export default function App() {
           onReviewConflicts={() => setConflictReviewOpen(true)}
         />
 
-        {view === "board" && activeBoard && (
-          <BoardView
-            board={activeBoard}
-            allCards={activeBoardCards}
-            cards={visibleCards}
-            members={members}
-            workspacePath={workspacePath}
-            dropTargetCardId={dragOverCardId}
-            onAddList={addList}
-            onRenameBoard={renameBoard}
-            onDeleteBoard={removeBoard}
-            onRenameList={renameList}
-            onDeleteList={deleteList}
-            onSortListCardsByDueDate={sortListCardsByDueDate}
-            onArchiveListCards={archiveListCards}
-            onDeleteListCards={deleteListCards}
-            onToggleListCollapsed={toggleListCollapsed}
-            onMoveList={moveList}
-            onAddCard={addCard}
-            onMoveCard={moveCard}
-            onMoveCardToBoard={cardBoardMoves.moveCardToBoard}
-            onRequestMoveCard={cardBoardMoves.requestMove}
-            onCardDropBoardChange={cardBoardMoves.setDropBoardId}
-            onOpenCard={openCardFromBoard}
-            onToggleSubtask={toggleSubtask}
-            onOpenAttachment={openCardAttachment}
-            onRevealAttachment={revealCardAttachment}
-            onToggleCardCompleted={toggleCardCompleted}
-            onArchiveCard={archiveCard}
-            onDeleteCard={removeCard}
-            onOpenContextMenu={openContextMenu}
-            onCopyText={copyText}
-          />
-        )}
+        {view === "board" && activeBoard && <BoardView {...boardViewProps(activeBoard)} />}
         {view === "board" && !activeBoard && (
           <EmptyState title="No board selected" body="Create a board to start adding lists and cards." action="Create board" onAction={addBoard} />
         )}
         {view === "overview" && workspacePath && (
           <OverviewView key={workspacePath} sections={boardNavSections} cards={cards}
-            members={members} workspacePath={workspacePath} dropTargetCardId={dragOverCardId}
-            onOpenCard={openCardFromWorkspaceView} onCreateBoard={addBoard}
-            onToggleSubtask={toggleSubtask} onOpenAttachment={openCardAttachment}
-            onRevealAttachment={revealCardAttachment} onOpenContextMenu={openContextMenu} onCopyText={copyText} />
+            workspacePath={workspacePath} boardProps={boardViewProps} onCreateBoard={addBoard} />
         )}
         {view === "filter" && (
           <FilterView

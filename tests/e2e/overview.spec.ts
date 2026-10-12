@@ -1,4 +1,4 @@
-import { test, expect, type Page } from "@playwright/test";
+import { test, expect, type Page, type Locator } from "@playwright/test";
 import type { Board, BoardGroup } from "../../src/types";
 import { openApp, openWorkspace, queueWorkspacePick, snapshot } from "./harness";
 
@@ -29,6 +29,21 @@ async function createCard(page: Page, title: string) {
   await expect(page.getByTestId("card-title-input")).toBeVisible();
   await page.getByTestId("save-card").click();
   await expect(page.getByTestId("card-title-input")).toBeHidden();
+}
+
+async function submitText(page: Page, value: string) {
+  await page.getByTestId("text-dialog-input").fill(value);
+  await page.getByTestId("text-dialog-submit").click();
+  await expect(page.getByTestId("text-dialog-input")).toBeHidden();
+}
+
+async function drag(page: Page, source: Locator, target: Locator, fraction = 0.5) {
+  const from = (await source.boundingBox())!;
+  const to = (await target.boundingBox())!;
+  await page.mouse.move(from.x + from.width / 2, from.y + 20);
+  await page.mouse.down();
+  await page.mouse.move(from.x + from.width / 2 + 20, from.y + 20);
+  await page.mouse.move(to.x + to.width / 2, to.y + to.height * fraction);
 }
 
 test.describe("workspace overview", () => {
@@ -93,7 +108,7 @@ test.describe("workspace overview", () => {
     await page.getByTestId("card-list-select").selectOption({ label: "In Progress" });
     await page.getByTestId("save-card").click();
     await expect(page.getByTestId("overview-view")).toBeVisible();
-    const column = page.getByTestId(`overview-board-${first.id}`).getByRole("region", { name: "First board: In Progress" });
+    const column = page.getByTestId(`overview-board-${first.id}`).getByTestId("list-in-progress");
     await expect(column).toContainText("Updated first task");
     await column.getByRole("button", { name: "Updated first task", exact: true }).click();
     await page.getByTestId("card-view-complete").click();
@@ -174,7 +189,7 @@ test.describe("workspace overview", () => {
       await page.setViewportSize({ width, height: 900 });
       expect(await layout()).toEqual(normal);
     }
-    const columns = page.getByTestId(`overview-board-${board.id}`).locator(".overview-columns");
+    const columns = page.getByTestId(`overview-board-${board.id}`).locator(".columns");
     expect(await columns.evaluate(el => el.scrollWidth > el.clientWidth)).toBe(true);
     await page.getByTestId("nav-settings").click();
     await page.getByTestId("list-width-input").fill("420");
@@ -190,7 +205,7 @@ test.describe("workspace overview", () => {
     const phone = await layout();
     await page.getByTestId("nav-overview").click();
     expect(await layout()).toEqual(phone);
-    const listBoxes = await columns.locator(".overview-column").evaluateAll(elements => elements.map(el => {
+    const listBoxes = await columns.locator(".column").evaluateAll(elements => elements.map(el => {
       const rect = el.getBoundingClientRect();
       return { x: rect.x, y: rect.y };
     }));
@@ -200,5 +215,176 @@ test.describe("workspace overview", () => {
     await page.getByTestId("theme-toggle").click();
     await expect(page.locator("html")).toHaveAttribute("data-theme", "light");
     await expect(page.getByTestId("overview-view")).toBeVisible();
+  });
+
+  test("adds cards and edits, collapses, and archives lists on the intended board", async ({ page }) => {
+    await openApp(page);
+    await openWorkspace(page);
+    const first = await createBoard(page, "First");
+    await createCard(page, "First task");
+    const second = await createBoard(page, "Second");
+    await createCard(page, "Second task");
+    await page.getByTestId("nav-overview").click();
+    const a = page.getByTestId(`overview-board-${first.id}`);
+    const b = page.getByTestId(`overview-board-${second.id}`);
+    await a.getByTestId("add-card-in-progress").click();
+    await submitText(page, "Added in Overview");
+    await expect(page.getByTestId("card-title-input")).toHaveValue("Added in Overview");
+    await expect(page.locator(".card-editor-heading h2")).toHaveText("First / In Progress");
+    await page.getByTestId("save-card").click();
+    await expect(a.getByTestId("list-in-progress")).toContainText("Added in Overview");
+    await expect(b.getByTestId("list-in-progress").locator(".task-card")).toHaveCount(0);
+    await a.getByTestId("collapse-list-todo").click();
+    await expect(a.getByTestId("list-todo")).toHaveClass(/collapsed/);
+    await expect(b.getByTestId("list-todo")).not.toHaveClass(/collapsed/);
+    await page.getByTestId(`board-nav-${first.id}`).click();
+    await expect(page.getByTestId("list-todo")).toHaveClass(/collapsed/);
+    await page.getByTestId("nav-overview").click();
+    await a.getByTestId("collapse-list-todo").click();
+    await expect(a.getByTestId("list-todo")).not.toHaveClass(/collapsed/);
+    await b.getByTestId("rename-list-todo").click();
+    await submitText(page, "Second backlog");
+    await expect(b.getByTestId("list-title-todo")).toHaveText("Second backlog");
+    await expect(a.getByTestId("list-title-todo")).toHaveText("To Do");
+    await b.getByTestId("add-list").click();
+    await submitText(page, "Review");
+    const updated = (await snapshot(page)).boards.map(file => JSON.parse(file.content) as Board).find(board => board.id === second.id)!;
+    const review = updated.lists.find(list => list.name === "Review")!;
+    await expect(b.getByTestId(`list-${review.id}`)).toBeVisible();
+    await expect(a.getByTestId(`list-${review.id}`)).toHaveCount(0);
+    await b.getByTestId(`delete-list-${review.id}`).click();
+    await page.getByTestId("confirm-dialog-submit").click();
+    await expect(b.getByTestId(`list-${review.id}`)).toHaveCount(0);
+    await b.getByTestId("list-title-todo").click({ button: "right" });
+    await page.getByRole("menuitem", { name: "Archive all cards", exact: true }).click();
+    await page.getByTestId("confirm-dialog-submit").click();
+    await expect(b.locator(".task-card")).toHaveCount(0);
+    await expect(a.locator(".task-card")).toHaveCount(2);
+    await openApp(page, { reset: false });
+    await page.getByTestId("nav-overview").click();
+    await expect(b.getByTestId("list-title-todo")).toHaveText("Second backlog");
+    await expect(a.getByTestId("list-in-progress")).toContainText("Added in Overview");
+  });
+
+  for (const pointer of ["mouse", "pen"] as const) {
+    test(`${pointer} drag moves and reorders cards within an inactive Overview board`, async ({ page }) => {
+      await page.setViewportSize({ width: 1600, height: 1400 });
+      await openApp(page);
+      await openWorkspace(page);
+      const first = await createBoard(page, "Source");
+      await createCard(page, "Move me");
+      await createCard(page, "Stay here");
+      const second = await createBoard(page, "Other");
+      await createCard(page, "Other task");
+      await page.getByTestId("nav-overview").click();
+      const a = page.getByTestId(`overview-board-${first.id}`);
+      const b = page.getByTestId(`overview-board-${second.id}`);
+      if (pointer === "pen") {
+        await page.evaluate(() => Object.defineProperty(PointerEvent.prototype, "pointerType", { configurable: true, get: () => "pen" }));
+      }
+      const todo = a.getByTestId("list-todo");
+      const source = todo.locator(".task-card", { hasText: "Move me" });
+      await drag(page, source, a.getByTestId("list-in-progress").locator(".empty-list"));
+      await expect(a.getByTestId("drop-indicator-in-progress")).toBeVisible();
+      await expect(b.getByTestId("drop-indicator-in-progress")).toHaveCount(0);
+      await page.mouse.up();
+      await expect(a.getByTestId("list-in-progress").locator(".card-open")).toHaveText("Move me");
+      await expect(todo.locator(".card-open")).toHaveText("Stay here");
+      await expect(b.getByTestId("list-todo").locator(".card-open")).toHaveText("Other task");
+      await drag(page, a.getByTestId("list-in-progress").locator(".task-card"), todo.locator(".task-card"), 0.9);
+      await page.mouse.up();
+      await expect(todo.locator(".card-open")).toHaveText(["Stay here", "Move me"]);
+      await drag(page, todo.locator(".task-card").last(), todo.locator(".task-card").first(), 0.1);
+      await page.mouse.up();
+      await expect(todo.locator(".card-open")).toHaveText(["Move me", "Stay here"]);
+      await expect(page.locator("body.is-card-dragging, .drag-preview")).toHaveCount(0);
+      await expect(page.getByTestId("nav-overview")).toHaveAttribute("aria-current", "page");
+      await openApp(page, { reset: false });
+      await page.getByTestId("nav-overview").click();
+      await expect(todo.locator(".card-open")).toHaveText(["Move me", "Stay here"]);
+    });
+  }
+
+  test("drags into an exact position on another board with repeated default list IDs", async ({ page }) => {
+    await page.setViewportSize({ width: 1600, height: 1400 });
+    await openApp(page);
+    await openWorkspace(page);
+    const first = await createBoard(page, "Source");
+    await createCard(page, "Move across");
+    const second = await createBoard(page, "Destination");
+    await createCard(page, "Top");
+    await createCard(page, "Bottom");
+    const before = (await snapshot(page)).cards.find(file => file.content.includes('title: "Move across"'))!;
+    await page.getByTestId("nav-overview").click();
+    const a = page.getByTestId(`overview-board-${first.id}`);
+    const b = page.getByTestId(`overview-board-${second.id}`);
+    const target = b.getByTestId("list-todo");
+    await drag(page, a.locator(".task-card"), target.locator(".task-card").last(), 0.1);
+    await expect(b.getByTestId("drop-indicator-todo")).toBeVisible();
+    await expect(a.getByTestId("drop-indicator-todo")).toHaveCount(0);
+    await page.mouse.up();
+    await expect(target.locator(".card-open")).toHaveText(["Top", "Move across", "Bottom"]);
+    await expect(a.locator(".task-card")).toHaveCount(0);
+    const after = (await snapshot(page)).cards.find(file => file.file_name === before.file_name)!.content;
+    expect(JSON.parse(after.match(/^boardId: (.*)$/m)![1])).toBe(second.id);
+    expect(JSON.parse(after.match(/^listId: (.*)$/m)![1])).toBe("todo");
+    const preserved = (content: string) => content.replace(/^(boardId|listId|order|updatedAt|activity): .*\n/gm, "");
+    expect(preserved(after)).toBe(preserved(before.content));
+    await openApp(page, { reset: false });
+    await page.getByTestId("nav-overview").click();
+    await expect(target.locator(".card-open")).toHaveText(["Top", "Move across", "Bottom"]);
+  });
+
+  test("reorders lists on one Overview board without changing another board", async ({ page }) => {
+    await page.setViewportSize({ width: 1600, height: 1400 });
+    await openApp(page);
+    await openWorkspace(page);
+    const first = await createBoard(page, "First");
+    const second = await createBoard(page, "Second");
+    await page.getByTestId("nav-overview").click();
+    const a = page.getByTestId(`overview-board-${first.id}`);
+    const b = page.getByTestId(`overview-board-${second.id}`);
+    const from = (await a.getByTestId("list-drag-todo").boundingBox())!;
+    const to = (await a.getByTestId("list-done").boundingBox())!;
+    await page.mouse.move(from.x + from.width / 2, from.y + from.height / 2);
+    await page.mouse.down();
+    await page.mouse.move(from.x + from.width / 2 + 20, from.y + from.height / 2);
+    await page.mouse.move(to.x + to.width - 2, to.y + to.height / 2);
+    await expect(a.locator(".list-drop-before, .list-drop-after")).toHaveCount(1);
+    await expect(b.locator(".list-drop-before, .list-drop-after")).toHaveCount(0);
+    await page.mouse.up();
+    await expect(a.locator(".list-title")).toHaveText(["In Progress", "Done", "To Do"]);
+    await expect(b.locator(".list-title")).toHaveText(["To Do", "In Progress", "Done"]);
+    await page.getByTestId(`board-nav-${first.id}`).click();
+    await expect(page.locator(".list-title")).toHaveText(["In Progress", "Done", "To Do"]);
+  });
+
+  test("keeps display controls in sync across Overview boards and the regular board view", async ({ page }) => {
+    await openApp(page);
+    await openWorkspace(page);
+    const first = await createBoard(page, "First");
+    await createCard(page, "First task");
+    const second = await createBoard(page, "Second");
+    await createCard(page, "Second task");
+    await openApp(page, { reset: false });
+    await page.getByTestId("nav-overview").click();
+    const a = page.getByTestId(`overview-board-${first.id}`);
+    const b = page.getByTestId(`overview-board-${second.id}`);
+    const ids = await page.getByTestId("board-view-menu-toggle").evaluateAll(elements => elements.map(el => el.getAttribute("aria-controls")));
+    expect(new Set(ids).size).toBe(2);
+    await a.getByTestId("board-view-menu-toggle").click();
+    await a.getByTestId("compact-board-toggle").click();
+    await expect(page.getByTestId("overview-view").locator(".task-card.compact")).toHaveCount(2);
+    await a.getByTestId("compact-board-toggle").click();
+    await a.getByTestId("compact-completed-toggle").click();
+    await b.locator(".task-card").click({ button: "right" });
+    await page.getByRole("menuitem", { name: "Mark complete", exact: true }).click();
+    await expect(b.locator(".task-card")).toHaveClass(/compact.*completed/);
+    await expect(a.locator(".task-card")).not.toHaveClass(/compact/);
+    await page.getByTestId(`overview-board-toggle-${second.id}`).click();
+    await page.getByTestId(`overview-board-toggle-${second.id}`).click();
+    await expect(b.locator(".task-card")).toHaveClass(/compact.*completed/);
+    await page.getByTestId(`board-nav-${second.id}`).click();
+    await expect(page.locator(".task-card")).toHaveClass(/compact.*completed/);
   });
 });

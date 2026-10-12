@@ -2,6 +2,7 @@
 // shared workspace data, so localStorage keeps each person's setup independent.
 
 type BoardDisplayPreference = "compactCards" | "compactCompleted";
+export const BOARD_DISPLAY_CHANGE_EVENT = "limn-board-display-change";
 
 const BOARD_DISPLAY_KEYS: Record<BoardDisplayPreference, string> = {
   compactCards: "limn-board-compact-cards",
@@ -38,7 +39,12 @@ export function readBoardDisplayPreference(preference: BoardDisplayPreference): 
 }
 
 export function writeBoardDisplayPreference(preference: BoardDisplayPreference, enabled: boolean): void {
+  let changed = true;
+  try {
+    changed = localStorage.getItem(BOARD_DISPLAY_KEYS[preference]) !== String(enabled);
+  } catch { /* Keep live display options working even when storage is blocked. */ }
   writeItem(BOARD_DISPLAY_KEYS[preference], String(enabled));
+  if (changed) window.dispatchEvent(new CustomEvent(BOARD_DISPLAY_CHANGE_EVENT, { detail: { preference, enabled } }));
 }
 
 function collapsedBoardGroupsKey(workspacePath: string): string {

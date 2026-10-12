@@ -165,7 +165,7 @@ body.is-card-dragging .column:hover {
   cursor: pointer;
 }
 
-.column-header h2 {
+.column-header .list-title {
   overflow: hidden;
   margin: 0;
   color: var(--text-strong);
@@ -178,7 +178,7 @@ body.is-card-dragging .column:hover {
   -webkit-user-select: none;
 }
 
-.column-header h2:active {
+.column-header .list-title:active {
   cursor: grabbing;
 }
 
