@@ -60,6 +60,7 @@ import {
 } from "./updater";
 
 import { BoardView } from "./components/BoardView";
+import { OverviewView } from "./components/OverviewView.js";
 import { BoardNameDialog, type BoardNameRequest } from "./components/BoardNameDialog.js";
 import { boardCategoryMoveError, boardChoices, boardNameError, effectiveBoardGroupId } from "./lib/boardNames.js";
 import { MoveCardDialog } from "./components/MoveCardDialog.js";
@@ -78,7 +79,7 @@ import type { FilterRequest } from "./components/FilterView";
 import { InboxView } from "./components/InboxView";
 import { ConfirmDialog, EmptyState, TextDialog } from "./components/dialogs";
 import type { ConfirmDialogState, TextDialogState } from "./components/dialogs";
-import { ContextMenu, isEditableTextControl, textControlContextItems } from "./components/contextMenu";
+import { ContextMenu, contextMenuScrollPositions, shouldDismissContextMenuOnScroll, isEditableTextControl, textControlContextItems } from "./components/contextMenu";
 import type { ContextMenuItem, ContextMenuState, OpenContextMenu } from "./components/contextMenu";
 import { Spinner } from "./components/icons";
 import { MembersView } from "./components/MembersView";
@@ -497,7 +498,7 @@ export default function App() {
     function closeOnOutsideScroll(event: Event) {
       // Long category menus scroll internally. Keep the menu open while the
       // user reaches a destination farther down its list.
-      if (event.target instanceof Element && event.target.closest(".context-menu")) return;
+      if (contextMenu && !shouldDismissContextMenuOnScroll(contextMenu, event)) return;
       closeContextMenu();
     }
 
@@ -2430,7 +2431,8 @@ export default function App() {
       x: Math.max(8, Math.min(event.clientX, window.innerWidth - menuWidth - 8)),
       y: Math.max(8, Math.min(event.clientY, window.innerHeight - estimatedHeight - 8)),
       label,
-      items
+      items,
+      scrollPositions: contextMenuScrollPositions(event.currentTarget)
     });
   };
 
@@ -2885,6 +2887,13 @@ export default function App() {
         )}
         {view === "board" && !activeBoard && (
           <EmptyState title="No board selected" body="Create a board to start adding lists and cards." action="Create board" onAction={addBoard} />
+        )}
+        {view === "overview" && workspacePath && (
+          <OverviewView key={workspacePath} sections={boardNavSections} cards={cards}
+            members={members} workspacePath={workspacePath} dropTargetCardId={dragOverCardId}
+            onOpenCard={openCardFromWorkspaceView} onCreateBoard={addBoard}
+            onToggleSubtask={toggleSubtask} onOpenAttachment={openCardAttachment}
+            onRevealAttachment={revealCardAttachment} onOpenContextMenu={openContextMenu} onCopyText={copyText} />
         )}
         {view === "filter" && (
           <FilterView

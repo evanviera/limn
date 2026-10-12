@@ -17,8 +17,10 @@ interface BoardNavProps {
   activeBoardId: string;
   cardDropBoardId: string | null;
   isBoardView: boolean;
+  isOverviewView: boolean;
   workspacePath: string;
   onSelectBoard: (boardId: string) => void;
+  onOpenOverview: () => void;
   // Drop `boardId` into category `groupId` (undefined = Ungrouped/flat) at the
   // given index among that category's other boards.
   onMoveBoard: (boardId: string, groupId: string | undefined, index: number) => void;
@@ -56,8 +58,10 @@ export function BoardNav({
   activeBoardId,
   cardDropBoardId,
   isBoardView,
+  isOverviewView,
   workspacePath,
   onSelectBoard,
+  onOpenOverview,
   onMoveBoard,
   onBoardContextMenu,
   onGroupContextMenu,
@@ -267,6 +271,16 @@ export function BoardNav({
           </button>
         </div>
       </div>
+
+      <button
+        type="button"
+        className={`overview-nav-item${isOverviewView ? " active" : ""}`}
+        aria-current={isOverviewView ? "page" : undefined}
+        data-testid="nav-overview"
+        onClick={onOpenOverview}
+      >
+        <Icon name="overview" /> Overview
+      </button>
 
       {totalBoards === 0 && <p className="empty-small">No boards yet.</p>}
 

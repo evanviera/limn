@@ -68,6 +68,22 @@ export function writeCollapsedBoardGroupIds(workspacePath: string, groupIds: Set
   writeItem(collapsedBoardGroupsKey(workspacePath), JSON.stringify([...groupIds]));
 }
 
+// Overview has its own category/board folds; collapsing it never hides boards
+// in the sidebar or changes another member's workspace files.
+export function readOverviewCollapsedIds(workspacePath: string): Set<string> {
+  const raw = readItem(`limn-overview-collapsed:${workspacePath}`);
+  try {
+    const ids: unknown = raw ? JSON.parse(raw) : [];
+    return Array.isArray(ids) ? new Set(ids.filter((id): id is string => typeof id === "string")) : new Set();
+  } catch {
+    return new Set();
+  }
+}
+
+export function writeOverviewCollapsedIds(workspacePath: string, ids: Set<string>): void {
+  writeItem(`limn-overview-collapsed:${workspacePath}`, JSON.stringify([...ids]));
+}
+
 export function readCardEditorSideWidth(fallback: number, minimum: number, maximum: number): number {
   const raw = readItem(CARD_EDITOR_SIDE_WIDTH_KEY);
   const parsed = raw === null ? fallback : Number(raw);

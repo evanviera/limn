@@ -1,0 +1,76 @@
+.overview-nav-item { margin-bottom: var(--space-4); }
+
+.overview-category + .overview-category { margin-top: 28px; }
+.overview-category-heading, .overview-board-heading { margin: 0; }
+
+.overview-fold {
+  display: flex;
+  align-items: center;
+  gap: var(--space-4);
+  width: 100%;
+  min-width: 0;
+  min-height: 36px;
+  padding: var(--space-3) 0;
+  text-align: left;
+  background: transparent;
+  border: 0;
+  border-radius: var(--radius-sm);
+}
+.overview-fold:hover { background: var(--row-hover); }
+.overview-fold .icon { flex: 0 0 auto; color: var(--text-muted); }
+.overview-name { min-width: 0; overflow-wrap: anywhere; }
+.overview-count {
+  flex: 0 0 auto;
+  margin-left: auto;
+  color: var(--text-faint);
+  font-size: var(--text-sm);
+  font-weight: var(--weight-normal);
+}
+.overview-category-toggle {
+  padding-bottom: var(--space-4);
+  color: var(--text-muted);
+  font-size: var(--text-sm);
+  font-weight: var(--weight-semibold);
+  text-transform: uppercase;
+  border-bottom: 1px solid var(--border-soft);
+}
+.overview-category-toggle .overview-count { text-transform: none; }
+.overview-board { margin-top: var(--space-5); }
+.overview-board + .overview-board { margin-top: var(--space-6); }
+.overview-board-toggle { color: var(--text-strong); font-size: var(--text-lg); }
+
+.overview-columns {
+  display: flex;
+  align-items: flex-start;
+  gap: var(--space-5);
+  overflow-x: auto;
+  padding: var(--space-3) 2px var(--space-4);
+}
+.overview-column {
+  flex: 1 0 200px;
+  min-width: 200px;
+  padding: 12px;
+  background: var(--list-bg);
+  border: 1px solid var(--border-soft);
+  border-radius: var(--radius-lg);
+}
+.overview-list-heading { display: flex; align-items: center; gap: var(--space-4); margin-bottom: 12px; }
+.overview-list-heading h4 { margin: 0; overflow-wrap: anywhere; font-size: var(--text-base); font-weight: var(--weight-semibold); }
+.overview-list-heading > span { margin-left: auto; color: var(--text-faint); font-size: var(--text-sm); }
+.overview-card-stack { display: grid; gap: var(--space-4); }
+.overview-card-stack .task-card, .overview-card-stack .task-card:active { cursor: pointer; }
+.overview-empty-list {
+  margin: 0;
+  padding: var(--space-5);
+  color: var(--text-muted);
+  text-align: center;
+  font-size: var(--text-sm);
+  border: 1px dashed var(--border-soft);
+  border-radius: var(--radius-sm);
+}
+@media (max-width: 520px) {
+  .overview-columns { flex-direction: column; }
+  .overview-column { flex: none; width: 100%; min-width: 0; }
+  .overview-fold { flex-wrap: wrap; }
+  .overview-count { margin-left: 24px; }
+}

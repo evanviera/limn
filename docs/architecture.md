@@ -23,6 +23,7 @@ focused" section before adding code to an existing large file.**
 - `dialogs.tsx` — `EmptyState`, `TextDialog`, `ConfirmDialog` and their state types.
 - `RichNoteText.tsx` — renders card note text (inline links / bold / italic).
 - `BoardView.tsx` — board columns and card/list drag-and-drop, including card drops onto sidebar boards.
+- `OverviewView.tsx` — all boards stacked in sidebar order with category and board folds stored per workspace on this device. Shows active cards in each board's lists; opens the shared card editor with the correct board context.
 - `BoardNameDialog.tsx` — create/rename board dialog with category selection on creation and category-local name validation.
 - `MoveCardDialog.tsx` — the card context menu’s cross-board location chooser, with board/list selection and validation.
 - `CardAttachments.tsx` — the card editor's attachments section (list / add / open / remove), fully prop-driven.
@@ -73,6 +74,7 @@ when the last one closes). The open list + active path persist via the
 - `useModalKeys.ts` — modal focus-trap / Escape hook and the modal stack.
 - `useAttachmentObjectUrl.ts` — loads an image attachment's bytes into an object URL (with cleanup), shared by the thumbnail and the lightbox.
 - `viewPreferences.ts` — device-local persistence for board display modes, collapsed board categories, and the card-editor column width.
+- Overview folds use separate keys in `viewPreferences.ts` so they stay independent of the sidebar's category folds.
 - `attachments.ts` — image-extension detection helpers (`isImageAttachment`, `latestImageAttachment`, `attachmentFileExtension`).
 - `recurrence.ts` — pure local-calendar recurrence validation/date math and successor-card construction. Monthly rules retain an anchor day so a clamped February occurrence can return to the intended day in March.
 - `merge.ts` — the reusable, typed **three-way merge engine** (base/ours/theirs). Field-level policies (`threeWayScalar`, `threeWayStringSet`, `threeWayListById`) compose into per-entity mergers (`mergeCard`, `mergeBoard`, `mergeSettings`, `mergeMembers`). Structured data (labels, assignees, comments, activity, subtasks, board lists, groups, saved views, members) merges automatically; only free text both sides rewrote (a card's title/body, a board's name) is a hard conflict. Pure, no IO.
@@ -85,7 +87,7 @@ when the last one closes). The open list + active path persist via the
 cascade order. Never add rules to it. Rules live in `src/styles/`:
 
 `tokens.css` (design tokens) → `base.css` (element resets, buttons, inputs) →
-`shell.css` (titlebar, sidebar, header) → `board.css` → `filter.css` → `archive.css`
+`shell.css` (titlebar, sidebar, header) → `board.css` → `overview.css` → `filter.css` → `archive.css`
 (cross-board filter) → `feedback.css` (banners/empty states) → `settings.css` →
 `dialogs.css` → `conflicts.css` (conflict review surface) → `card-editor.css` →
 `comments.css` (card discussion + @mentions) → `responsive.css` (media queries).
@@ -134,7 +136,7 @@ order and add new partials to the barrel at the right position.
 ## End-to-end tests (`tests/e2e/`)
 
 - `harness.ts` — shared Playwright page helpers.
-- Feature specs: `board.spec.ts`, `archive.spec.ts`, `card-editor.spec.ts`, `notes.spec.ts`,
+- Feature specs: `board.spec.ts`, `overview.spec.ts`, `archive.spec.ts`, `card-editor.spec.ts`, `notes.spec.ts`,
   `discussion.spec.ts`, `filter.spec.ts`, `integrations.spec.ts` (Slack +
   updater), `conflicts.spec.ts` (conflict review + version-checked deletes), plus
   `qa-sweep.spec.ts`.

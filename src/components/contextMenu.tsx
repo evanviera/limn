@@ -16,6 +16,23 @@ export interface ContextMenuState {
   y: number;
   label?: string;
   items: ContextMenuItem[];
+  scrollPositions: Array<{ element: HTMLElement; top: number; left: number }>;
+}
+
+export function contextMenuScrollPositions(target: HTMLElement): ContextMenuState["scrollPositions"] {
+  const positions: ContextMenuState["scrollPositions"] = [];
+  for (let element: HTMLElement | null = target; element; element = element.parentElement) {
+    positions.push({ element, top: element.scrollTop, left: element.scrollLeft });
+  }
+  return positions;
+}
+
+export function shouldDismissContextMenuOnScroll(menu: ContextMenuState, event: Event): boolean {
+  if (event.target instanceof Element && event.target.closest(".context-menu")) return false;
+  // Bringing a clipped trigger into view can queue a scroll event *before* the
+  // menu opens but deliver it afterwards. Only dismiss for a subsequent move.
+  return !menu.scrollPositions.some(position => position.element === event.target
+    && position.top === position.element.scrollTop && position.left === position.element.scrollLeft);
 }
 export type OpenContextMenu = (event: ReactMouseEvent<HTMLElement>, items: ContextMenuItem[], label?: string) => void;
 export function ContextMenu({

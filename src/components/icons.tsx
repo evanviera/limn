@@ -18,6 +18,7 @@ export type IconName =
   | "minus"
   | "more-horizontal"
   | "moon"
+  | "overview"
   | "paperclip"
   | "plus"
   | "refresh"
@@ -122,6 +123,13 @@ export function Icon({ name }: { name: IconName }) {
     moon: (
       <>
         <path d="M20 15.3A8 8 0 0 1 8.7 4a7 7 0 1 0 11.3 11.3z" />
+      </>
+    ),
+    overview: (
+      <>
+        <path d="M4 4h16v6H4z" />
+        <path d="M4 14h16v6H4z" />
+        <path d="M9 4v6M9 14v6" />
       </>
     ),
     paperclip: (

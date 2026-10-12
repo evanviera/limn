@@ -148,8 +148,10 @@ export function WorkspaceSidebar({
         activeBoardId={activeBoardId}
         cardDropBoardId={cardDropBoardId}
         isBoardView={view === "board"}
+        isOverviewView={view === "overview"}
         workspacePath={workspacePath}
         onSelectBoard={onSelectBoard}
+        onOpenOverview={() => onSetView("overview")}
         onMoveBoard={onMoveBoard}
         onBoardContextMenu={onBoardContextMenu}
         onGroupContextMenu={onGroupContextMenu}
