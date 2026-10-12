@@ -144,22 +144,58 @@ test.describe("workspace overview", () => {
     await expect(categoryToggle).toHaveAttribute("aria-expanded", "false");
   });
 
-  test("fits the default columns at desktop width and reflows at phone width", async ({ page }) => {
+  test("preserves single-board list and card formatting as the window resizes", async ({ page }) => {
     await openApp(page);
     await openWorkspace(page);
     const board = await createBoard(page, "A long board title that wraps without hiding the collapse button or card counts");
     await createCard(page, "A long task title that remains readable in a narrower overview column");
+    const layout = () => page.locator(".columns").evaluate(element => {
+      const list = element.querySelector<HTMLElement>(".column")!;
+      const stack = list.querySelector<HTMLElement>(".card-stack")!;
+      const card = stack.querySelector<HTMLElement>(".task-card")!;
+      return {
+        listWidth: list.getBoundingClientRect().width,
+        cardWidth: card.getBoundingClientRect().width,
+        listPadding: getComputedStyle(list).padding,
+        cardPadding: getComputedStyle(card).padding,
+        listGap: getComputedStyle(element).gap,
+        cardGap: getComputedStyle(stack).gap,
+        titleFont: getComputedStyle(card.querySelector("h3")!).fontSize
+      };
+    });
+    await page.setViewportSize({ width: 1440, height: 900 });
+    const normal = await layout();
+    expect(normal.listWidth).toBe(320);
     await page.getByTestId("nav-overview").click();
-    await page.setViewportSize({ width: 1024, height: 900 });
+    expect(await layout()).toEqual(normal);
+    // A wider window must leave the fixed-width cards alone; a narrower one
+    // scrolls horizontally instead of compressing the lists to fill it.
+    for (const width of [2200, 1024]) {
+      await page.setViewportSize({ width, height: 900 });
+      expect(await layout()).toEqual(normal);
+    }
     const columns = page.getByTestId(`overview-board-${board.id}`).locator(".overview-columns");
-    expect(await columns.evaluate(el => el.scrollWidth <= el.clientWidth)).toBe(true);
+    expect(await columns.evaluate(el => el.scrollWidth > el.clientWidth)).toBe(true);
+    await page.getByTestId("nav-settings").click();
+    await page.getByTestId("list-width-input").fill("420");
+    await page.getByTestId("list-width-input").blur();
+    await page.getByTestId(`board-nav-${board.id}`).click();
+    const custom = await layout();
+    expect(custom.listWidth).toBe(420);
+    await page.getByTestId("nav-overview").click();
+    expect(await layout()).toEqual(custom);
+    // Phone-sized windows keep the same horizontal-board layout in both views.
     await page.setViewportSize({ width: 390, height: 844 });
+    await page.getByTestId(`board-nav-${board.id}`).click();
+    const phone = await layout();
+    await page.getByTestId("nav-overview").click();
+    expect(await layout()).toEqual(phone);
     const listBoxes = await columns.locator(".overview-column").evaluateAll(elements => elements.map(el => {
       const rect = el.getBoundingClientRect();
       return { x: rect.x, y: rect.y };
     }));
-    expect(listBoxes[0].x).toBe(listBoxes[1].x);
-    expect(listBoxes[1].y).toBeGreaterThan(listBoxes[0].y);
+    expect(listBoxes[1].x).toBeGreaterThan(listBoxes[0].x);
+    expect(listBoxes[0].y).toBe(listBoxes[1].y);
     expect(await page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth)).toBe(true);
     await page.getByTestId("theme-toggle").click();
     await expect(page.locator("html")).toHaveAttribute("data-theme", "light");

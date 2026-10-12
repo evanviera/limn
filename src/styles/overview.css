@@ -39,25 +39,16 @@
 .overview-board + .overview-board { margin-top: var(--space-6); }
 .overview-board-toggle { color: var(--text-strong); font-size: var(--text-lg); }
 
-.overview-columns {
-  display: flex;
-  align-items: flex-start;
-  gap: var(--space-5);
-  overflow-x: auto;
-  padding: var(--space-3) 2px var(--space-4);
-}
+/* Reuse the board's column sizing, list padding and card spacing. Overview
+   only changes vertical flow so every board grows to show all of its cards. */
 .overview-column {
-  flex: 1 0 200px;
-  min-width: 200px;
-  padding: 12px;
-  background: var(--list-bg);
-  border: 1px solid var(--border-soft);
-  border-radius: var(--radius-lg);
+  grid-template-rows: auto auto;
+  max-height: none;
 }
-.overview-list-heading { display: flex; align-items: center; gap: var(--space-4); margin-bottom: 12px; }
+.overview-list-heading { display: flex; align-items: center; gap: var(--space-4); min-height: 30px; padding-bottom: 2px; }
 .overview-list-heading h4 { margin: 0; overflow-wrap: anywhere; font-size: var(--text-base); font-weight: var(--weight-semibold); }
 .overview-list-heading > span { margin-left: auto; color: var(--text-faint); font-size: var(--text-sm); }
-.overview-card-stack { display: grid; gap: var(--space-4); }
+.overview-card-stack { overflow-y: visible; }
 .overview-card-stack .task-card, .overview-card-stack .task-card:active { cursor: pointer; }
 .overview-empty-list {
   margin: 0;
@@ -69,8 +60,6 @@
   border-radius: var(--radius-sm);
 }
 @media (max-width: 520px) {
-  .overview-columns { flex-direction: column; }
-  .overview-column { flex: none; width: 100%; min-width: 0; }
   .overview-fold { flex-wrap: wrap; }
   .overview-count { margin-left: 24px; }
 }

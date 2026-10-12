@@ -72,11 +72,11 @@ export function OverviewView(props: OverviewViewProps) {
         </h3>
         <div id={contentId} hidden={collapsed}>
           {!collapsed && (board.lists.length === 0 ? <p className="muted">No lists in this board.</p> : (
-            <div className="overview-columns">
+            <div className="columns overview-columns">
               {board.lists.map(list => (
-                <section className="overview-column" key={list.id} aria-label={`${board.name}: ${list.name}`}>
+                <section className="column overview-column" key={list.id} aria-label={`${board.name}: ${list.name}`}>
                   <header className="overview-list-heading"><h4>{list.name}</h4><span>{listCards.get(list.id)!.length}</span></header>
-                  <div className="overview-card-stack">
+                  <div className="card-stack overview-card-stack">
                     {listCards.get(list.id)!.length === 0 && <p className="overview-empty-list">No cards</p>}
                     {listCards.get(list.id)!.map(card => (
                       <article key={card.id} aria-label={`${card.title}${card.completed ? " (completed)" : ""}`}
