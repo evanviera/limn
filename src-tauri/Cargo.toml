@@ -1,6 +1,6 @@
 [package]
 name = "limn"
-version = "0.8.15"
+version = "0.8.16"
 description = "Local-first task boards"
 authors = ["Limn"]
 edition = "2021"
