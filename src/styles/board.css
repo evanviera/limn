@@ -4,14 +4,34 @@
   grid-template-rows: auto minmax(0, 1fr);
 }
 
+.board-view > .content-header {
+  align-items: flex-start;
+  gap: 12px;
+  margin-bottom: 18px;
+  padding-bottom: 0;
+  border-bottom: 0;
+}
+
+.board-title-row { display: flex; align-items: baseline; flex-wrap: wrap; gap: 6px 12px; min-width: 0; }
+.board-title-row h1 { max-width: 100%; }
+.board-title-row .meta-line { margin: 0; white-space: nowrap; }
+.board-view > .content-header .header-actions { flex: 0 0 auto; gap: 4px; }
+.board-view > .content-header .header-actions > button,
+.board-view-menu > button { border-color: transparent; }
+
+@media (max-width: 800px) {
+  .board-view > .content-header { flex-direction: row; flex-wrap: wrap; }
+  .board-view > .content-header .header-actions { width: auto; }
+}
+
 .columns {
   overflow-x: auto;
   overflow-y: hidden;
   display: flex;
   align-items: start;
-  gap: var(--space-6);
+  gap: 16px;
   min-height: 0;
-  padding-bottom: var(--space-4);
+  padding: 1px 1px 12px;
 }
 
 .column {
@@ -24,11 +44,11 @@
   max-width: var(--list-width, 320px);
   display: grid;
   grid-template-rows: auto minmax(0, 1fr) auto;
-  gap: var(--space-4);
+  gap: 10px;
   max-height: 100%;
   min-height: 0;
-  padding: 10px 8px 8px;
-  background: var(--list-bg);
+  padding: 0;
+  background: transparent;
   border: 1px solid transparent;
   border-radius: var(--radius-lg);
   transition: border-color var(--transition), background var(--transition);
@@ -92,7 +112,7 @@
   max-height: 100%;
   color: var(--text-strong);
   font-size: var(--text-base);
-  font-weight: var(--weight-bold);
+  font-weight: var(--weight-medium);
   text-overflow: ellipsis;
   white-space: nowrap;
   writing-mode: vertical-rl;
@@ -127,11 +147,11 @@
 }
 
 .column.list-drop-before::before {
-  left: calc(var(--space-6) / -2 - 1.5px);
+  left: -9.5px;
 }
 
 .column.list-drop-after::after {
-  right: calc(var(--space-6) / -2 - 1.5px);
+  right: -9.5px;
 }
 
 .column:first-child.list-drop-before::before {
@@ -154,10 +174,10 @@ body.is-card-dragging .column:hover {
 
 .column-header {
   display: grid;
-  grid-template-columns: auto auto minmax(0, 1fr) auto auto auto;
+  grid-template-columns: auto auto minmax(0, 1fr) auto auto;
   align-items: center;
-  gap: var(--space-3);
-  min-height: 28px;
+  gap: 2px;
+  min-height: 30px;
   padding: 0 var(--space-1);
 }
 
@@ -170,7 +190,7 @@ body.is-card-dragging .column:hover {
   margin: 0;
   color: var(--text-strong);
   font-size: var(--text-base);
-  font-weight: var(--weight-bold);
+  font-weight: var(--weight-medium);
   text-overflow: ellipsis;
   white-space: nowrap;
   cursor: grab;
@@ -205,19 +225,9 @@ body.is-card-dragging .column:hover {
   color: var(--text-strong);
 }
 
-/* Rename / delete are rare, destructive-ish actions — keep them out of the way
-   until the list is hovered or focused so the header reads as just title + count
-   (their grid slots stay reserved, so revealing them causes no layout shift). */
-.column-header .list-action {
-  opacity: 0;
-  transition: opacity var(--transition), color var(--transition);
-}
-
-.column:hover .column-header .list-action,
-.column:focus-within .column-header .list-action,
-.column-header .list-action:focus-visible {
-  opacity: 1;
-}
+/* Keep the list menu reachable without hover. Rare actions live inside it. */
+.column-header .list-action { opacity: .7; }
+.column-header .list-action:hover, .column-header .list-action:focus-visible { opacity: 1; }
 
 /* The drag handle and collapse chevron are wayfinding, not primary controls —
    render them muted so the list title leads, then lift them on hover. */
@@ -258,236 +268,7 @@ body.is-card-dragging .column:hover {
   align-content: start;
   gap: 10px;
   min-height: 0;
-  padding-right: var(--space-1);
-}
-
-.task-card {
-  display: grid;
-  gap: 9px;
-  min-width: 0;
-  padding: 12px 12px;
-  color: var(--text);
-  background: var(--card-bg);
-  border: 1px solid transparent;
-  border-radius: var(--radius-md);
-  box-shadow: var(--card-shadow);
-  cursor: grab;
-  user-select: none;
-  -webkit-user-select: none;
-  transition: background var(--transition), border-color var(--transition),
-    box-shadow var(--transition), transform var(--transition), opacity var(--transition);
-}
-
-.task-card.compact {
-  gap: var(--space-3);
-  padding: 10px 11px;
-}
-
-.task-card:hover {
-  background: var(--card-hover-bg);
-  box-shadow: var(--card-shadow-hover);
-}
-
-.task-card:focus-visible {
-  outline: none;
-  box-shadow: var(--focus);
-  border-color: var(--accent-border);
-}
-
-.task-card:active {
-  cursor: grabbing;
-}
-
-.task-card.drag-source {
-  opacity: 0.38;
-}
-
-/* Highlighted while an OS file is dragged over it, to show where a drop lands. */
-.task-card.drop-target {
-  background: var(--accent-soft);
-  border-color: var(--accent);
-  box-shadow: 0 0 0 1px var(--accent);
-}
-
-.task-card.drag-preview {
-  position: fixed;
-  top: 0;
-  left: 0;
-  z-index: 40;
-  pointer-events: none;
-  cursor: grabbing;
-  background: var(--surface-hover);
-  border-color: var(--accent-border);
-  box-shadow: var(--drag-shadow);
-  /* The preview is repositioned via `transform` on every pointer move. The base
-     .task-card rule transitions `transform`, which would ease each move over
-     140ms and make the ghost lag/jitter behind the cursor (very visible on a
-     trackpad). Snap to the pointer instead. */
-  transition: none;
-}
-
-body.is-card-dragging,
-body.is-card-dragging *,
-body.is-list-dragging,
-body.is-list-dragging * {
-  cursor: grabbing !important;
-  user-select: none !important;
-  -webkit-user-select: none !important;
-}
-
-.task-card.completed {
-  background: linear-gradient(90deg, var(--success-soft), var(--card-bg) 38%);
-  box-shadow: var(--card-shadow), inset 3px 0 0 var(--success);
-}
-
-.task-card.completed:hover {
-  box-shadow: var(--card-shadow-hover), inset 3px 0 0 var(--success);
-}
-
-/* Cover art bleeds to the card edges (Trello-style) instead of sitting in a
-   bordered inset — the negative margins cancel the card's padding and the top
-   corners follow the card radius. */
-.task-card-cover {
-  display: block;
-  width: calc(100% + 24px);
-  margin: -12px -12px 0;
-  aspect-ratio: 16 / 9;
-  object-fit: cover;
-  background: var(--surface);
-  border-radius: var(--radius-md) var(--radius-md) 0 0;
-}
-
-.task-card h3 {
-  overflow-wrap: anywhere;
-  margin: 0;
-  color: var(--text-strong);
-  font-size: var(--text-base);
-  font-weight: var(--weight-bold);
-  line-height: 1.25;
-}
-
-.task-card.completed h3 {
-  text-decoration: line-through;
-  text-decoration-color: var(--success-border);
-  text-decoration-thickness: 1px;
-}
-
-/* The card title is a real button so keyboard users have an explicit "open
-   card" target, while the card itself is a plain (non-button) container. */
-.card-open {
-  display: inline;
-  margin: 0;
-  padding: 0;
-  color: inherit;
-  font: inherit;
-  text-align: left;
-  background: none;
-  border: none;
-  cursor: pointer;
-}
-
-/* The whole card lifts and opens on hover/click, so the title must not paint its
-   own box. Without this, the global button:hover fill hugs the text (padding is
-   0), producing a dark rectangle flush against the first letter. It stays a
-   clean, box-less open target; the card's own hover is the only affordance. */
-.card-open:hover:not(:disabled) {
-  color: inherit;
-  background: none;
-  border-color: transparent;
-}
-
-.card-open:focus-visible {
-  outline: none;
-  border-radius: var(--radius-sm);
-  box-shadow: var(--focus);
-}
-
-.done-check {
-  color: var(--success);
-  font-weight: var(--weight-bold);
-}
-
-.task-card footer {
-  display: flex;
-  align-items: center;
-  flex-wrap: wrap;
-  justify-content: space-between;
-  gap: var(--space-3) var(--space-4);
-  min-width: 0;
-  color: var(--text-muted);
-  font-size: var(--text-sm);
-  line-height: 1.25;
-}
-
-.task-card.compact footer {
-  gap: var(--space-2) var(--space-3);
-}
-
-.task-card footer > span:first-child {
-  overflow: hidden;
-  flex: 1 0 76px;
-  min-width: 0;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-}
-
-.label-row {
-  display: flex;
-  flex-wrap: wrap;
-  gap: var(--space-3);
-}
-
-.label-row span {
-  max-width: 100%;
-  overflow: hidden;
-  padding: 2px 9px;
-  color: var(--text-muted);
-  background: var(--subtle-bg);
-  border-radius: var(--radius-pill);
-  font-size: var(--text-sm);
-  font-weight: var(--weight-medium);
-  text-overflow: ellipsis;
-  white-space: nowrap;
-}
-
-.task-card-attachments {
-  display: grid;
-  gap: var(--space-1);
-  min-width: 0;
-  margin: 0;
-  padding: 0;
-  list-style: none;
-}
-
-.task-card-attachments li {
-  display: grid;
-  grid-template-columns: auto minmax(0, 1fr) auto;
-  align-items: center;
-  gap: var(--space-2);
-  min-width: 0;
-  padding: var(--space-1) var(--space-2);
-  color: var(--text-strong);
-  background: var(--subtle-bg);
-  border-radius: var(--radius-sm);
-  font-size: var(--text-sm);
-}
-
-.task-card-attachments .icon {
-  width: 15px;
-  height: 15px;
-  color: var(--text-muted);
-}
-
-.task-card-attachment-name {
-  min-width: 0;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-}
-
-.task-card-attachment-size {
-  color: var(--text-muted);
-  font-variant-numeric: tabular-nums;
+  padding: 2px 3px 4px;
 }
 
 /* Ghost affordance — reads as part of the list rather than a heavy button, and
@@ -527,53 +308,6 @@ body.is-list-dragging * {
   background: var(--accent-soft);
   border-style: solid;
   border-color: var(--accent);
-}
-
-.card-notes-preview {
-  display: -webkit-box;
-  overflow: hidden;
-  margin: 0;
-  color: var(--text-muted);
-  font-size: var(--text-sm);
-  line-height: 1.38;
-  overflow-wrap: anywhere;
-  white-space: pre-wrap;
-  -webkit-box-orient: vertical;
-  -webkit-line-clamp: 3;
-}
-
-.card-notes-preview a {
-  color: var(--accent-link);
-  text-decoration-line: underline;
-  text-decoration-color: var(--accent-link-border);
-  text-underline-offset: 2px;
-}
-
-.card-notes-preview a:hover,
-.card-notes-preview a:focus-visible {
-  color: var(--accent-link-hover);
-  text-decoration-color: var(--accent-link-hover);
-}
-
-/* Due-date chip in the card footer. Kept as coloured text (not a heavy pill) so
-   it slots into the tight footer, but urgency reads at a glance. */
-.task-card footer .due-badge {
-  color: var(--text-muted);
-  font-variant-numeric: tabular-nums;
-}
-
-.task-card footer .due-badge.due-overdue {
-  color: var(--danger);
-  font-weight: var(--weight-bold);
-}
-
-.task-card footer .due-badge.due-today {
-  color: var(--warning);
-  font-weight: var(--weight-bold);
-}
-
-.task-card footer .due-badge.due-soon {
-  color: var(--warning);
 }
 
 /* Insertion line shown between cards while dragging, marking where the card will

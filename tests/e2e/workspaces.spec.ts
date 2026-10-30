@@ -224,7 +224,8 @@ for (const command of ["load_workspace", "read_workspace_files"] as const) {
 
     // Editing after the late response must still write only Beta's data into B.
     await page.getByTestId(`board-nav-${beta.id}`).click();
-    await page.getByTestId("rename-list-todo").click();
+    await page.getByTestId("list-more-todo").click();
+    await page.getByRole("menuitem", { name: "Rename list", exact: true }).click();
     await page.getByTestId("text-dialog-input").fill("Beta backlog");
     await page.getByTestId("text-dialog-submit").click();
     const saved = await page.evaluate(path => window.__LIMN_TEST_IPC__!.invoke<WorkspaceFiles>("load_workspace", { path }), WORKSPACE_B);

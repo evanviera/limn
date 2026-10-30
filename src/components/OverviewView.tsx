@@ -7,6 +7,7 @@ import { countLabel } from "../lib/format.js";
 import { readOverviewCollapsedIds, writeOverviewCollapsedIds } from "../lib/viewPreferences.js";
 import { EmptyState } from "./dialogs.js";
 import { Icon } from "./icons.js";
+import { DueReminder } from "./DueReminder.js";
 
 interface OverviewViewProps {
   sections: BoardNavSections;
@@ -14,6 +15,8 @@ interface OverviewViewProps {
   workspacePath: string;
   boardProps: (board: Board) => BoardViewProps;
   onCreateBoard: () => void;
+  dueReminders: number;
+  onReviewDue: () => void;
 }
 
 export function OverviewView(props: OverviewViewProps) {
@@ -86,6 +89,7 @@ export function OverviewView(props: OverviewViewProps) {
       <header className="content-header"><div>
         <p className="eyebrow">Workspace</p><h1>Overview</h1>
         <p className="meta-line">{props.sections.grouped.length} {props.sections.grouped.length === 1 ? "category" : "categories"} · {countLabel(boards.length, "board")} · {countLabel(cardCount, "card")}</p>
+        <DueReminder count={props.dueReminders} onReview={props.onReviewDue} />
       </div></header>
       {boards.length === 0 && categories.length === 0 && (
         <EmptyState title="No boards yet" body="Create a board to start adding lists and cards." action="Create board" onAction={props.onCreateBoard} />

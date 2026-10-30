@@ -11,7 +11,12 @@ for (const action of ["add", "rename", "delete"] as const) {
     await page.getByTestId("text-dialog-submit").click();
     const file = (await snapshot(page)).boards[0];
     const board = JSON.parse(file.content) as Board;
-    await page.getByTestId(action === "add" ? "add-list" : `${action}-list-todo`).click();
+    if (action === "add") {
+      await page.getByTestId("add-list").click();
+    } else {
+      await page.getByTestId("list-more-todo").click();
+      await page.getByRole("menuitem", { name: action === "rename" ? "Rename list" : "Delete list", exact: true }).click();
+    }
     await page.evaluate(({ file, board }) => window.__LIMN_E2E__!.externalEditBoard(file, {
       ...board, name: "Remote board name", updatedAt: "2026-12-01T00:00:00.000Z",
       lists: [...board.lists, { id: "remote-list", name: "Remote work" }]

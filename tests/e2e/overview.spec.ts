@@ -242,7 +242,8 @@ test.describe("workspace overview", () => {
     await page.getByTestId("nav-overview").click();
     await a.getByTestId("collapse-list-todo").click();
     await expect(a.getByTestId("list-todo")).not.toHaveClass(/collapsed/);
-    await b.getByTestId("rename-list-todo").click();
+    await b.getByTestId("list-more-todo").click();
+    await page.getByRole("menuitem", { name: "Rename list", exact: true }).click();
     await submitText(page, "Second backlog");
     await expect(b.getByTestId("list-title-todo")).toHaveText("Second backlog");
     await expect(a.getByTestId("list-title-todo")).toHaveText("To Do");
@@ -252,7 +253,8 @@ test.describe("workspace overview", () => {
     const review = updated.lists.find(list => list.name === "Review")!;
     await expect(b.getByTestId(`list-${review.id}`)).toBeVisible();
     await expect(a.getByTestId(`list-${review.id}`)).toHaveCount(0);
-    await b.getByTestId(`delete-list-${review.id}`).click();
+    await b.getByTestId(`list-more-${review.id}`).click();
+    await page.getByRole("menuitem", { name: "Delete list", exact: true }).click();
     await page.getByTestId("confirm-dialog-submit").click();
     await expect(b.getByTestId(`list-${review.id}`)).toHaveCount(0);
     await b.getByTestId("list-title-todo").click({ button: "right" });

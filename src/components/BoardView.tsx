@@ -7,12 +7,15 @@ import { compareCardsByOrder } from "../lib/ordering.js";
 import { Icon } from "./icons.js";
 import { EmptyState } from "./dialogs.js";
 import { TaskCardBody } from "./TaskCard.js";
+import { DueReminder } from "./DueReminder.js";
 import type { ContextMenuItem, OpenContextMenu } from "./contextMenu";
 
 export interface CardDropTarget { boardId: string; listId: string; index: number }
 
 export interface BoardViewProps {
   embedded?: boolean;
+  dueReminders?: number;
+  onReviewDue?: () => void;
   cardDropTarget?: CardDropTarget | null;
   onCardDropListChange?: (target: CardDropTarget | null) => void;
   board: Board;
@@ -158,10 +161,12 @@ export function BoardView(props: BoardViewProps) {
   return (
     <section className={`board-view${props.embedded ? " embedded-board-view" : ""}`} onContextMenu={(event) => props.onOpenContextMenu(event, boardContextItems(), props.board.name)}>
       <header className="content-header">
-        {!props.embedded && <div>
-          <p className="eyebrow">Board</p>
-          <h1>{props.board.name}</h1>
-          <p className="meta-line">{countLabel(props.board.lists.length, "list")} / {countLabel(props.cards.length, "card")}</p>
+        {!props.embedded && <div className="board-title-block">
+          <div className="board-title-row">
+            <h1>{props.board.name}</h1>
+            <p className="meta-line">{countLabel(props.cards.length, "card")}</p>
+          </div>
+          {props.onReviewDue && <DueReminder count={props.dueReminders ?? 0} onReview={props.onReviewDue} />}
         </div>}
         <div className="header-actions">
           <div className="board-view-menu" ref={viewMenuRef}>
@@ -211,7 +216,7 @@ export function BoardView(props: BoardViewProps) {
           >
             <Icon name="more-horizontal" /> More
           </button>
-          <button className="primary" data-testid="add-list" onClick={() => void props.onAddList()}>
+          <button data-testid="add-list" onClick={() => void props.onAddList()}>
             <Icon name="plus" /> Add list
           </button>
         </div>
@@ -326,11 +331,9 @@ export function BoardView(props: BoardViewProps) {
                   {list.name}
                 </ListHeading>
                 <span>{listCards.length}</span>
-                <button className="list-action" aria-label={`Rename ${list.name}`} title="Rename list" data-testid={`rename-list-${list.id}`} onClick={() => void props.onRenameList(list)}>
-                  <Icon name="edit" />
-                </button>
-                <button className="list-action" aria-label={`Delete ${list.name}`} title="Delete list" data-testid={`delete-list-${list.id}`} onClick={() => void props.onDeleteList(list)}>
-                  <Icon name="trash" />
+                <button className="list-action" aria-label={`More actions for ${list.name}`} title="List actions" data-testid={`list-more-${list.id}`}
+                  onClick={(event) => props.onOpenContextMenu(event, listContextItems(list), list.name)}>
+                  <Icon name="more-horizontal" />
                 </button>
               </header>
               <div className="card-stack">

@@ -70,9 +70,10 @@ test.describe("filter, presets, and saved views", () => {
 
     // Reloading surfaces a personal reminder, excluding another member's due card.
     await openApp(page, { reset: false });
-    await expect(page.getByText("2 cards assigned to you are overdue or due today. Open Filter to review.")).toBeVisible();
+    await expect(page.getByTestId("board-due-reminder")).toContainText("2 cards assigned to you due or overdue");
+    await expect(page.locator(".banner", { hasText: "assigned to you" })).toHaveCount(0);
     await expect(page.getByTestId("due-reminder-count")).toHaveText("2");
-    await page.getByTestId("due-reminder-count").click();
+    await page.getByTestId("board-due-reminder").click();
     await expect(page.getByTestId("filter-due")).toHaveValue("soon");
     await expect(page.getByTestId("filter-sort")).toHaveValue("due");
     await expect(page.getByTestId(`filter-active-assignee-${ada.id}`)).toContainText("Assignee: Ada Lovelace");

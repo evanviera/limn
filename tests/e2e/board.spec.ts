@@ -315,6 +315,8 @@ test.describe("smoke", () => {
     await expect(card.locator("h3")).toContainText("Compact candidate");
     await expect(card.locator(".label-row")).toContainText("Planning");
     await expect(card.locator(".card-subtasks")).toContainText("Checklist");
+    await expect(card.locator(".card-notes-preview")).toHaveCount(0);
+    await card.getByRole("button", { name: /^Expand preview for/ }).click();
     await expect(card.locator(".card-notes-preview")).toContainText("This note should collapse");
 
     // Selective mode reacts to completion state without shrinking active cards.

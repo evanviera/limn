@@ -135,6 +135,7 @@ test.describe("smoke", () => {
     await page.locator('[data-testid^="subtask-item-"][data-testid$="-url"]').last().fill("https://example.com/brand");
     await page.getByTestId("save-card").click();
 
+    await page.getByRole("button", { name: /^Expand preview for/ }).click();
     await expect(page.getByText("Logo files")).toBeVisible();
     const itemLink = page.getByTestId(/card-subtask-item-.*-link/);
     await expect(itemLink).toHaveText("Brand guide");
@@ -230,6 +231,7 @@ test.describe("smoke", () => {
     await expect.poll(async () => (await snapshot(page)).externalLinks.some((link) => link.startsWith("attachment://"))).toBe(true);
 
     await page.getByRole("button", { name: "Close", exact: true }).click();
+    await page.getByRole("button", { name: /^Expand preview for/ }).click();
     const cardAttachments = page.getByTestId(/card-.*-attachments/);
     await expect(cardAttachments).toContainText("screenshot.png");
     await expect(cardAttachments).toContainText("design-spec.pdf");
@@ -238,7 +240,7 @@ test.describe("smoke", () => {
     await expect(cardCover).toBeVisible();
     await expect(cardCover).toHaveAttribute("alt", "final-cover.jpg");
 
-    await page.locator(".task-card", { hasText: "Collect artifacts" }).click();
+    await page.getByRole("button", { name: "Collect artifacts", exact: true }).click();
     await page.locator('[data-testid^="attachment-"][data-testid$="-remove"]').nth(2).click();
     await expect.poll(async () => page.getByTestId(/card-.*-image-cover/).getAttribute("alt")).toBe("screenshot.png");
   });
@@ -350,7 +352,8 @@ test.describe("smoke", () => {
 
     await page.getByRole("button", { name: "Close", exact: true }).click();
 
-    // So does the attachment row listed on the board card itself.
+    // So does the attachment row in the expanded board preview.
+    await page.getByRole("button", { name: /^Expand preview for/ }).click();
     await page.locator(".task-card-attachments li", { hasText: "spec.pdf" }).click({ button: "right" });
     await expect(contextMenu).toBeVisible();
     await contextMenu.getByRole("menuitem", { name: "Show in file manager" }).click();
@@ -384,7 +387,9 @@ test.describe("smoke", () => {
     // Drop onto the second card while the board (no editor) is showing.
     await dropFiles(page, ["/mock/uploads/diagram.png"], secondCard);
 
-    // The image cover lands on the second card, and the first card stays bare.
+    // The attachment count appears immediately; its cover is available on expansion.
+    await expect(secondCard.locator(".card-attachment-count")).toHaveText("1");
+    await secondCard.getByRole("button", { name: /^Expand preview for/ }).click();
     await expect(secondCard.getByTestId(/card-.*-image-cover/)).toBeVisible();
     await expect(page.locator(".task-card", { hasText: "First card" }).getByTestId(/card-.*-image-cover/)).toHaveCount(0);
 

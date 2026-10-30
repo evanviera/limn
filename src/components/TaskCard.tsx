@@ -1,12 +1,13 @@
+import { useId, useState } from "react";
 import type { Attachment, Card, Member } from "../types";
-import { openExternal } from "../storage";
-import { latestImageAttachment } from "../lib/attachments";
-import { formatFileSize, initials } from "../lib/format";
-import { describeDue } from "../lib/dueDate";
-import { AttachmentImagePreview } from "./AttachmentImagePreview";
-import { Icon } from "./icons";
-import { RichNoteText } from "./RichNoteText";
-import type { ContextMenuItem, OpenContextMenu } from "./contextMenu";
+import { latestImageAttachment } from "../lib/attachments.js";
+import { formatFileSize, initials } from "../lib/format.js";
+import { describeDue } from "../lib/dueDate.js";
+import { AttachmentImagePreview } from "./AttachmentImagePreview.js";
+import { Icon } from "./icons.js";
+import { TaskCardChecklist } from "./TaskCardChecklist.js";
+import { RichNoteText } from "./RichNoteText.js";
+import type { OpenContextMenu } from "./contextMenu";
 
 export function TaskCardBody({
   card,
@@ -31,10 +32,20 @@ export function TaskCardBody({
   onOpenContextMenu?: OpenContextMenu;
   onCopyText?: (text: string) => Promise<void>;
 }) {
-  const doneCount = card.subtasks.filter((subtask) => subtask.completed).length;
+  const detailsId = useId();
+  const [previewExpanded, setPreviewExpanded] = useState(false);
+  const expanded = !compact && previewExpanded;
+  const pendingSubtasks = card.subtasks.filter(subtask => !subtask.completed);
+  const completedSubtasks = card.subtasks.filter(subtask => subtask.completed);
+  const doneCount = completedSubtasks.length;
+  const checklistProps = { card, onOpen, onToggleSubtask, onOpenContextMenu, onCopyText };
   const noteText = card.body.trim();
   const coverAttachment = workspacePath ? latestImageAttachment(card.attachments) : null;
   const due = describeDue(card.due);
+  const dueLabel = due.status === "overdue" ? `${Math.abs(due.days!)}d overdue`
+    : due.status === "today" ? "Today"
+    : due.status === "soon" ? (due.days === 1 ? "Tomorrow" : `In ${due.days} days`)
+    : due.label;
   // Completed cards never nag: their due date reads as a neutral chip.
   const dueClass = card.completed ? "due-badge due-complete" : `due-badge due-${due.status}`;
   // Card footers only carry meaning when there's something to show — an empty
@@ -44,237 +55,163 @@ export function TaskCardBody({
   const showDue = due.status !== "none";
   const hasSubtasks = card.subtasks.length > 0;
   const assignedMembers = members.filter((member) => card.assignees.includes(member.id));
+  const hasDetails = card.subtasks.length > 0 || Boolean(noteText) || card.attachments.length > 0 || card.labels.length > 2;
+  function togglePreview() { setPreviewExpanded(current => !current); }
   return (
     <>
-      {!compact && coverAttachment && (
-        <AttachmentImagePreview
-          attachment={coverAttachment}
-          cardId={card.id}
-          className="task-card-cover"
-          testId={`card-${card.id}-image-cover`}
-          workspacePath={workspacePath ?? null}
-        />
-      )}
-      <h3>
-        {card.completed && (
-          <>
-            <span className="sr-only">Completed: </span>
-            <span className="done-check" aria-hidden="true">✓ </span>
-          </>
-        )}
-        {onOpen ? (
-          <button
-            className="card-open"
-            data-testid={`card-open-${card.id}`}
-            type="button"
-            onClick={(event) => {
-              event.stopPropagation();
-              onOpen(card.id);
-            }}
-          >
-            {card.title}
-          </button>
-        ) : (
-          card.title
-        )}
-      </h3>
-      {!compact && card.labels.length > 0 && (
-        <div className="label-row">
-          {card.labels.map((label) => (
-            <span key={label}>{label}</span>
-          ))}
-        </div>
-      )}
-      {!compact && card.attachments.length > 0 && (
-        <ul
-          aria-label="Attachments"
-          className="task-card-attachments"
-          data-testid={`card-${card.id}-attachments`}
-        >
-          {card.attachments.map((attachment) => (
-            <li
-              key={attachment.id}
-              data-testid={`card-${card.id}-attachment-${attachment.id}`}
-              title={attachment.name}
-              onContextMenu={(event) => {
-                if (!onOpenContextMenu) {
-                  return;
-                }
-                onOpenContextMenu(event, [
-                  {
-                    label: "Open attachment",
-                    icon: "chevron-up-right",
-                    disabled: !onOpenAttachment,
-                    onSelect: () => onOpenAttachment?.(card.id, attachment)
-                  },
-                  {
-                    label: "Show in file manager",
-                    icon: "folder",
-                    disabled: !onRevealAttachment,
-                    onSelect: () => onRevealAttachment?.(card.id, attachment)
-                  },
-                  { label: "Copy file name", icon: "copy", onSelect: () => void onCopyText?.(attachment.name) },
-                  { label: "Open card", icon: "edit", disabled: !onOpen, onSelect: () => onOpen?.(card.id) }
-                ], attachment.name);
+      <div className="task-card-heading">
+        <h3>
+          {card.completed && (
+            <>
+              <span className="sr-only">Completed: </span>
+              <span className="done-check" aria-hidden="true">✓ </span>
+            </>
+          )}
+          {onOpen ? (
+            <button
+              className="card-open"
+              data-testid={`card-open-${card.id}`}
+              type="button"
+              onClick={(event) => {
+                event.stopPropagation();
+                onOpen(card.id);
               }}
             >
-              <Icon name="paperclip" />
-              <span className="task-card-attachment-name">{attachment.name}</span>
-              <span className="task-card-attachment-size">{formatFileSize(attachment.size)}</span>
-            </li>
-          ))}
-        </ul>
-      )}
-      {!compact && card.subtasks.length > 0 && (
-        <ul className="card-subtasks">
-          {card.subtasks.map((subtask) => {
-            const subtaskUrl = subtask.url.trim();
-            const title = subtask.title || subtaskUrl || "Untitled sub-task";
-            const listItems = subtask.items.filter((item) => item.text.trim() || item.url.trim());
-            return (
-              <li
-                key={subtask.id}
-                className={`card-subtask ${subtask.completed ? "completed" : ""}`}
-                onContextMenu={(event) => {
-                  if (!onOpenContextMenu) {
-                    return;
-                  }
-                  onOpenContextMenu(event, [
-                    {
-                      label: subtask.completed ? "Mark step incomplete" : "Mark step complete",
-                      icon: "check",
-                      disabled: !onToggleSubtask,
-                      onSelect: () => onToggleSubtask?.(card.id, subtask.id, !subtask.completed)
-                    },
-                    { label: "Open card", icon: "edit", disabled: !onOpen, onSelect: () => onOpen?.(card.id) },
-                    { label: "Copy step title", icon: "copy", onSelect: () => void onCopyText?.(title) },
-                    ...(subtaskUrl
-                      ? ([
-                          { type: "separator" },
-                          { label: "Open step link", icon: "chevron-up-right", onSelect: () => void openExternal(subtaskUrl) },
-                          { label: "Copy step link", icon: "copy", onSelect: () => void onCopyText?.(subtaskUrl) }
-                        ] satisfies ContextMenuItem[])
-                      : [])
-                  ], title);
-                }}
-              >
-                <div className="card-subtask-main">
-                  <input
-                    checked={subtask.completed}
-                    data-testid={`card-subtask-${subtask.id}-toggle`}
-                    disabled={!onToggleSubtask}
-                    type="checkbox"
-                    onClick={(event) => event.stopPropagation()}
-                    onPointerDown={(event) => event.stopPropagation()}
-                    onChange={(event) => onToggleSubtask?.(card.id, subtask.id, event.target.checked)}
-                  />
-                  {subtaskUrl ? (
-                    <a
-                      className="card-subtask-title card-subtask-link"
-                      data-testid={`card-subtask-${subtask.id}-link`}
-                      href={subtaskUrl}
-                      onPointerDown={(event) => event.stopPropagation()}
-                      onContextMenu={(event) => {
-                        if (!onOpenContextMenu) {
-                          return;
-                        }
-                        onOpenContextMenu(event, [
-                          { label: "Open step link", icon: "chevron-up-right", onSelect: () => void openExternal(subtaskUrl) },
-                          { label: "Copy step link", icon: "copy", onSelect: () => void onCopyText?.(subtaskUrl) },
-                          { label: "Copy step title", icon: "copy", onSelect: () => void onCopyText?.(title) }
-                        ], title);
-                      }}
-                      onClick={(event) => {
-                        event.preventDefault();
-                        event.stopPropagation();
-                        void openExternal(subtaskUrl);
-                      }}
-                    >
-                      {title}
-                    </a>
-                  ) : (
-                    <span className="card-subtask-title">{title}</span>
-                  )}
-                </div>
-                {listItems.length > 0 && (
-                  <ul className="card-subtask-items">
-                    {listItems.map((item) => {
-                      const itemUrl = item.url.trim();
-                      const itemText = item.text || itemUrl || "Untitled item";
-                      return (
-                        <li key={item.id} className="card-subtask-item">
-                          {itemUrl ? (
-                            <a
-                              className="card-subtask-item-content card-subtask-link"
-                              data-testid={`card-subtask-item-${item.id}-link`}
-                              href={itemUrl}
-                              onPointerDown={(event) => event.stopPropagation()}
-                              onContextMenu={(event) => {
-                                if (!onOpenContextMenu) {
-                                  return;
-                                }
-                                onOpenContextMenu(event, [
-                                  { label: "Open detail link", icon: "chevron-up-right", onSelect: () => void openExternal(itemUrl) },
-                                  { label: "Copy detail link", icon: "copy", onSelect: () => void onCopyText?.(itemUrl) },
-                                  { label: "Copy detail text", icon: "copy", onSelect: () => void onCopyText?.(itemText) }
-                                ], itemText);
-                              }}
-                              onClick={(event) => {
-                                event.preventDefault();
-                                event.stopPropagation();
-                                void openExternal(itemUrl);
-                              }}
-                            >
-                              {itemText}
-                            </a>
-                          ) : (
-                            <span className="card-subtask-item-content">{itemText}</span>
-                          )}
-                        </li>
-                      );
-                    })}
-                  </ul>
-                )}
-              </li>
-            );
-          })}
-        </ul>
-      )}
-      {!compact && noteText && (
-        <p className="card-notes-preview" data-testid={`card-notes-${card.id}`}>
-          <RichNoteText text={noteText} testIdPrefix={`card-note-link-${card.id}`} onOpenContextMenu={onOpenContextMenu} onCopyText={onCopyText} />
-        </p>
-      )}
-      {(showDue || hasSubtasks || assignedMembers.length > 0) && (
+              {card.title}
+            </button>
+          ) : (
+            card.title
+          )}
+        </h3>
+        {!compact && hasDetails && (
+          <button className="card-preview-toggle" type="button" data-testid={`card-preview-${card.id}`}
+            aria-label={`${expanded ? "Collapse" : "Expand"} preview for ${card.title}`}
+            aria-expanded={expanded} aria-controls={detailsId}
+            onPointerDown={event => event.stopPropagation()} onMouseDown={event => event.stopPropagation()}
+            onClick={event => { event.stopPropagation(); togglePreview(); }}>
+            <Icon name="chevron-down" />
+          </button>
+        )}
+      </div>
+      <div id={detailsId} className="card-preview-content"
+        hidden={compact || (!expanded && card.labels.length === 0 && pendingSubtasks.length === 0)}>
+        {!compact && card.labels.length > 0 && (
+          <div className="label-row">
+            {(expanded ? card.labels : card.labels.slice(0, 2)).map((label) => (
+              <span key={label}>{label}</span>
+            ))}
+            {!expanded && card.labels.length > 2 && <span title={card.labels.slice(2).join(", ")}>+{card.labels.length - 2}</span>}
+          </div>
+        )}
+        {!compact && (
+          <TaskCardChecklist {...checklistProps} subtasks={expanded ? pendingSubtasks : pendingSubtasks.slice(0, 1)} preview={!expanded} />
+        )}
+        {!compact && !expanded && pendingSubtasks.length > 1 && (
+          <button type="button" className="card-more-steps" aria-expanded={false} aria-controls={detailsId}
+            onPointerDown={event => event.stopPropagation()} onMouseDown={event => event.stopPropagation()}
+            onClick={event => {
+              event.stopPropagation();
+              event.currentTarget.closest(".task-card")?.querySelector<HTMLButtonElement>(".card-preview-toggle")?.focus();
+              togglePreview();
+            }}>
+            +{pendingSubtasks.length - 1} more {pendingSubtasks.length === 2 ? "step" : "steps"}
+          </button>
+        )}
+        <div className="card-preview-details" hidden={!expanded}
+          onClick={event => event.stopPropagation()} onPointerDown={event => event.stopPropagation()}
+          onMouseDown={event => event.stopPropagation()}>
+          {expanded && coverAttachment && (
+            <AttachmentImagePreview attachment={coverAttachment} cardId={card.id}
+              className="task-card-cover" testId={`card-${card.id}-image-cover`}
+              workspacePath={workspacePath ?? null} />
+          )}
+          {expanded && doneCount > 0 && (
+            <details className="card-completed-steps">
+              <summary>{doneCount} completed</summary>
+              <TaskCardChecklist {...checklistProps} subtasks={completedSubtasks} />
+            </details>
+          )}
+          {expanded && card.attachments.length > 0 && (
+            <ul
+              aria-label="Attachments"
+              className="task-card-attachments"
+              data-testid={`card-${card.id}-attachments`}
+            >
+              {card.attachments.map((attachment) => (
+                <li
+                  key={attachment.id}
+                  data-testid={`card-${card.id}-attachment-${attachment.id}`}
+                  title={attachment.name}
+                  onContextMenu={(event) => {
+                    if (!onOpenContextMenu) {
+                      return;
+                    }
+                    onOpenContextMenu(event, [
+                      {
+                        label: "Open attachment",
+                        icon: "chevron-up-right",
+                        disabled: !onOpenAttachment,
+                        onSelect: () => onOpenAttachment?.(card.id, attachment)
+                      },
+                      {
+                        label: "Show in file manager",
+                        icon: "folder",
+                        disabled: !onRevealAttachment,
+                        onSelect: () => onRevealAttachment?.(card.id, attachment)
+                      },
+                      { label: "Copy file name", icon: "copy", onSelect: () => void onCopyText?.(attachment.name) },
+                      { label: "Open card", icon: "edit", disabled: !onOpen, onSelect: () => onOpen?.(card.id) }
+                    ], attachment.name);
+                  }}
+                >
+                  <Icon name="paperclip" />
+                  <span className="task-card-attachment-name">{attachment.name}</span>
+                  <span className="task-card-attachment-size">{formatFileSize(attachment.size)}</span>
+                </li>
+              ))}
+            </ul>
+          )}
+          {expanded && noteText && (
+            <p className="card-notes-preview" data-testid={`card-notes-${card.id}`}>
+              <RichNoteText text={noteText} testIdPrefix={`card-note-link-${card.id}`} onOpenContextMenu={onOpenContextMenu} onCopyText={onCopyText} />
+            </p>
+          )}
+        </div>
+      </div>
+      {(showDue || hasSubtasks || card.attachments.length > 0 || assignedMembers.length > 0) && (
         <footer>
           {showDue && (
-            <span className={dueClass} data-testid={`card-due-${card.id}`} title={due.label}>
-              {due.label}
+            <span className={dueClass} data-testid={`card-due-${card.id}`} title={due.label} aria-label={due.label}>
+              {dueLabel}
             </span>
           )}
-          {hasSubtasks && (
-            <span className="subtask-badge" title="Sub-tasks completed">
-              <Icon name="check" /> {doneCount}/{card.subtasks.length}
-            </span>
-          )}
-          {assignedMembers.length > 0 && <MemberDots members={assignedMembers} />}
+          <span className="card-footer-details">
+            {card.attachments.length > 0 && <span className="card-attachment-count" title={`${card.attachments.length} attachments`} aria-label={`${card.attachments.length} attachments`}><Icon name="paperclip" />{card.attachments.length}</span>}
+            {hasSubtasks && (
+              <span className="subtask-badge" title="Sub-tasks completed" aria-label={`${doneCount} of ${card.subtasks.length} steps complete`}>
+                {doneCount}/{card.subtasks.length}
+              </span>
+            )}
+            {assignedMembers.length > 0 && <MemberDots members={assignedMembers} quiet={!expanded} />}
+          </span>
         </footer>
       )}
     </>
   );
 }
 
-export function MemberDots({ members }: { members: Member[] }) {
+export function MemberDots({ members, quiet = false }: { members: Member[]; quiet?: boolean }) {
   if (members.length === 0) {
     return <span className="muted">Unassigned</span>;
   }
   return (
-    <span className="member-dots">
-      {members.slice(0, 4).map((member) => (
-        <span className="avatar small" key={member.id} style={{ background: member.color }}>
+    <span className={`member-dots${quiet ? " quiet" : ""}`} role="img" aria-label={`Assigned to ${members.map(member => member.name).join(", ")}`} title={members.map(member => member.name).join(", ")}>
+      {members.slice(0, quiet ? 1 : 4).map((member) => (
+        <span className="avatar small" key={member.id} title={member.name} style={quiet ? undefined : { background: member.color }}>
           {initials(member.name)}
         </span>
       ))}
+      {members.length > (quiet ? 1 : 4) && <span className="member-overflow">+{members.length - (quiet ? 1 : 4)}</span>}
     </span>
   );
 }

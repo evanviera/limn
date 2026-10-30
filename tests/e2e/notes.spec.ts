@@ -106,13 +106,14 @@ test.describe("smoke", () => {
     await expect(notesInput).not.toContainText("[status](https://example.com/spec)");
     await page.getByTestId("save-card").click();
 
+    await page.getByRole("button", { name: /^Expand preview for/ }).click();
     const notes = page.getByTestId(/card-notes-.*/);
     await expect(notes).toContainText("Review launch status at www.example.org/status.");
     await expect(notes.locator("em")).toHaveText("Review");
     await expect(notes.locator("strong")).toHaveText("launch");
     await expect(page.getByText("Approval checklist")).toBeVisible();
     const notesBelowSubtasks = await notes.evaluate((element) => {
-      const subtaskList = element.parentElement?.querySelector(".card-subtasks");
+      const subtaskList = element.closest(".task-card")?.querySelector(".card-subtasks");
       return Boolean(subtaskList && (subtaskList.compareDocumentPosition(element) & Node.DOCUMENT_POSITION_FOLLOWING));
     });
     expect(notesBelowSubtasks).toBe(true);
@@ -159,6 +160,7 @@ test.describe("smoke", () => {
     expect(saved.cards[0].content).toContain("**brand** guidelines. Reference:");
     expect(saved.cards[0].content).not.toContain("****");
 
+    await page.getByRole("button", { name: /^Expand preview for/ }).click();
     const notes = page.getByTestId(/card-notes-.*/);
     await expect(notes.locator("strong")).toHaveText("brand");
     await expect(notes).not.toContainText("**");
@@ -182,6 +184,7 @@ test.describe("smoke", () => {
     await expect(notesInput).not.toContainText("[launch spec](https://example.com/spec)");
     await page.getByTestId("save-card").click();
 
+    await page.getByRole("button", { name: /^Expand preview for/ }).click();
     const notes = page.getByTestId(/card-notes-.*/);
     await expect(notes).toContainText("Review the launch spec.");
     await expect(notes).toContainText("Track status at www.example.org/status.");

@@ -23,6 +23,8 @@ focused" section before adding code to an existing large file.**
 - `dialogs.tsx` — `EmptyState`, `TextDialog`, `ConfirmDialog` and their state types.
 - `RichNoteText.tsx` — renders card note text (inline links / bold / italic).
 - `BoardView.tsx` — shared board controls, list rails, card rendering and context menus. Used standalone and embedded in Overview; pointer interactions live in `useBoardInteraction`.
+- `TaskCard.tsx`, `TaskCardChecklist.tsx` — calm board previews: one unfinished step, locally expanded notes/attachments, folded completed steps, and quieter metadata. Title clicks open the full card; chevrons expand the preview. Preview state never changes workspace files.
+- `DueReminder.tsx` — the live personal due count and Filter shortcut in board and Overview headers; separate from diagnostics banners.
 - `OverviewView.tsx` — all boards stacked in sidebar order with category and board folds stored per workspace on this device. Embeds the full `BoardView` so card/list authoring and dragging behave the same in both views; shares board-qualified card drop targets across the stack.
 - `BoardNameDialog.tsx` — create/rename board dialog with category selection on creation and category-local name validation.
 - `MoveCardDialog.tsx` — the card context menu’s cross-board location chooser, with board/list selection and validation.
@@ -90,7 +92,7 @@ when the last one closes). The open list + active path persist via the
 cascade order. Never add rules to it. Rules live in `src/styles/`:
 
 `tokens.css` (design tokens) → `base.css` (element resets, buttons, inputs) →
-`shell.css` (titlebar, sidebar, header) → `board.css` → `overview.css` → `filter.css` → `archive.css`
+`shell.css` (titlebar, sidebar, header) → `board.css` → `task-card.css` → `overview.css` → `filter.css` → `archive.css`
 (cross-board filter) → `feedback.css` (banners/empty states) → `settings.css` →
 `dialogs.css` → `conflicts.css` (conflict review surface) → `card-editor.css` →
 `comments.css` (card discussion + @mentions) → `responsive.css` (media queries).
@@ -139,7 +141,7 @@ order and add new partials to the barrel at the right position.
 ## End-to-end tests (`tests/e2e/`)
 
 - `harness.ts` — shared Playwright page helpers.
-- Feature specs: `board.spec.ts`, `overview.spec.ts`, `archive.spec.ts`, `card-editor.spec.ts`, `notes.spec.ts`,
+- Feature specs: `board.spec.ts`, `board-cards.spec.ts`, `overview.spec.ts`, `archive.spec.ts`, `card-editor.spec.ts`, `notes.spec.ts`,
   `discussion.spec.ts`, `filter.spec.ts`, `integrations.spec.ts` (Slack +
   updater), `conflicts.spec.ts` (conflict review + version-checked deletes), plus
   `qa-sweep.spec.ts`.

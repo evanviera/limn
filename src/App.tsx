@@ -119,17 +119,6 @@ const WORKSPACE_WATCH_REFRESH_DELAY_MS = 75;
 const INCREMENTAL_REFRESH_MAX_FILES = 40;
 const CLOUD_HINT_DISMISS_PREFIX = "limn-cloud-hint-dismissed:";
 
-function dueReminderMessage(count: number): string {
-  if (count <= 0) {
-    return "";
-  }
-  return `${countLabel(count, "card")} assigned to you ${count === 1 ? "is" : "are"} overdue or due today. Open Filter to review.`;
-}
-
-function isDueReminderMessage(message: string): boolean {
-  return message.endsWith("overdue or due today. Open Filter to review.");
-}
-
 // Whether the user has dismissed the cloud-storage advisory for this workspace.
 function storageHintDismissed(path: string): boolean {
   try {
@@ -676,13 +665,8 @@ export default function App() {
         setSelectedCardId(focusCard.id);
       }
       const diagnostics = [...meta.diagnostics, ...cardData.diagnostics];
-      const reminderMemberId = resolveActiveMember(meta.membersFile.members, readActiveMemberId(path))?.id ?? "";
-      const reminders = dueReminderCount(cardData.cards, reminderMemberId);
       if (diagnostics.length > 0) {
         setNotice(diagnostics.join(" "));
-        setNoticeKind("warning");
-      } else if (reminders > 0) {
-        setNotice(dueReminderMessage(reminders));
         setNoticeKind("warning");
       } else {
         setNotice("");
@@ -2005,14 +1989,6 @@ export default function App() {
     writeActiveMemberId(workspacePath, memberId);
     setActiveMemberId(memberId);
     setInboxReadState(readStoredInboxReadState(workspacePath, memberId));
-    // Keep an existing reminder banner synchronized when identity changes, but
-    // never overwrite unrelated diagnostics or command feedback.
-    if (!notice || isDueReminderMessage(notice)) {
-      const nextMemberId = resolveActiveMember(members, memberId)?.id ?? "";
-      const reminders = dueReminderCount(cards, nextMemberId);
-      setNotice(dueReminderMessage(reminders));
-      setNoticeKind(reminders > 0 ? "warning" : "info");
-    }
   }
 
   async function saveCardFromEditor(nextCard: Card) {
@@ -2645,13 +2621,14 @@ export default function App() {
           onReviewConflicts={() => setConflictReviewOpen(true)}
         />
 
-        {view === "board" && activeBoard && <BoardView {...boardViewProps(activeBoard)} />}
+        {view === "board" && activeBoard && <BoardView {...boardViewProps(activeBoard)} dueReminders={dueReminders} onReviewDue={openDueReminderFilter} />}
         {view === "board" && !activeBoard && (
           <EmptyState title="No board selected" body="Create a board to start adding lists and cards." action="Create board" onAction={addBoard} />
         )}
         {view === "overview" && workspacePath && (
           <OverviewView key={workspacePath} sections={boardNavSections} cards={cards}
-            workspacePath={workspacePath} boardProps={boardViewProps} onCreateBoard={addBoard} />
+            workspacePath={workspacePath} boardProps={boardViewProps} onCreateBoard={addBoard}
+            dueReminders={dueReminders} onReviewDue={openDueReminderFilter} />
         )}
         {view === "filter" && (
           <FilterView
