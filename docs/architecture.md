@@ -72,6 +72,7 @@ when the last one closes). The open list + active path persist via the
 - `useBoardInteraction.ts` — shared mouse/pen card and list dragging, previews, insertion feedback, and synchronized device-local display controls. List drop targets include both board and list IDs; Overview can drop into an exact position on another board.
 - `useBoardListActions.ts` — board-scoped card creation and list add/rename/collapse/reorder/archive/delete actions, extracted from App. Each action names its board rather than relying on the selected board.
 - `boardWriteBarrier.ts` — keeps workspace refreshes from overwriting optimistic board edits with stale disk snapshots; waits for pending board saves and retries reads overtaken by a write.
+- `boardFiles.ts` — resolves duplicate board IDs on full and progressive loads, preferring the canonical writable filename and reporting preserved copies without displaying duplicate boards.
 - `boardViewProps.ts` — binds the shared board and list callbacks to a specific board for both standalone and embedded `BoardView` instances.
 - `archive.ts` — pure archive projections: legacy-aware archive timestamps/reasons, location availability, sorting, and relative-date labels for `ArchiveView`.
 - `useEmptyArchive.ts` — confirmed workspace-wide archive deletion in bounded batches, with progress, version-checked deletes, and partial-failure reporting. Search filters do not limit the captured deletion scope.

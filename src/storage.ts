@@ -1,5 +1,6 @@
 import { invoke } from "./ipc.js";
 import { EMPTY_FILTER } from "./lib/filter.js";
+import { uniqueBoards } from "./lib/boardFiles.js";
 import { normalizeRecurrence } from "./lib/recurrence.js";
 import { mergeBoard, mergeCard, mergeMembers, mergeSettings, type EntityMergeResult } from "./lib/merge.js";
 import { resolveConflictWrite, type ConflictWriteAdapter, type SaveOutcome } from "./lib/mergeWrite.js";
@@ -454,16 +455,16 @@ export function parseWorkspaceMeta(meta: WorkspaceMeta): WorkspaceMetaData {
 // Parse board JSON files, pushing a diagnostic for any that don't load. Shared by
 // the full load and the phase-one meta load.
 function parseBoardFiles(files: Array<{ file_name: string; content: string }>, diagnostics: string[]): Board[] {
-  const boards: Board[] = [];
+  const boards: Array<{ fileName: string; board: Board }> = [];
   for (const file of files) {
     const result = safeJson<Board | null>(file.content, null);
     if (result.ok && result.value?.id) {
-      boards.push(normalizeBoard(result.value));
+      boards.push({ fileName: file.file_name, board: normalizeBoard(result.value) });
     } else {
       diagnostics.push(`boards/${file.file_name} could not be loaded.`);
     }
   }
-  return boards;
+  return uniqueBoards(boards, diagnostics);
 }
 
 // Parse card Markdown files, pushing a diagnostic for any that don't load.

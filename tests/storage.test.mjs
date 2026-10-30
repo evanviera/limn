@@ -1,5 +1,6 @@
 import assert from "node:assert/strict";
 import "./board-write-barrier.test.mjs";
+import "./board-files.test.mjs";
 import { mkdtemp, mkdir, readFile, readdir, rm, unlink, writeFile } from "node:fs/promises";
 import { join } from "node:path";
 import { tmpdir } from "node:os";
