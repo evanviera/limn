@@ -813,7 +813,10 @@ test.describe("moving cards between boards", () => {
         { id: targetListId, name: pointer === "mouse" ? " in PROGRESS " : "Incoming" },
         { id: "review", name: "Review" }
       ] });
-      await expect(page.getByTestId(`list-${targetListId}`)).toBeVisible();
+      // This ID exists before the external edit too. Wait for its new name so
+      // the drag cannot race the watcher and use the old destination lists.
+      await expect(page.getByTestId(`list-${targetListId}`).locator(".list-title"))
+        .toHaveText(pointer === "mouse" ? "in PROGRESS" : "Incoming");
       await page.getByTestId(`board-nav-${source.id}`).click();
       const movedCard = page.getByTestId("list-in-progress").locator(".task-card");
       await expect(movedCard).toHaveCount(1);
