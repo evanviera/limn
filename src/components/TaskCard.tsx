@@ -14,7 +14,7 @@ export function TaskCardBody({
   members,
   workspacePath,
   compact = false,
-  showMoreSteps = false,
+  compactSteps = false,
   onOpen,
   onToggleSubtask,
   onOpenAttachment,
@@ -26,7 +26,7 @@ export function TaskCardBody({
   members: Member[];
   workspacePath?: string | null;
   compact?: boolean;
-  showMoreSteps?: boolean;
+  compactSteps?: boolean;
   onOpen?: (cardId: string) => void;
   onToggleSubtask?: (cardId: string, subtaskId: string, completed: boolean) => void;
   onOpenAttachment?: (cardId: string, attachment: Attachment) => void;
@@ -35,7 +35,9 @@ export function TaskCardBody({
   onCopyText?: (text: string) => Promise<void>;
 }) {
   const detailsId = useId();
-  const [previewExpanded, setPreviewExpanded] = useState(false);
+  // The board keys this component by compactSteps so changing the display
+  // preference resets per-card overrides and applies the new default at once.
+  const [previewExpanded, setPreviewExpanded] = useState(!compactSteps);
   const expanded = !compact && previewExpanded;
   const pendingSubtasks = card.subtasks.filter(subtask => !subtask.completed);
   const completedSubtasks = card.subtasks.filter(subtask => subtask.completed);
@@ -108,7 +110,7 @@ export function TaskCardBody({
         {!compact && (
           <TaskCardChecklist {...checklistProps} subtasks={expanded ? pendingSubtasks : pendingSubtasks.slice(0, 1)} preview={!expanded} />
         )}
-        {showMoreSteps && !compact && !expanded && pendingSubtasks.length > 1 && (
+        {!compact && !expanded && pendingSubtasks.length > 1 && (
           <button type="button" className="card-more-steps" aria-expanded={false} aria-controls={detailsId}
             onPointerDown={event => event.stopPropagation()} onMouseDown={event => event.stopPropagation()}
             onClick={event => {

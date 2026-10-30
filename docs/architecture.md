@@ -23,7 +23,7 @@ focused" section before adding code to an existing large file.**
 - `dialogs.tsx` — `EmptyState`, `TextDialog`, `ConfirmDialog` and their state types.
 - `RichNoteText.tsx` — renders card note text (inline links / bold / italic).
 - `BoardView.tsx` — shared board controls, list rails, card rendering and context menus. Used standalone and embedded in Overview; pointer interactions live in `useBoardInteraction`.
-- `TaskCard.tsx`, `TaskCardChecklist.tsx` — calm board previews: one unfinished step, locally expanded notes/attachments, folded completed steps, and quieter metadata. Title clicks open the full card; chevrons expand the preview. Preview state never changes workspace files.
+- `TaskCard.tsx`, `TaskCardChecklist.tsx` — board previews show all unfinished steps by default, with completed steps folded below. The device-local Compact steps option defaults previews to one step plus “+ more steps”; changing it resets per-card preview overrides. Title clicks open the full card; chevrons expand or collapse the preview. Preview state never changes workspace files.
 - `DueReminder.tsx` — the live personal due count and Filter shortcut in board and Overview headers; separate from diagnostics banners.
 - `OverviewView.tsx` — all boards stacked in sidebar order with category and board folds stored per workspace on this device. Embeds the full `BoardView` so card/list authoring and dragging behave the same in both views; shares board-qualified card drop targets across the stack.
 - `BoardNameDialog.tsx` — create/rename board dialog with category selection on creation and category-local name validation.

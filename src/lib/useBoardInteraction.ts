@@ -52,7 +52,7 @@ export function useBoardInteraction(props: BoardViewProps) {
   const [listDropTarget, setListDropTarget] = useState<{ index: number } | null>(null);
   const [compactCards, setCompactCards] = useState(() => readBoardDisplayPreference("compactCards"));
   const [autoCompactCompletedCards, setAutoCompactCompletedCards] = useState(() => readBoardDisplayPreference("compactCompleted"));
-  const [showMoreSteps, setShowMoreSteps] = useState(() => readBoardDisplayPreference("showMoreSteps"));
+  const [compactSteps, setCompactSteps] = useState(() => readBoardDisplayPreference("compactSteps"));
   const [viewMenuOpen, setViewMenuOpen] = useState(false);
   const viewMenuRef = useRef<HTMLDivElement | null>(null);
   const viewMenuToggleRef = useRef<HTMLButtonElement | null>(null);
@@ -80,8 +80,8 @@ export function useBoardInteraction(props: BoardViewProps) {
   }, [autoCompactCompletedCards]);
 
   useEffect(() => {
-    writeBoardDisplayPreference("showMoreSteps", showMoreSteps);
-  }, [showMoreSteps]);
+    writeBoardDisplayPreference("compactSteps", compactSteps);
+  }, [compactSteps]);
 
   useEffect(() => {
     if (!viewMenuOpen) {
@@ -114,7 +114,7 @@ export function useBoardInteraction(props: BoardViewProps) {
       const { preference, enabled } = (event as CustomEvent<{ preference: string; enabled: boolean }>).detail;
       if (preference === "compactCards") setCompactCards(enabled);
       if (preference === "compactCompleted") setAutoCompactCompletedCards(enabled);
-      if (preference === "showMoreSteps") setShowMoreSteps(enabled);
+      if (preference === "compactSteps") setCompactSteps(enabled);
     }
     window.addEventListener(BOARD_DISPLAY_CHANGE_EVENT, syncDisplay);
     return () => window.removeEventListener(BOARD_DISPLAY_CHANGE_EVENT, syncDisplay);
@@ -508,7 +508,7 @@ export function useBoardInteraction(props: BoardViewProps) {
   return {
     columnsRef, dragPreview, dropTarget, draggingListId, listDropTarget,
     compactCards, setCompactCards, autoCompactCompletedCards, setAutoCompactCompletedCards,
-    showMoreSteps, setShowMoreSteps,
+    compactSteps, setCompactSteps,
     viewMenuOpen, setViewMenuOpen, viewMenuRef, viewMenuToggleRef, openCard,
     beginPointerDrag, updatePointerDrag, finishPointerDrag, cancelPointerDrag, beginMouseDrag,
     beginListPointerDrag, updateListPointerDrag, finishListPointerDrag, cancelListPointerDrag, beginListMouseDrag

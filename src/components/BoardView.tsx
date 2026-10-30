@@ -58,7 +58,7 @@ export function BoardView(props: BoardViewProps) {
   const {
     columnsRef, dragPreview, dropTarget, draggingListId, listDropTarget,
     compactCards, setCompactCards, autoCompactCompletedCards, setAutoCompactCompletedCards,
-    showMoreSteps, setShowMoreSteps,
+    compactSteps, setCompactSteps,
     viewMenuOpen, setViewMenuOpen, viewMenuRef, viewMenuToggleRef, openCard,
     beginPointerDrag, updatePointerDrag, finishPointerDrag, cancelPointerDrag, beginMouseDrag,
     beginListPointerDrag, updateListPointerDrag, finishListPointerDrag, cancelListPointerDrag, beginListMouseDrag
@@ -208,14 +208,14 @@ export function BoardView(props: BoardViewProps) {
                   <span className="board-view-switch" aria-hidden="true" />
                 </button>
                 <button
-                  aria-pressed={showMoreSteps}
+                  aria-pressed={compactSteps}
                   className="board-view-option"
-                  data-testid="show-more-steps-toggle"
-                  onClick={() => setShowMoreSteps((current) => !current)}
+                  data-testid="compact-steps-toggle"
+                  onClick={() => setCompactSteps((current) => !current)}
                 >
                   <span className="board-view-option-copy">
                     <Icon name="plus" />
-                    <span><strong>Show more steps</strong><small>Show the “+ more steps” shortcut</small></span>
+                    <span><strong>Compact steps</strong><small>Show one step with “+ more steps”</small></span>
                   </span>
                   <span className="board-view-switch" aria-hidden="true" />
                 </button>
@@ -383,9 +383,10 @@ export function BoardView(props: BoardViewProps) {
                         onMouseDown={(event) => beginMouseDrag(event, card.id)}
                       >
                         <TaskCardBody
+                          key={compactSteps ? "compact-steps" : "full-steps"}
                           card={card}
                           compact={isCompact}
-                          showMoreSteps={showMoreSteps}
+                          compactSteps={compactSteps}
                           members={props.members}
                           workspacePath={props.workspacePath}
                           onOpen={openCard}
@@ -418,7 +419,7 @@ export function BoardView(props: BoardViewProps) {
             width: dragPreview.width
           }}
         >
-          <TaskCardBody card={dragPreviewCard} compact={cardIsCompact(dragPreviewCard)} showMoreSteps={showMoreSteps} members={props.members} workspacePath={props.workspacePath} />
+          <TaskCardBody key={compactSteps ? "compact-steps" : "full-steps"} card={dragPreviewCard} compact={cardIsCompact(dragPreviewCard)} compactSteps={compactSteps} members={props.members} workspacePath={props.workspacePath} />
         </article>
       )}
     </section>
