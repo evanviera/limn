@@ -38,6 +38,7 @@ test("calm cards disclose details without opening the editor or changing saved c
   await expect(card.getByTestId("card-subtask-item-detail-link")).toHaveCount(0);
   await expect(card.locator(".card-notes-preview")).toHaveCount(0);
   await expect(card.getByTestId("card-subtask-complete-toggle")).toHaveCount(0);
+  await expect(card.getByRole("button", { name: "+1 more step" })).toHaveCount(0);
 
   const disclosure = card.getByTestId(/^card-preview-/);
   await disclosure.focus();
@@ -56,12 +57,46 @@ test("calm cards disclose details without opening the editor or changing saved c
   await card.getByRole("button", { name: "Collapse preview for Opening credits" }).click();
   await expect(card.locator(".card-notes-preview")).toHaveCount(0);
   expect((await snapshot(page)).cards).toEqual(original);
+  await page.getByTestId("board-view-menu-toggle").click();
+  const moreSteps = page.getByRole("group", { name: "Card display" }).getByTestId("show-more-steps-toggle");
+  await expect(moreSteps).toHaveAttribute("aria-pressed", "false");
+  await moreSteps.click();
+  await page.getByTestId("board-view-menu-toggle").click();
   await card.getByRole("button", { name: "+1 more step" }).focus();
   await card.getByRole("button", { name: "+1 more step" }).press("Enter");
   await expect(disclosure).toBeFocused();
   await expect(disclosure).toHaveAttribute("aria-expanded", "true");
   await card.getByRole("button", { name: "Opening credits", exact: true }).click();
   await expect(page.getByTestId("card-view-title")).toHaveText("Opening credits");
+});
+
+test("the more steps shortcut is an opt-in display preference that persists across board views", async ({ page }) => {
+  const card = await createPreviewCard(page);
+  await expect(card.getByRole("button", { name: "+1 more step" })).toHaveCount(0);
+  const original = (await snapshot(page)).cards;
+  await page.getByTestId("board-view-menu-toggle").click();
+  const option = page.getByTestId("show-more-steps-toggle");
+  await expect(option).toHaveAttribute("aria-pressed", "false");
+  await option.click();
+  await expect(card.getByRole("button", { name: "+1 more step" })).toBeVisible();
+  await page.getByTestId("compact-board-toggle").click();
+  await expect(card.getByRole("button", { name: "+1 more step" })).toHaveCount(0);
+  await page.getByTestId("compact-board-toggle").click();
+
+  await openApp(page, { reset: false });
+  await expect(card.getByRole("button", { name: "+1 more step" })).toBeVisible();
+  await page.getByTestId("nav-overview").click();
+  await expect(card.getByRole("button", { name: "+1 more step" })).toBeVisible();
+  await page.getByTestId("board-view-menu-toggle").click();
+  await expect(option).toHaveAttribute("aria-pressed", "true");
+  await option.click();
+  await expect(card.getByRole("button", { name: "+1 more step" })).toHaveCount(0);
+  await openApp(page, { reset: false });
+  await expect(card.getByRole("button", { name: "+1 more step" })).toHaveCount(0);
+  await page.getByTestId("board-view-menu-toggle").click();
+  await expect(option).toHaveAttribute("aria-pressed", "false");
+  await expect(card.getByRole("button", { name: /^Expand preview/ })).toBeVisible();
+  expect((await snapshot(page)).cards).toEqual(original);
 });
 
 test("the next unfinished step advances and completed steps remain reversible", async ({ page }) => {

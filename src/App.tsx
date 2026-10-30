@@ -65,6 +65,7 @@ import { boardCategoryMoveError, boardChoices, boardNameError, effectiveBoardGro
 import { MoveCardDialog } from "./components/MoveCardDialog.js";
 import { useCardBoardMoves } from "./lib/useCardBoardMoves.js";
 import { useBoardListActions } from "./lib/useBoardListActions.js";
+import { BoardWriteBarrier } from "./lib/boardWriteBarrier.js";
 import { createBoardViewProps } from "./lib/boardViewProps.js";
 import { ArchiveToast, ArchiveView, RestoreCardDialog } from "./components/ArchiveView";
 import type { ArchiveToastState } from "./components/ArchiveView";
@@ -312,6 +313,7 @@ export default function App() {
   // window drag-drop listener (subscribed once) never reads stale state.
   const attachToCardRef = useRef<(cardId: string, paths: string[]) => void>(() => undefined);
   const pendingCardWriteRef = useRef<Record<string, string>>({});
+  const boardWritesRef = useRef(new BoardWriteBarrier());
   const pendingMembersWriteRef = useRef<Member[] | null>(null);
   const pendingSettingsWriteRef = useRef<WorkspaceSettings | null>(null);
   const watchRefreshTimerRef = useRef<number | null>(null);
@@ -864,8 +866,9 @@ export default function App() {
     if (!path) {
       return;
     }
-    const data = await loadWorkspace(path);
-    if (path !== workspacePathRef.current || token !== loadTokenRef.current) return;
+    const isCurrent = () => path === workspacePathRef.current && token === loadTokenRef.current;
+    const data = await boardWritesRef.current.read(path, () => loadWorkspace(path), isCurrent);
+    if (!data || !isCurrent()) return;
     let settingsToApply = data.settings;
     let membersToApply = data.membersFile.members;
     let cardsToApply = data.cards;
@@ -1222,7 +1225,7 @@ export default function App() {
     // The caller supplies the version it edited, including across dialog waits.
     const token = loadTokenRef.current;
     setBoards((current) => upsertById(current, nextBoard));
-    const outcome = await saveBoard(workspacePath, nextBoard, base);
+    const outcome = await boardWritesRef.current.save(workspacePath, () => saveBoard(workspacePath, nextBoard, base));
     if (workspacePath !== workspacePathRef.current || token !== loadTokenRef.current) return;
     await handleSaveOutcome(outcome, "board");
   }

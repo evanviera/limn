@@ -14,6 +14,7 @@ export function TaskCardBody({
   members,
   workspacePath,
   compact = false,
+  showMoreSteps = false,
   onOpen,
   onToggleSubtask,
   onOpenAttachment,
@@ -25,6 +26,7 @@ export function TaskCardBody({
   members: Member[];
   workspacePath?: string | null;
   compact?: boolean;
+  showMoreSteps?: boolean;
   onOpen?: (cardId: string) => void;
   onToggleSubtask?: (cardId: string, subtaskId: string, completed: boolean) => void;
   onOpenAttachment?: (cardId: string, attachment: Attachment) => void;
@@ -106,7 +108,7 @@ export function TaskCardBody({
         {!compact && (
           <TaskCardChecklist {...checklistProps} subtasks={expanded ? pendingSubtasks : pendingSubtasks.slice(0, 1)} preview={!expanded} />
         )}
-        {!compact && !expanded && pendingSubtasks.length > 1 && (
+        {showMoreSteps && !compact && !expanded && pendingSubtasks.length > 1 && (
           <button type="button" className="card-more-steps" aria-expanded={false} aria-controls={detailsId}
             onPointerDown={event => event.stopPropagation()} onMouseDown={event => event.stopPropagation()}
             onClick={event => {

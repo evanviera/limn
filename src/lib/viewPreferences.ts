@@ -1,12 +1,13 @@
 // Device-local display preferences. These affect how Limn is laid out, not the
 // shared workspace data, so localStorage keeps each person's setup independent.
 
-type BoardDisplayPreference = "compactCards" | "compactCompleted";
+type BoardDisplayPreference = "compactCards" | "compactCompleted" | "showMoreSteps";
 export const BOARD_DISPLAY_CHANGE_EVENT = "limn-board-display-change";
 
 const BOARD_DISPLAY_KEYS: Record<BoardDisplayPreference, string> = {
   compactCards: "limn-board-compact-cards",
-  compactCompleted: "limn-board-compact-completed"
+  compactCompleted: "limn-board-compact-completed",
+  showMoreSteps: "limn-board-show-more-steps"
 };
 const COLLAPSED_BOARD_GROUPS_KEY_PREFIX = "limn-collapsed-board-groups:";
 const CARD_EDITOR_SIDE_WIDTH_KEY = "limn-card-editor-side-width";
