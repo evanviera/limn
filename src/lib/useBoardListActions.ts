@@ -12,7 +12,7 @@ interface Options {
   cards: { readonly current: Card[] };
   workspacePath: string;
   selectedCardIdRef: { readonly current: string | null };
-  persistBoard: (board: Board) => Promise<unknown>;
+  persistBoard: (board: Board, previous: Board) => Promise<unknown>;
   persistCard: (card: Card, previous?: Card) => Promise<SaveOutcome | null>;
   openTextDialog: (dialog: TextDialogState) => void;
   openConfirmDialog: (dialog: ConfirmDialogState) => void;
@@ -49,7 +49,7 @@ export function useBoardListActions(options: Options) {
           : null,
       onSubmit: async (name) => {
         const list: BoardList = { id: makeId("list"), name };
-        await persistBoard({ ...board, lists: [...board.lists, list], updatedAt: timestamp() });
+        await persistBoard({ ...board, lists: [...board.lists, list], updatedAt: timestamp() }, board);
       }
     });
   }
@@ -73,7 +73,7 @@ export function useBoardListActions(options: Options) {
           ...board,
           lists: board.lists.map((item) => (item.id === list.id ? { ...item, name } : item)),
           updatedAt: timestamp()
-        });
+        }, board);
       }
     });
   }
@@ -89,7 +89,7 @@ export function useBoardListActions(options: Options) {
         item.id === list.id ? { ...item, collapsed: !item.collapsed } : item
       ),
       updatedAt: timestamp()
-    });
+    }, board);
   }
 
   async function deleteList(boardId: string, list: BoardList) {
@@ -115,7 +115,7 @@ export function useBoardListActions(options: Options) {
           ...board,
           lists: board.lists.filter((item) => item.id !== list.id),
           updatedAt: now
-        });
+        }, board);
         if (changedCards.length > 0) {
           setArchiveToast({
             message: `${countLabel(changedCards.length, "card")} archived when “${list.name}” was deleted.`,
@@ -248,7 +248,7 @@ export function useBoardListActions(options: Options) {
     }
 
     try {
-      await persistBoard({ ...board, lists: nextLists, updatedAt: timestamp() });
+      await persistBoard({ ...board, lists: nextLists, updatedAt: timestamp() }, board);
     } catch (reason) {
       setError(`Move list failed: ${errorText(reason)}`);
     }

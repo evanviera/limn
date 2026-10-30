@@ -1,6 +1,33 @@
 import { test, expect } from "@playwright/test";
 import { openApp, openWorkspace, setUpdaterMode, snapshot } from "./harness";
 
+test("remote notes preserve the visible draft, caret, and both conflict versions", async ({ page }) => {
+  await openApp(page);
+  await openWorkspace(page);
+  await page.getByTestId("create-board").click();
+  await page.getByTestId("text-dialog-input").fill("Shared notes");
+  await page.getByTestId("text-dialog-submit").click();
+  await page.getByTestId("add-card-todo").click();
+  await page.getByTestId("text-dialog-input").fill("Notes card");
+  await page.getByTestId("text-dialog-submit").click();
+  const notes = page.getByTestId("card-notes-input");
+  await notes.fill("My unsaved notes");
+  await notes.press("ControlOrMeta+End");
+  const file = (await snapshot(page)).cards[0];
+  await page.evaluate(value => window.__LIMN_E2E__!.externalEditCard(value.file_name,
+    value.content.replace(/^updatedAt: .*$/m, 'updatedAt: "2026-12-01T00:00:00.000Z"') + "\nRemote notes"), file);
+  await expect(page.getByText(/changed on disk/)).toBeVisible();
+  await expect(notes).toHaveText("My unsaved notes");
+  await notes.pressSequentially(" continued typing");
+  await expect(notes).toHaveText("My unsaved notes continued typing");
+  await page.getByTestId("save-card").click();
+  await expect(page.getByTestId("card-title-input")).toBeHidden();
+  await expect(page.getByTestId("conflict-banner")).toBeVisible();
+  const saved = (await snapshot(page)).cards;
+  expect(saved.find(value => value.file_name === file.file_name)!.content).toContain("Remote notes");
+  expect(saved.find(value => value.file_name.includes("_conflict_"))!.content).toContain("My unsaved notes continued typing");
+});
+
 test.describe("smoke", () => {
   test("card notes render on list cards with clickable links", async ({ page }) => {
     await openApp(page);

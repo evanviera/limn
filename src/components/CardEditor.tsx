@@ -156,8 +156,12 @@ export function CardEditor({
       return;
     }
 
-    input.innerHTML = renderNoteEditorHtml(card.body);
-  }, [card.id, card.body, mode]);
+    // The draft owns edit-mode notes. Disk updates must not replace typed text;
+    // comparing the serialized DOM also preserves the caret on local input.
+    if (serializeNoteEditor(input) !== draft.body) {
+      input.innerHTML = renderNoteEditorHtml(draft.body);
+    }
+  }, [draft.id, draft.body, mode]);
   useModalKeys(editorRef, onClose);
   // Move focus into the dialog on open so keyboard users land inside it.
   useEffect(() => {

@@ -1,6 +1,40 @@
 import { test, expect } from "@playwright/test";
 import { dropFiles, openApp, openWorkspace, queueAttachmentPick, setUpdaterMode, snapshot } from "./harness";
 
+test("attachment saves preserve remote edits against the editor's original ancestor", async ({ page }) => {
+  await openApp(page);
+  await openWorkspace(page);
+  await page.getByTestId("create-board").click();
+  await page.getByTestId("text-dialog-input").fill("Shared board");
+  await page.getByTestId("text-dialog-submit").click();
+  await page.getByTestId("add-card-todo").click();
+  await page.getByTestId("text-dialog-input").fill("Original card");
+  await page.getByTestId("text-dialog-submit").click();
+  await expect(page.getByTestId("card-title-input")).toHaveValue("Original card");
+  const file = (await snapshot(page)).cards[0];
+  await page.getByTestId("card-notes-input").fill("Local draft notes");
+  await page.evaluate(value => window.__LIMN_E2E__!.externalEditCard(value.file_name, value.content
+    .replace(/^title: .*$/m, 'title: "Remote title"')
+    .replace(/^labels: .*$/m, 'labels: ["remote-label"]')
+    .replace(/^updatedAt: .*$/m, 'updatedAt: "2026-12-01T00:00:00.000Z"')), file);
+  await expect(page.getByText(/changed on disk/)).toBeVisible();
+  await queueAttachmentPick(page, ["/mock/reference.pdf"]);
+  await page.getByTestId("add-attachment").click();
+  await expect(page.locator(".attachment-row")).toHaveCount(1);
+  await expect(page.getByTestId("card-title-input")).toHaveValue("Original card");
+  expect((await snapshot(page)).cards[0].content).toContain('title: "Remote title"');
+  await page.getByTestId("save-card").click();
+  await expect(page.getByTestId("card-title-input")).toBeHidden();
+  const after = await snapshot(page);
+  expect(after.cards).toHaveLength(1);
+  expect(after.cards[0].content).toContain('title: "Remote title"');
+  expect(after.cards[0].content).toContain('labels: ["remote-label"]');
+  expect(after.cards[0].content).toContain("Local draft notes");
+  expect(after.cards[0].content).toContain("Attached reference.pdf");
+  expect(after.attachments).toHaveLength(1);
+  expect(after.conflicts).toHaveLength(0);
+});
+
 test.describe("smoke", () => {
   test("card editor divider resizes the detail rail", async ({ page }) => {
     await openApp(page);

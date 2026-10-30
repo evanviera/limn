@@ -625,6 +625,7 @@ export default function App() {
       return name;
     }
 
+    workspacePathRef.current = path;
     setWorkspacePath(path);
     settingsRef.current = meta.settings;
     setSettings(meta.settings);
@@ -762,6 +763,11 @@ export default function App() {
   // Clear every workspace-scoped piece of state, returning to the welcome screen.
   // Used when the last open workspace tab is closed.
   function clearWorkspaceState() {
+    loadTokenRef.current += 1;
+    progressiveLoadInFlightRef.current = false;
+    workspacePathRef.current = "";
+    clearScheduledWatchRefresh();
+    setCardsLoading(null);
     setWorkspacePath("");
     settingsRef.current = null;
     setSettings(null);
@@ -869,10 +875,13 @@ export default function App() {
   }
 
   async function refreshWorkspace(showNotice = true) {
-    if (!workspacePath) {
+    const path = workspacePathRef.current;
+    const token = loadTokenRef.current;
+    if (!path) {
       return;
     }
-    const data = await loadWorkspace(workspacePath);
+    const data = await loadWorkspace(path);
+    if (path !== workspacePathRef.current || token !== loadTokenRef.current) return;
     let settingsToApply = data.settings;
     let membersToApply = data.membersFile.members;
     let cardsToApply = data.cards;
@@ -935,7 +944,7 @@ export default function App() {
       setNotice("This card changed on disk. Reopen it to see the latest version.");
       setNoticeKind("warning");
     }
-    await reloadConflicts(workspacePath, {
+    await reloadConflicts(path, {
       cards: data.cards,
       boards: data.boards,
       settings: data.settings,
@@ -1007,6 +1016,7 @@ export default function App() {
       changedCards.length > INCREMENTAL_REFRESH_MAX_FILES;
     changedCardPathsRef.current.clear();
     fullReloadNeededRef.current = false;
+    const token = loadTokenRef.current;
     try {
       if (useFull) {
         await refreshWorkspace(false);
@@ -1014,7 +1024,7 @@ export default function App() {
         await refreshChangedCards(changedCards);
       }
     } catch (reason) {
-      setError(errorText(reason));
+      if (token === loadTokenRef.current) setError(errorText(reason));
     } finally {
       watchRefreshInFlightRef.current = false;
       if (watchRefreshPendingRef.current) {
@@ -1031,10 +1041,12 @@ export default function App() {
   // the corruption diagnostic surfaces exactly as it otherwise would.
   async function refreshChangedCards(names: string[]) {
     const path = workspacePathRef.current;
+    const token = loadTokenRef.current;
     if (!path) {
       return;
     }
     const updates = await readWorkspaceFiles(path, names.map((name) => ({ dir: "cards" as const, name })));
+    if (path !== workspacePathRef.current || token !== loadTokenRef.current) return;
     if (updates.some((update) => !update.deleted && update.card === null)) {
       await refreshWorkspace(false);
       return;
@@ -1172,11 +1184,14 @@ export default function App() {
   // on-disk entity for the review UI. Called after every workspace load/reload;
   // failures never break the reload (the app just shows no conflicts).
   async function reloadConflicts(path: string, entities: WorkspaceEntities) {
+    const token = loadTokenRef.current;
+    const isCurrent = () => path === workspacePathRef.current && token === loadTokenRef.current;
+    if (!isCurrent()) return;
     try {
       const files = await listConflicts(path);
-      setConflicts(buildConflicts(files, entities));
+      if (isCurrent()) setConflicts(buildConflicts(files, entities));
     } catch {
-      setConflicts([]);
+      if (isCurrent()) setConflicts([]);
     }
   }
 
@@ -1216,13 +1231,15 @@ export default function App() {
     }
   }
 
-  async function persistBoard(nextBoard: Board) {
+  async function persistBoard(nextBoard: Board, base: Board | undefined) {
     if (!workspacePath) {
       return;
     }
-    const base = boardsRef.current.find((board) => board.id === nextBoard.id);
+    // The caller supplies the version it edited, including across dialog waits.
+    const token = loadTokenRef.current;
     setBoards((current) => upsertById(current, nextBoard));
     const outcome = await saveBoard(workspacePath, nextBoard, base);
+    if (workspacePath !== workspacePathRef.current || token !== loadTokenRef.current) return;
     await handleSaveOutcome(outcome, "board");
   }
 
@@ -1261,18 +1278,17 @@ export default function App() {
     if (!workspacePath) {
       return null;
     }
+    const token = loadTokenRef.current;
     pendingCardWriteRef.current[nextCard.id] = nextCard.updatedAt;
     const outcome = await saveCard(workspacePath, nextCard, previous);
+    if (workspacePath !== workspacePathRef.current || token !== loadTokenRef.current) return outcome;
     setCards((current) => upsertById(current, nextCard));
     if (outcome.status === "written") {
-      // A clean write to the open card becomes the new merge ancestor for the
-      // editor. Immediately-persisted actions (posting a comment, adding an
-      // attachment, toggling a step) bump the card's version on disk without
-      // touching the editor draft; without advancing the base here, the next
-      // editor Save would compare its stale open-time base against the newer
-      // disk copy, "conflict", cleanly three-way-merge, and falsely report
-      // "Merged edits from another device" for the device's own edits.
-      if (nextCard.id === selectedCardIdRef.current) {
+      // Advance through our own writes only. A refreshed live card may include
+      // remote edits absent from the editor draft; keep its original ancestor
+      // so a later editor save merges those edits instead of overwriting them.
+      if (nextCard.id === selectedCardIdRef.current && previous &&
+          editorBaseRef.current?.updatedAt === previous.updatedAt) {
         editorBaseRef.current = nextCard;
       }
     } else {
@@ -1329,7 +1345,7 @@ export default function App() {
     const scope = boardsRef.current.filter((board) => effectiveBoardGroupId(board, groups) === target);
     const board = current ? { ...current, name, updatedAt: timestamp() }
       : { ...createBoard(name), groupId: target, order: nextOrderForList(scope) };
-    await persistBoard(board);
+    await persistBoard(board, current);
     if (!current) {
       setActiveBoardId(board.id);
       setView("board");
@@ -1348,13 +1364,12 @@ export default function App() {
       onConfirm: async () => {
         const boardCards = cards.filter((card) => card.boardId === board.id);
         const cardOutcomes = await Promise.all(boardCards.map((card) => deleteCard(workspacePath, card)));
-        const boardOutcome = await deleteBoard(workspacePath, board);
-        const conflict = [...cardOutcomes, boardOutcome].find((outcome) => outcome.status === "conflict");
-        if (conflict) {
-          // A card or the board itself was edited on another device: its copy was
-          // preserved and the delete refused. Reload to show exactly what
-          // survived on disk instead of optimistically clearing everything.
-          await handleSaveOutcome(conflict, "board", "delete");
+        // A refused card delete must retain its parent board. Other card deletes
+        // may have succeeded; reload the survivors before offering a retry.
+        const outcome = cardOutcomes.find((result) => result.status === "conflict")
+          ?? await deleteBoard(workspacePath, board);
+        if (outcome.status === "conflict") {
+          await handleSaveOutcome(outcome, "board", "delete");
           return;
         }
         setCards((current) => current.filter((card) => card.boardId !== board.id));
@@ -1439,7 +1454,7 @@ export default function App() {
         const nextBoards = latestBoards.map((board) => ({ ...board, groupId: undefined, updatedAt: now }));
         await Promise.all([
           persistWorkspaceSettings(nextSettings, "Category deleted."),
-          ...nextBoards.map((board) => persistBoard(board))
+          ...nextBoards.map((board, index) => persistBoard(board, latestBoards[index]))
         ]);
       }
     });
@@ -1454,7 +1469,7 @@ export default function App() {
     const problem = boardCategoryMoveError(boardsRef.current, settingsRef.current?.boardGroups ?? [], [board.id], groupId);
     if (problem) { setError(problem); return; }
     setError("");
-    await persistBoard({ ...current, groupId, updatedAt: timestamp() });
+    await persistBoard({ ...current, groupId, updatedAt: timestamp() }, current);
   }
 
   // The category a board actually renders under: its `groupId`, or undefined when
@@ -1493,10 +1508,10 @@ export default function App() {
       for (const change of placement.rebalance) {
         const sibling = boardsRef.current.find((item) => item.id === change.id);
         if (sibling) {
-          await persistBoard({ ...sibling, order: change.order, updatedAt: timestamp() });
+          await persistBoard({ ...sibling, order: change.order, updatedAt: timestamp() }, sibling);
         }
       }
-      await persistBoard({ ...board, groupId: targetGroupId, order: placement.order, updatedAt: timestamp() });
+      await persistBoard({ ...board, groupId: targetGroupId, order: placement.order, updatedAt: timestamp() }, board);
     } catch (reason) {
       setError(`Move failed: ${errorText(reason)}`);
     }
@@ -2006,9 +2021,8 @@ export default function App() {
     // (possibly disk-refreshed) copy — that is what makes an external edit landing
     // mid-session merge cleanly rather than get overwritten.
     const previous = editorBaseRef.current ?? live;
-    // Attachments and comments are persisted immediately and aren't tracked in
-    // the editor draft, so keep the live copy's lists instead of the draft's
-    // stale ones.
+    // Attachments, comments, and activity persist immediately outside the draft;
+    // keep their live lists so saving edited fields cannot roll them back.
     const recurrenceError = recurrenceValidation(nextCard.recurrence, nextCard.due);
     if (recurrenceError) {
       setError(recurrenceError);
@@ -2018,6 +2032,7 @@ export default function App() {
       ...nextCard,
       attachments: live?.attachments ?? nextCard.attachments,
       comments: live?.comments ?? nextCard.comments,
+      activity: live?.activity ?? nextCard.activity,
       // Discard blank checklist steps (e.g. from clicking "Add step" without
       // typing) so they don't clutter the card or skew its "N of M complete"
       // count. A step is kept if it carries a title, a link, or list content.
