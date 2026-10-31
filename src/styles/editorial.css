@@ -96,7 +96,8 @@
   background: var(--nav-active-bg);
 }
 
-.sidebar button.active:not(.drop-before)::before { content: none; }
+/* The active board carries the one accent marker: a short square bar on the left edge. */
+.sidebar button.active:not(.drop-before)::before { left: 0; width: 2px; border-radius: 0; }
 .sidebar .board-nav-item { display: block; padding: 0 12px; }
 .board-group-heading { text-transform: none; font-size: var(--text-sm); }
 
@@ -213,8 +214,7 @@
   color: var(--text-faint);
   font-size: var(--text-xs);
   font-weight: var(--weight-medium);
-  letter-spacing: 0.08em;
-  text-transform: uppercase;
+  letter-spacing: 0;
 }
 
 .header-actions .board-view-option {

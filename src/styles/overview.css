@@ -31,7 +31,6 @@
   color: var(--text-muted);
   font-size: var(--text-sm);
   font-weight: var(--weight-semibold);
-  text-transform: uppercase;
   border-bottom: 1px solid var(--border-soft);
 }
 .overview-category-toggle .overview-count { text-transform: none; }
