@@ -194,7 +194,7 @@ export function WorkspaceSidebar({
           onClick={() => onSetView("inbox")}
         >
           <Icon name="chat" /> Inbox
-          {inboxUnread > 0 && <span className="nav-badge" data-testid="inbox-unread-count">{inboxUnread}</span>}
+          {inboxUnread > 0 && <span className="nav-badge unread" data-testid="inbox-unread-count">{inboxUnread}</span>}
         </button>
         <button
           className={view === "filter" ? "active" : ""}

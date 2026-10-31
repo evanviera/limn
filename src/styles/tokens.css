@@ -42,9 +42,12 @@
   --accent-text: var(--ui-ink);
   --accent-soft: rgba(59, 140, 255, 0.14);
   --accent-border: rgba(59, 140, 255, 0.45);
-  --accent-link: var(--ui-accent-text-dark);
-  --accent-link-hover: #b3d1ff;
-  --accent-link-border: rgba(138, 184, 255, 0.5);
+  /* Links read as text with a quiet underline; blue appears only on hover. */
+  --accent-link: currentColor;
+  --accent-link-hover: var(--ui-accent-text-dark);
+  --accent-link-border: rgba(255, 255, 255, 0.24);
+  --avatar-bg: #3a3a3a;
+  --avatar-text: #e6e6e6;
   --selection: rgba(59, 140, 255, 0.3);
   --success: #6fb894;
   --success-soft: rgba(38, 112, 83, 0.2);
@@ -158,9 +161,11 @@
   --text-faint: #686b70;
   --accent-soft: rgba(26, 91, 199, 0.1);
   --accent-border: rgba(26, 91, 199, 0.34);
-  --accent-link: var(--ui-accent-text-light);
-  --accent-link-hover: #144aa3;
-  --accent-link-border: rgba(26, 91, 199, 0.4);
+  --accent-link: currentColor;
+  --accent-link-hover: var(--ui-accent-text-light);
+  --accent-link-border: rgba(23, 23, 23, 0.28);
+  --avatar-bg: #dcdee1;
+  --avatar-text: #36383b;
   --selection: rgba(59, 140, 255, 0.22);
   --success: #267053;
   --success-soft: rgba(38, 112, 83, 0.1);
