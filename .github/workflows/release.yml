@@ -84,6 +84,21 @@ jobs:
           tagName: ${{ env.RELEASE_TAG }}
           releaseName: Limn ${{ env.RELEASE_TAG }}
           releaseBody: "See the assets below to download and install Limn."
-          releaseDraft: false
+          # Draft until every platform has uploaded; the publish job below
+          # makes it public. A public release with only the macOS assets sends
+          # Windows downloads (and the "latest" links on the websites) to a 404.
+          releaseDraft: true
+          releaseCommitish: ${{ github.sha }}
           prerelease: false
           uploadUpdaterJson: true
+
+  publish:
+    name: Publish release
+    needs: release
+    runs-on: ubuntu-latest
+    env:
+      RELEASE_TAG: ${{ github.event_name == 'workflow_dispatch' && format('v{0}', inputs.version) || github.ref_name }}
+      GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+    steps:
+      - name: Publish the draft once macOS and Windows assets are uploaded
+        run: gh release edit "$RELEASE_TAG" --repo "${{ github.repository }}" --draft=false --latest
