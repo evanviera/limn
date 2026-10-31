@@ -48,6 +48,7 @@
   --accent-link-border: rgba(255, 255, 255, 0.24);
   --avatar-bg: #3a3a3a;
   --avatar-text: #e6e6e6;
+  --avatar-ring: rgba(255, 255, 255, 0.06);
   --selection: rgba(59, 140, 255, 0.3);
   --success: #6fb894;
   --success-soft: rgba(38, 112, 83, 0.2);
@@ -166,6 +167,7 @@
   --accent-link-border: rgba(23, 23, 23, 0.28);
   --avatar-bg: #dcdee1;
   --avatar-text: #36383b;
+  --avatar-ring: rgba(0, 0, 0, 0.05);
   --selection: rgba(59, 140, 255, 0.22);
   --success: #267053;
   --success-soft: rgba(38, 112, 83, 0.1);

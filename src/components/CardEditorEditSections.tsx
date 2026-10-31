@@ -10,13 +10,13 @@ import type {
 } from "react";
 import type { Attachment, Board, Card, Member, Subtask, SubtaskListItem } from "../types";
 import { dueInputFromToday, describeDue } from "../lib/dueDate.js";
-import { initials } from "../lib/format.js";
 import { openExternal } from "../storage.js";
 import { AttachmentLightbox } from "./AttachmentLightbox.js";
 import type { ContextMenuItem, OpenContextMenu } from "./contextMenu";
 import { isEditableTextControl, textControlContextItems } from "./contextMenu.js";
 import { Icon, LinkIcon, Spinner } from "./icons.js";
 import { RecurrenceControl } from "./RecurrenceControl.js";
+import { Avatar } from "./Avatar.js";
 
 export type NoteLinkDraft = { mode: "selection" | "link"; label: string; url: string };
 
@@ -538,9 +538,7 @@ export function CardEditorSidePanel({
                 type="checkbox"
                 onChange={(event) => onUpdateAssignee(member.id, event.target.checked)}
               />
-              <span className="avatar small" style={{ background: member.color }}>
-                {initials(member.name)}
-              </span>
+              <Avatar name={member.name} small />
               <span className="assignee-name">{member.name}</span>
             </label>
           ))}

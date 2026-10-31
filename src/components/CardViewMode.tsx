@@ -1,13 +1,13 @@
 import type { Attachment, Board, Card, Member, Subtask } from "../types";
 import { describeDue } from "../lib/dueDate";
 import { recurrenceSummary } from "../lib/recurrence.js";
-import { initials } from "../lib/format";
 import { openExternal } from "../storage";
 import { CardAttachments } from "./CardAttachments";
 import { CardComments } from "./CardComments";
 import { Icon } from "./icons";
 import { RichNoteText } from "./RichNoteText";
 import type { OpenContextMenu } from "./contextMenu";
+import { Avatar } from "./Avatar.js";
 
 export function CardViewMode({
   card,
@@ -217,9 +217,7 @@ export function CardViewMode({
             <div className="card-view-people">
               {assignedMembers.map((member) => (
                 <span className="card-view-person" key={member.id}>
-                  <span className="avatar small" style={{ background: member.color }}>
-                    {initials(member.name)}
-                  </span>
+                  <Avatar name={member.name} small />
                   <span>{member.name}</span>
                 </span>
               ))}

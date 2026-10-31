@@ -2,8 +2,8 @@ import { useRef, useState } from "react";
 import type { Member } from "../types";
 import { makeId } from "../storage";
 import { memberColors } from "../lib/constants";
-import { initials } from "../lib/format";
 import { isEditableTextControl, textControlContextItems, type OpenContextMenu } from "./contextMenu";
+import { Avatar } from "./Avatar.js";
 
 export function MembersView({
   members,
@@ -105,9 +105,7 @@ export function MembersView({
               ], member.name);
             }}
           >
-            <span className="avatar" style={{ background: member.color }}>
-              {initials(member.name)}
-            </span>
+            <Avatar name={member.name} />
             <input
               value={member.name}
               onChange={(event) => void onSave({ ...member, name: event.target.value })}
@@ -119,12 +117,6 @@ export function MembersView({
               onChange={(event) => void onSave({ ...member, slackHandle: event.target.value })}
               aria-label={`${member.name} Slack member ID`}
               placeholder="Slack member ID (U024BE7LH)"
-            />
-            <input
-              type="color"
-              value={member.color}
-              onChange={(event) => void onSave({ ...member, color: event.target.value })}
-              aria-label={`${member.name} color`}
             />
             <button data-testid={`member-${member.id}-remove`} onClick={() => void onRemove(member.id)}>Remove</button>
           </div>

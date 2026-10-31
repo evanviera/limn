@@ -572,7 +572,6 @@ body.is-board-dragging * {
 
 .identity-select .avatar.small {
   margin-left: 0;
-  box-shadow: none;
 }
 
 .identity-select-text {
