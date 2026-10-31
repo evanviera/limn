@@ -108,27 +108,41 @@
   background: transparent;
 }
 
+/* Member avatar: a plain circle with optically centered initials. Glyph boxes
+   carry uneven ascender/descender space, so the text box is trimmed to the
+   cap height and the baseline (text-box) and the initials sit truly centered.
+   Engines without text-box fall back to a line-height of 1 inside a flex box. */
 .avatar {
-  display: inline-grid;
-  place-items: center;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
   flex: 0 0 auto;
   width: 2rem;
   height: 2rem;
   color: #ffffff;
-  border: 1px solid rgba(255, 255, 255, 0.18);
+  border: 0;
   border-radius: 50%;
-  font-size: var(--text-sm);
-  font-weight: var(--weight-bold);
+  font-size: 0.8125rem;
+  font-weight: var(--weight-semibold);
+  font-variant-numeric: tabular-nums;
+  letter-spacing: 0.02em;
   line-height: 1;
+  text-box: trim-both cap alphabetic;
+  user-select: none;
 }
 
 .avatar.small {
-  width: 1.5rem;
-  height: 1.5rem;
-  margin-left: -0.25rem;
-  border-color: var(--pane-bg);
-  box-shadow: 0 0 0 2px var(--pane-bg);
-  font-size: var(--text-xs);
+  width: 1.375rem;
+  height: 1.375rem;
+  font-size: 0.625rem;
+  letter-spacing: 0.03em;
+}
+
+/* Neutral avatars: on cards, people are identified by initials, not by a
+   per-member color, so a busy board stays quiet. */
+.avatar.neutral {
+  color: var(--avatar-text);
+  background: var(--avatar-bg);
 }
 
 .member-dots {

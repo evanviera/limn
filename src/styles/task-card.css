@@ -251,18 +251,36 @@ body.is-list-dragging * {
 /* Due-date chip in the card footer. Kept as coloured text (not a heavy pill) so
    it slots into the tight footer, but urgency reads at a glance. */
 .task-card footer .due-badge {
-  color: var(--text-muted);
+  color: var(--text-faint);
   font-variant-numeric: tabular-nums;
 }
 
-.task-card footer .due-badge.due-overdue {
-  color: var(--danger);
-  font-weight: var(--weight-medium);
+/* Urgency is a small dot, not colored text, so a column of overdue cards
+   doesn't read as an error list. Cards more than a week late keep red text. */
+.task-card footer .due-badge.due-overdue,
+.task-card footer .due-badge.due-today {
+  display: inline-flex;
+  align-items: center;
+  gap: 7px;
+  color: var(--text-muted);
 }
 
-.task-card footer .due-badge.due-today {
-  color: var(--warning);
-  font-weight: var(--weight-medium);
+.task-card footer .due-badge.due-overdue::before,
+.task-card footer .due-badge.due-today::before {
+  content: "";
+  flex: 0 0 auto;
+  width: 6px;
+  height: 6px;
+  background: var(--danger);
+  border-radius: 50%;
+}
+
+.task-card footer .due-badge.due-today::before {
+  background: var(--warning);
+}
+
+.task-card footer .due-badge.due-overdue.due-late {
+  color: var(--danger);
 }
 
 .subtask-badge {
@@ -421,7 +439,7 @@ body.is-list-dragging * {
 .card-preview-details .card-subtask-title, .card-preview-details .card-subtask-item-content,
 .card-subtasks:not(.card-subtasks-preview) .card-subtask-title,
 .card-subtasks:not(.card-subtasks-preview) .card-subtask-item-content { white-space: normal; overflow-wrap: anywhere; }
-.card-completed-steps summary { color: var(--text-muted); font-size: var(--text-sm); cursor: pointer; }
+.card-completed-steps summary { color: var(--text-faint); font-size: var(--text-sm); cursor: pointer; }
 .card-completed-steps[open] summary { margin-bottom: 8px; }
 .card-completed-steps summary:focus-visible { outline: 2px solid var(--accent); outline-offset: 3px; }
 .card-subtasks-preview .card-subtask { color: var(--text-muted); }
@@ -432,13 +450,16 @@ body.is-list-dragging * {
 }
 .task-card .subtask-badge {
   min-height: 20px; padding: 0; background: transparent; border: 0; border-radius: 0;
-  color: var(--text-muted); font-size: var(--text-sm); font-weight: var(--weight-normal);
+  color: var(--text-faint); font-size: var(--text-sm); font-weight: var(--weight-normal);
 }
 .card-attachment-count { display: inline-flex; align-items: center; gap: 4px; }
 .card-attachment-count .icon { width: 13px; height: 13px; }
-.task-card .member-dots { gap: 3px; padding-left: 0; }
-.task-card .member-dots .avatar.small { width: 21px; height: 21px; margin: 0; box-shadow: none; border: 0; font-weight: var(--weight-medium); }
-.task-card .member-dots.quiet .avatar { background: var(--surface-hover); color: var(--text-muted); }
+/* Assignees stack with a slight overlap; a ring in the card color separates them. */
+.task-card .member-dots { gap: 0; padding-left: 0; }
+.task-card .member-dots .avatar.small { margin: 0; box-shadow: 0 0 0 2px var(--card-bg); }
+.task-card .member-dots .avatar.small + .avatar.small { margin-left: -3px; }
+.task-card:hover .member-dots .avatar.small { box-shadow: 0 0 0 2px var(--card-hover-bg); }
+.member-overflow { margin-left: 6px; }
 .member-overflow { color: var(--text-muted); font-size: var(--text-sm); }
 @media (pointer: coarse) {
   .card-preview-toggle { width: 32px; min-width: 32px; min-height: 32px; }
