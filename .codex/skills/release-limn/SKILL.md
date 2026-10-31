@@ -17,7 +17,7 @@ From the Limn repo root:
 .codex/skills/release-limn/scripts/cut-release.sh 0.1.3
 ```
 
-The script bumps all versioned files through `npm run release:version`, runs the release checks, commits `Prepare vX.Y.Z release`, creates tag `vX.Y.Z`, and pushes `main` plus the tag. The Release workflow is expected to create a non-draft GitHub release (`releaseDraft: false`) so the release goes directly to production after the workflow uploads assets, but the user will monitor that workflow manually by default.
+The script bumps all versioned files through `npm run release:version`, runs the release checks, commits `Prepare vX.Y.Z release`, creates tag `vX.Y.Z`, and pushes `main` plus the tag. The Release workflow builds into a draft GitHub release and its final `publish` job makes it public (not draft, marked latest) only after both the macOS and Windows jobs have uploaded, so the release goes to production with every platform's assets at once, but the user will monitor that workflow manually by default.
 
 Use `--skip-e2e` only when the user explicitly accepts that risk. Use `--no-push` for a local rehearsal that still commits and tags.
 
