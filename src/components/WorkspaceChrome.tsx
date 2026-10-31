@@ -2,9 +2,10 @@ import type { MouseEvent as ReactMouseEvent, ReactNode } from "react";
 import type { Board, BoardGroup, Member, View } from "../types";
 import type { ThemeMode } from "../lib/constants";
 import type { UpdateStatus } from "../lib/updateMessages";
-import { countLabel, initials } from "../lib/format.js";
+import { countLabel } from "../lib/format.js";
 import { BoardNav } from "./BoardNav.js";
 import { Icon, Spinner } from "./icons.js";
+import { Avatar } from "./Avatar.js";
 
 export interface BoardNavSections {
   grouped: Array<{ group: BoardGroup; boards: Board[] }>;
@@ -168,7 +169,7 @@ export function WorkspaceSidebar({
         >
           {activeMember ? (
             <>
-              <span className="avatar small" style={{ background: activeMember.color }}>{initials(activeMember.name)}</span>
+              <Avatar name={activeMember.name} small />
               <span className="identity-select-text">
                 <span className="identity-select-label">You</span>
                 <span className="identity-select-name">{activeMember.name}</span>

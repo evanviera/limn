@@ -456,9 +456,9 @@ body.is-list-dragging * {
 .card-attachment-count .icon { width: 13px; height: 13px; }
 /* Assignees stack with a slight overlap; a ring in the card color separates them. */
 .task-card .member-dots { gap: 0; padding-left: 0; }
-.task-card .member-dots .avatar.small { margin: 0; box-shadow: 0 0 0 2px var(--card-bg); }
+.task-card .member-dots .avatar.small { width: 1.375rem; height: 1.375rem; margin: 0; font-size: 0.625rem; box-shadow: 0 0 0 2px var(--card-bg), inset 0 0 0 1px var(--avatar-ring); }
 .task-card .member-dots .avatar.small + .avatar.small { margin-left: -3px; }
-.task-card:hover .member-dots .avatar.small { box-shadow: 0 0 0 2px var(--card-hover-bg); }
+.task-card:hover .member-dots .avatar.small { box-shadow: 0 0 0 2px var(--card-hover-bg), inset 0 0 0 1px var(--avatar-ring); }
 .member-overflow { margin-left: 6px; }
 .member-overflow { color: var(--text-muted); font-size: var(--text-sm); }
 @media (pointer: coarse) {

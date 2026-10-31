@@ -143,10 +143,6 @@
     order: 1;
   }
 
-  .member-row input[type="color"] {
-    width: 100%;
-  }
-
   .card-editor {
     width: 100vw;
     border-left: 0;

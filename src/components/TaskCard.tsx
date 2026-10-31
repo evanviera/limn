@@ -1,13 +1,14 @@
 import { useId, useState } from "react";
 import type { Attachment, Card, Member } from "../types";
 import { latestImageAttachment } from "../lib/attachments.js";
-import { formatFileSize, initials } from "../lib/format.js";
+import { formatFileSize } from "../lib/format.js";
 import { describeDue } from "../lib/dueDate.js";
 import { AttachmentImagePreview } from "./AttachmentImagePreview.js";
 import { Icon } from "./icons.js";
 import { TaskCardChecklist } from "./TaskCardChecklist.js";
 import { RichNoteText } from "./RichNoteText.js";
 import type { OpenContextMenu } from "./contextMenu";
+import { Avatar } from "./Avatar.js";
 
 export function TaskCardBody({
   card,
@@ -212,9 +213,7 @@ export function MemberDots({ members, quiet = false }: { members: Member[]; quie
   return (
     <span className={`member-dots${quiet ? " quiet" : ""}`} role="img" aria-label={`Assigned to ${members.map(member => member.name).join(", ")}`} title={members.map(member => member.name).join(", ")}>
       {members.slice(0, quiet ? 1 : 4).map((member) => (
-        <span className="avatar small neutral" key={member.id} title={member.name}>
-          {initials(member.name)}
-        </span>
+        <Avatar key={member.id} name={member.name} small title={member.name} />
       ))}
       {members.length > (quiet ? 1 : 4) && <span className="member-overflow">+{members.length - (quiet ? 1 : 4)}</span>}
     </span>

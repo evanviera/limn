@@ -5,14 +5,14 @@ import type {
   ReactNode
 } from "react";
 import type { Comment, Member } from "../types";
-import { countLabel, initials } from "../lib/format";
+import { countLabel } from "../lib/format";
 import { MENTION_SPLIT_PATTERN, matchMention } from "../lib/mentions";
 import { MentionTextarea } from "./MentionTextarea";
 import { Icon } from "./icons";
 import { isEditableTextControl, textControlContextItems } from "./contextMenu";
 import type { ContextMenuItem, OpenContextMenu } from "./contextMenu";
+import { Avatar } from "./Avatar.js";
 
-const FALLBACK_AVATAR_COLOR = "#77828a";
 
 // Render a comment body as text with known @mentions highlighted. Newlines are
 // preserved by the `.comment-body` white-space rule, so the whole body can be
@@ -178,9 +178,7 @@ export function CardComments({
                   onOpenContextMenu(event, commentContextItems(comment, isOwn), authorName);
                 }}
               >
-                <span className="avatar small" style={{ background: authorMember?.color ?? FALLBACK_AVATAR_COLOR }}>
-                  {initials(authorName)}
-                </span>
+                <Avatar name={authorName} small />
                 <div className="comment-content">
                   <div className="comment-meta">
                     <span className="comment-author">{authorName}</span>
@@ -245,9 +243,7 @@ export function CardComments({
 
       {activeMember && (
         <form className="comment-composer" data-testid="comment-composer" onSubmit={submitComment}>
-          <span className="avatar small" style={{ background: activeMember.color }}>
-            {initials(activeMember.name)}
-          </span>
+          <Avatar name={activeMember.name} small />
           <div className="comment-composer-main">
             <MentionTextarea
               className="comment-textarea"
@@ -281,7 +277,7 @@ export function CardComments({
                 type="button"
                 onClick={() => onSelectActiveMember(member.id)}
               >
-                <span className="avatar small" style={{ background: member.color }}>{initials(member.name)}</span>
+                <Avatar name={member.name} small />
                 <span className="comment-identity-name">{member.name}</span>
               </button>
             ))}

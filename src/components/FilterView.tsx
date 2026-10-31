@@ -9,10 +9,11 @@ import {
   filterIsActive
 } from "../lib/filter";
 import { describeDue } from "../lib/dueDate";
-import { countLabel, initials } from "../lib/format";
+import { countLabel } from "../lib/format";
 import { Icon } from "./icons";
 import { MemberDots } from "./TaskCard";
 import type { OpenContextMenu } from "./contextMenu";
+import { Avatar } from "./Avatar.js";
 
 export interface FilterViewProps {
   // Every card in the workspace (archived included); the view filters locally.
@@ -406,7 +407,7 @@ export function FilterView(props: FilterViewProps) {
                     aria-pressed={selected}
                     onClick={() => patch({ assignees: toggleMembership(filter.assignees, member.id) })}
                   >
-                    <span className="avatar small" style={{ background: member.color }}>{initials(member.name)}</span>
+                    <Avatar name={member.name} small />
                     {member.name}
                   </button>
                 );

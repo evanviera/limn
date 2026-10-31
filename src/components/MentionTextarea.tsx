@@ -1,9 +1,9 @@
 import { useRef, useState } from "react";
 import type { KeyboardEvent as ReactKeyboardEvent } from "react";
 import type { Member } from "../types";
-import { initials } from "../lib/format";
 import { applyMention, findMentionQuery, suggestMembers } from "../lib/mentions";
 import type { MentionQuery } from "../lib/mentions";
+import { Avatar } from "./Avatar.js";
 
 // A textarea that offers an @mention picker: typing "@" opens a list of members,
 // filtered as you type, that can be navigated with the arrow keys and inserted
@@ -130,9 +130,7 @@ export function MentionTextarea({
                 onMouseEnter={() => setHighlight(index)}
                 onClick={() => choose(member)}
               >
-                <span className="avatar small" style={{ background: member.color }}>
-                  {initials(member.name)}
-                </span>
+                <Avatar name={member.name} small />
                 <span className="mention-suggestion-name">{member.name}</span>
               </button>
             </li>

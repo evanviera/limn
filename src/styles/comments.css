@@ -19,7 +19,6 @@
 
 .comment .avatar.small {
   margin-left: 0;
-  box-shadow: none;
 }
 
 .comment-content {
@@ -191,7 +190,6 @@
 
 .comment-composer .avatar.small {
   margin-left: 0;
-  box-shadow: none;
 }
 
 .comment-composer-main {
@@ -276,7 +274,6 @@
 
 .comment-identity-option .avatar.small {
   margin-left: 0;
-  box-shadow: none;
 }
 
 .comment-identity-name {
