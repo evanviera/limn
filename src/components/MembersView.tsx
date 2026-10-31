@@ -105,7 +105,7 @@ export function MembersView({
               ], member.name);
             }}
           >
-            <span className="avatar" style={{ background: member.color }}>
+            <span className="avatar">
               {initials(member.name)}
             </span>
             <input
@@ -119,12 +119,6 @@ export function MembersView({
               onChange={(event) => void onSave({ ...member, slackHandle: event.target.value })}
               aria-label={`${member.name} Slack member ID`}
               placeholder="Slack member ID (U024BE7LH)"
-            />
-            <input
-              type="color"
-              value={member.color}
-              onChange={(event) => void onSave({ ...member, color: event.target.value })}
-              aria-label={`${member.name} color`}
             />
             <button data-testid={`member-${member.id}-remove`} onClick={() => void onRemove(member.id)}>Remove</button>
           </div>

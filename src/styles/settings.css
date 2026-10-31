@@ -92,7 +92,7 @@
 
 .member-row {
   display: grid;
-  grid-template-columns: auto minmax(150px, 1fr) minmax(140px, 0.75fr) 58px auto;
+  grid-template-columns: auto minmax(150px, 1fr) minmax(140px, 0.75fr) auto;
   gap: var(--space-4);
   align-items: center;
   min-width: 0;
@@ -108,14 +108,15 @@
   background: transparent;
 }
 
-/* Member avatar: a plain circle with optically centered initials. Glyph boxes
-   carry uneven ascender/descender space, so the line is trimmed to the cap
-   height and the baseline (text-box) and padded to the middle of the circle.
-   text-box only trims block containers, not flex or grid ones, which is why
-   this is an inline-block. No letter-spacing: it pads the right edge and
-   pushes the initials off center. Size comes from --avatar-size, and the
-   initials scale with it at half the diameter so the letters fill the
-   circle like a modern identifier instead of floating in it. */
+/* Member avatar: a plain neutral circle with optically centered initials.
+   People are told apart by their initials, not a per-member color, so every
+   avatar in the app stays quiet. Glyph boxes carry uneven ascender/descender
+   space, so the line is trimmed to the cap height and the baseline (text-box)
+   and padded to the middle of the circle. text-box only trims block
+   containers, not flex or grid ones, which is why this is an inline-block.
+   No letter-spacing: it pads the right edge and pushes the initials off
+   center. Size comes from --avatar-size; the initials are half the diameter
+   so they fill the circle instead of floating in it. */
 .avatar {
   --avatar-size: 2rem;
   display: inline-block;
@@ -124,7 +125,8 @@
   width: var(--avatar-size);
   height: var(--avatar-size);
   padding: calc((var(--avatar-size) - 1cap) / 2) 0 0;
-  color: #ffffff;
+  color: var(--avatar-text);
+  background: var(--avatar-bg);
   border: 0;
   border-radius: 50%;
   font-size: calc(var(--avatar-size) * 0.5);
@@ -149,13 +151,6 @@
 
 .avatar.small {
   --avatar-size: 1.375rem;
-}
-
-/* Neutral avatars: on cards, people are identified by initials, not by a
-   per-member color, so a busy board stays quiet. */
-.avatar.neutral {
-  color: var(--avatar-text);
-  background: var(--avatar-bg);
 }
 
 .member-dots {

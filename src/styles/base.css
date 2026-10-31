@@ -229,11 +229,6 @@ select {
   padding: 0 10px;
 }
 
-input[type="color"] {
-  min-width: 48px;
-  padding: 3px;
-}
-
 input[type="date"] {
   color-scheme: var(--color-scheme);
 }

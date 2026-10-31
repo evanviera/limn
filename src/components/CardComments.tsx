@@ -12,8 +12,6 @@ import { Icon } from "./icons";
 import { isEditableTextControl, textControlContextItems } from "./contextMenu";
 import type { ContextMenuItem, OpenContextMenu } from "./contextMenu";
 
-const FALLBACK_AVATAR_COLOR = "#77828a";
-
 // Render a comment body as text with known @mentions highlighted. Newlines are
 // preserved by the `.comment-body` white-space rule, so the whole body can be
 // tokenized at once.
@@ -178,7 +176,7 @@ export function CardComments({
                   onOpenContextMenu(event, commentContextItems(comment, isOwn), authorName);
                 }}
               >
-                <span className="avatar small" style={{ background: authorMember?.color ?? FALLBACK_AVATAR_COLOR }}>
+                <span className="avatar small">
                   {initials(authorName)}
                 </span>
                 <div className="comment-content">
@@ -245,7 +243,7 @@ export function CardComments({
 
       {activeMember && (
         <form className="comment-composer" data-testid="comment-composer" onSubmit={submitComment}>
-          <span className="avatar small" style={{ background: activeMember.color }}>
+          <span className="avatar small">
             {initials(activeMember.name)}
           </span>
           <div className="comment-composer-main">
@@ -281,7 +279,7 @@ export function CardComments({
                 type="button"
                 onClick={() => onSelectActiveMember(member.id)}
               >
-                <span className="avatar small" style={{ background: member.color }}>{initials(member.name)}</span>
+                <span className="avatar small">{initials(member.name)}</span>
                 <span className="comment-identity-name">{member.name}</span>
               </button>
             ))}

@@ -217,7 +217,7 @@ export function CardViewMode({
             <div className="card-view-people">
               {assignedMembers.map((member) => (
                 <span className="card-view-person" key={member.id}>
-                  <span className="avatar small" style={{ background: member.color }}>
+                  <span className="avatar small">
                     {initials(member.name)}
                   </span>
                   <span>{member.name}</span>

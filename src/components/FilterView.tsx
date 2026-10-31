@@ -406,7 +406,7 @@ export function FilterView(props: FilterViewProps) {
                     aria-pressed={selected}
                     onClick={() => patch({ assignees: toggleMembership(filter.assignees, member.id) })}
                   >
-                    <span className="avatar small" style={{ background: member.color }}>{initials(member.name)}</span>
+                    <span className="avatar small">{initials(member.name)}</span>
                     {member.name}
                   </button>
                 );

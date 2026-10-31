@@ -168,7 +168,7 @@ export function WorkspaceSidebar({
         >
           {activeMember ? (
             <>
-              <span className="avatar small" style={{ background: activeMember.color }}>{initials(activeMember.name)}</span>
+              <span className="avatar small">{initials(activeMember.name)}</span>
               <span className="identity-select-text">
                 <span className="identity-select-label">You</span>
                 <span className="identity-select-name">{activeMember.name}</span>

@@ -212,7 +212,7 @@ export function MemberDots({ members, quiet = false }: { members: Member[]; quie
   return (
     <span className={`member-dots${quiet ? " quiet" : ""}`} role="img" aria-label={`Assigned to ${members.map(member => member.name).join(", ")}`} title={members.map(member => member.name).join(", ")}>
       {members.slice(0, quiet ? 1 : 4).map((member) => (
-        <span className="avatar small neutral" key={member.id} title={member.name}>
+        <span className="avatar small" key={member.id} title={member.name}>
           {initials(member.name)}
         </span>
       ))}
