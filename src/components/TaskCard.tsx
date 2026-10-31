@@ -51,7 +51,9 @@ export function TaskCardBody({
     : due.status === "soon" ? (due.days === 1 ? "Tomorrow" : `In ${due.days} days`)
     : due.label;
   // Completed cards never nag: their due date reads as a neutral chip.
-  const dueClass = card.completed ? "due-badge due-complete" : `due-badge due-${due.status}`;
+  // Cards more than a week late keep the full signal colour; the rest stay muted.
+  const dueClass = card.completed ? "due-badge due-complete"
+    : `due-badge due-${due.status}${due.status === "overdue" && due.days! < -7 ? " due-late" : ""}`;
   // Card footers only carry meaning when there's something to show — an empty
   // "No due date · Unassigned" row is pure noise, so each meta slot is gated and
   // the footer collapses entirely when a card has no due date, sub-tasks, or
@@ -211,7 +213,7 @@ export function MemberDots({ members, quiet = false }: { members: Member[]; quie
   return (
     <span className={`member-dots${quiet ? " quiet" : ""}`} role="img" aria-label={`Assigned to ${members.map(member => member.name).join(", ")}`} title={members.map(member => member.name).join(", ")}>
       {members.slice(0, quiet ? 1 : 4).map((member) => (
-        <span className="avatar small" key={member.id} title={member.name} style={quiet ? undefined : { background: member.color }}>
+        <span className="avatar small" key={member.id} title={member.name}>
           {initials(member.name)}
         </span>
       ))}

@@ -105,12 +105,6 @@
 .sidebar-bottom button { min-height: 36px; }
 .identity-select { min-height: 46px !important; margin-bottom: 4px; }
 
-/* Counts describe navigation; only actionable reminders use a strong badge. */
-[data-testid="archive-count"] {
-  color: var(--text-muted);
-  background: var(--subtle-bg);
-}
-
 .workspace { padding: 22px 24px 18px; }
 
 .content-header {

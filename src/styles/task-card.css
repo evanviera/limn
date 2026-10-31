@@ -236,9 +236,9 @@ body.is-list-dragging * {
 }
 
 .card-notes-preview a {
-  color: var(--accent-link);
+  color: inherit;
   text-decoration-line: underline;
-  text-decoration-color: var(--accent-link-border);
+  text-decoration-color: var(--border);
   text-underline-offset: 2px;
 }
 
@@ -248,14 +248,36 @@ body.is-list-dragging * {
   text-decoration-color: var(--accent-link-hover);
 }
 
-/* Due-date chip in the card footer. Kept as coloured text (not a heavy pill) so
-   it slots into the tight footer, but urgency reads at a glance. */
+/* Due-date chip in the card footer. Muted text with a small signal dot, so a
+   board full of late cards doesn't turn red; only "today" and badly late cards
+   (more than a week) use the full signal colour. */
 .task-card footer .due-badge {
   color: var(--text-muted);
   font-variant-numeric: tabular-nums;
 }
 
-.task-card footer .due-badge.due-overdue {
+.task-card footer .due-badge.due-overdue,
+.task-card footer .due-badge.due-today {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.task-card footer .due-badge.due-overdue::before,
+.task-card footer .due-badge.due-today::before {
+  content: "";
+  width: 6px;
+  height: 6px;
+  flex: 0 0 auto;
+  border-radius: 50%;
+  background: var(--danger);
+}
+
+.task-card footer .due-badge.due-today::before {
+  background: var(--warning);
+}
+
+.task-card footer .due-badge.due-overdue.due-late {
   color: var(--danger);
   font-weight: var(--weight-medium);
 }
@@ -340,9 +362,9 @@ body.is-list-dragging * {
 }
 
 .card-subtask-link {
-  color: var(--accent-link);
+  color: inherit;
   text-decoration-line: underline;
-  text-decoration-color: var(--accent-link-border);
+  text-decoration-color: var(--border);
   text-decoration-thickness: 1px;
   text-underline-offset: 3px;
   cursor: pointer;
@@ -437,8 +459,16 @@ body.is-list-dragging * {
 .card-attachment-count { display: inline-flex; align-items: center; gap: 4px; }
 .card-attachment-count .icon { width: 13px; height: 13px; }
 .task-card .member-dots { gap: 3px; padding-left: 0; }
-.task-card .member-dots .avatar.small { width: 21px; height: 21px; margin: 0; box-shadow: none; border: 0; font-weight: var(--weight-medium); }
-.task-card .member-dots.quiet .avatar { background: var(--surface-hover); color: var(--text-muted); }
+.task-card .member-dots .avatar.small { width: 20px; height: 20px; margin: 0; font-size: 10.5px; }
+/* Card faces stay greyscale: assignees read as neutral initials, and the
+   member colour is kept for places where identity is the point (Members,
+   comments, the identity picker). */
+.member-dots .avatar,
+.task-card .member-dots .avatar.small {
+  color: var(--text-muted);
+  background: var(--surface-hover);
+  box-shadow: none;
+}
 .member-overflow { color: var(--text-muted); font-size: var(--text-sm); }
 @media (pointer: coarse) {
   .card-preview-toggle { width: 32px; min-width: 32px; min-height: 32px; }
