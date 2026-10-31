@@ -109,33 +109,46 @@
 }
 
 /* Member avatar: a plain circle with optically centered initials. Glyph boxes
-   carry uneven ascender/descender space, so the text box is trimmed to the
-   cap height and the baseline (text-box) and the initials sit truly centered.
-   Engines without text-box fall back to a line-height of 1 inside a flex box. */
+   carry uneven ascender/descender space, so the line is trimmed to the cap
+   height and the baseline (text-box) and padded to the middle of the circle.
+   text-box only trims block containers, not flex or grid ones, which is why
+   this is an inline-block. No letter-spacing: it pads the right edge and
+   pushes the initials off center. Size comes from --avatar-size, and the
+   initials scale with it at half the diameter so the letters fill the
+   circle like a modern identifier instead of floating in it. */
 .avatar {
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
+  --avatar-size: 2rem;
+  display: inline-block;
+  box-sizing: border-box;
   flex: 0 0 auto;
-  width: 2rem;
-  height: 2rem;
+  width: var(--avatar-size);
+  height: var(--avatar-size);
+  padding: calc((var(--avatar-size) - 1cap) / 2) 0 0;
   color: #ffffff;
   border: 0;
   border-radius: 50%;
-  font-size: 0.8125rem;
+  font-size: calc(var(--avatar-size) * 0.5);
   font-weight: var(--weight-semibold);
   font-variant-numeric: tabular-nums;
-  letter-spacing: 0.02em;
   line-height: 1;
+  text-align: center;
   text-box: trim-both cap alphabetic;
+  white-space: nowrap;
+  vertical-align: middle;
   user-select: none;
 }
 
+@supports not (text-box: trim-both cap alphabetic) {
+  .avatar {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    padding: 0;
+  }
+}
+
 .avatar.small {
-  width: 1.375rem;
-  height: 1.375rem;
-  font-size: 0.625rem;
-  letter-spacing: 0.03em;
+  --avatar-size: 1.375rem;
 }
 
 /* Neutral avatars: on cards, people are identified by initials, not by a

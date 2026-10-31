@@ -244,10 +244,8 @@ button.filter-state-chip .icon {
 }
 
 .filter-token .avatar.small {
-  width: 18px;
-  height: 18px;
+  --avatar-size: 18px;
   margin-left: -2px;
-  font-size: 9px;
 }
 
 .filter-token.active {
