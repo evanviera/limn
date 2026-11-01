@@ -14,6 +14,15 @@ See **[docs/architecture.md](docs/architecture.md)** for the full map. In short:
 - `src-tauri/src/` — `lib.rs` (bootstrap + IPC commands + fs helpers), `menu.rs`, `tests.rs`.
 - `tests/e2e/` — feature-grouped Playwright specs (`board`, `card-editor`, `notes`, `integrations`).
 
+## Branding
+
+Limn follows **[evanviera/forme-brand](https://github.com/evanviera/forme-brand)**, the single source of truth for the Forme suite's look, naming and voice. Limn is its reference app, so keep the two in step:
+
+- Don't invent colors, fonts, sizes or UI patterns here. Use the tokens in `src/styles/tokens.css`, which mirror forme-brand's `tokens/tokens.json`. If something new is needed, change forme-brand first.
+- Blue is only for the next action, the current selection, focus and unread dots. Status is a small dot, avatars are neutral grey, text is never under 11px or heavier than 600.
+- Never name the studio behind the apps anywhere in the app.
+- Before finishing visual work, run `node scripts/check.mjs ../limn` from a forme-brand checkout.
+
 ## Keep files focused (do not let single files swell)
 
 Files grow silently and are painful to split later. **Split before a file gets large:**

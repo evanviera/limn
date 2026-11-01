@@ -1,7 +1,8 @@
-/* Shared app palette: true neutrals, ink chrome, one rare cool-blue accent.
-   The same values ship in Limn, Snapback and the Limn website. Blue marks the
-   one next action (primary button, active marker, focus); text on it is ink,
-   because white on this blue fails WCAG AA. */
+/* Forme palette: true neutrals, ink chrome, one rare cool-blue accent.
+   Source of truth: evanviera/forme-brand (tokens/tokens.json, mirrored as
+   --ui-* in tokens/ui.css). Change values there first, then here. Blue marks
+   the next action, the current selection, focus and unread dots; text on it
+   is ink, because white on this blue fails WCAG AA. */
 :root {
   --ui-ink: #090909;
   --ui-accent: #3b8cff;
@@ -54,7 +55,7 @@
   --success-soft: rgba(38, 112, 83, 0.2);
   --success-border: rgba(111, 184, 148, 0.36);
   --warning: #e0a95b;
-  --warning-soft: rgba(155, 98, 21, 0.24);
+  --warning-soft: rgba(138, 85, 18, 0.24);
   --warning-border: rgba(224, 169, 91, 0.36);
   --danger: #e0857d;
   --danger-text: var(--ui-ink);
@@ -88,10 +89,10 @@
   --nav-active-text: #f2f2f2;
   --color-scheme: dark;
 
-  /* Type scale — five steps, only the first is "decorative" (uppercase labels).
-     xs 11 · sm 13 · base 14 · lg 16 · xl 24. Everything in the UI maps to one
-     of these; larger titles have their own 28px step. */
-  --text-xs: 0.6875rem;   /* 11px — uppercase eyebrows / avatar initials only */
+  /* Type scale (forme-brand font.size): xs 11 · sm 13 · base 14 · lg 16 ·
+     xl 24, plus a 28px step for large titles. Everything in the UI maps to one
+     of these; 11px is the floor. Sentence case only, no uppercase eyebrows. */
+  --text-xs: 0.6875rem;   /* 11px — avatar initials, tiny meta only */
   --text-sm: 0.8125rem;   /* 13px — labels, meta, chips, section headers */
   --text-base: 0.875rem;  /* 14px — body, inputs, buttons, rows (default) */
   --text-lg: 1rem;        /* 16px — panel & dialog titles */
@@ -173,8 +174,8 @@
   --success-soft: rgba(38, 112, 83, 0.1);
   --success-border: rgba(38, 112, 83, 0.28);
   --warning: #8a5512;
-  --warning-soft: rgba(155, 98, 21, 0.1);
-  --warning-border: rgba(155, 98, 21, 0.28);
+  --warning-soft: rgba(138, 85, 18, 0.1);
+  --warning-border: rgba(138, 85, 18, 0.28);
   --danger: #a23d36;
   --danger-text: #ffffff;
   --danger-soft: rgba(162, 61, 54, 0.09);
