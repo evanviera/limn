@@ -11,6 +11,8 @@ lines per source file. New UI → `src/components/`; new pure logic/hooks →
 which is only an `@import` barrel); Rust subsystems → their own module (not a
 bigger `lib.rs`); e2e tests → the matching feature spec.
 
+Branding follows **[evanviera/forme-brand](https://github.com/evanviera/forme-brand)**; see the Branding section of CLAUDE.md.
+
 Verify with:
 
 ```sh

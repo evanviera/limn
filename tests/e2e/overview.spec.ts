@@ -63,11 +63,11 @@ test.describe("workspace overview", () => {
   test("stacks categories and boards in sidebar order and isolates repeated list IDs", async ({ page }) => {
     await openApp(page);
     await openWorkspace(page);
-    const orchid = await createCategory(page, "Orchid");
+    const studio = await createCategory(page, "Studio");
     const finance = await createCategory(page, "Finances / Taxes");
-    const first = await createBoard(page, "TODO", orchid.id);
-    await createCard(page, "Orchid task");
-    const files = await createBoard(page, "FILES", orchid.id);
+    const first = await createBoard(page, "TODO", studio.id);
+    await createCard(page, "Studio task");
+    const files = await createBoard(page, "FILES", studio.id);
     await createCard(page, "File task");
     const second = await createBoard(page, "TODO", finance.id);
     await createCard(page, "Finance task");
@@ -81,13 +81,13 @@ test.describe("workspace overview", () => {
     })), { fileName: file.file_name, board: { ...files, order: -1000, updatedAt: "2027-01-01T00:00:00.000Z" } });
     await expect.poll(() => page.locator(".board-nav-item").allTextContents()).toEqual(["FILES", "TODO", "TODO", "Personal"]);
     // A collapsed sidebar category must still be expanded in the new Overview.
-    await page.getByTestId(`board-group-collapse-${orchid.id}`).click();
+    await page.getByTestId(`board-group-collapse-${studio.id}`).click();
     await page.getByTestId("nav-overview").click();
     const overview = page.getByTestId("overview-view");
-    await expect(overview.locator(".overview-category-toggle .overview-name")).toHaveText(["Orchid", "Finances / Taxes", "Ungrouped"]);
+    await expect(overview.locator(".overview-category-toggle .overview-name")).toHaveText(["Studio", "Finances / Taxes", "Ungrouped"]);
     await expect(overview.locator(".overview-board-toggle .overview-name")).toHaveText(["FILES", "TODO", "TODO", "Personal"]);
     await expect(overview.locator(".task-card")).toHaveCount(4);
-    for (const [board, title] of [[files, "File task"], [first, "Orchid task"], [second, "Finance task"], [loose, "Personal task"]] as const) {
+    for (const [board, title] of [[files, "File task"], [first, "Studio task"], [second, "Finance task"], [loose, "Personal task"]] as const) {
       await expect(page.getByTestId(`overview-board-${board.id}`).locator(".task-card")).toHaveText(title);
     }
     await expect(overview).toContainText("2 categories · 4 boards · 4 cards");
@@ -123,7 +123,7 @@ test.describe("workspace overview", () => {
   test("remembers independent board and category folds across navigation, reloads, and workspaces", async ({ page }) => {
     await openApp(page);
     await openWorkspace(page);
-    const category = await createCategory(page, "Orchid");
+    const category = await createCategory(page, "Studio");
     const board = await createBoard(page, "TODO", category.id);
     await createCard(page, "Remember me");
     // Stop requesting a preference reset before testing persistence.

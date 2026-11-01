@@ -59,7 +59,7 @@
 .welcome-note code {
   padding: 1px 5px;
   border-radius: 4px;
-  background: var(--surface-sunken, rgba(127, 127, 127, 0.14));
+  background: var(--code-bg);
   font-size: 0.9em;
 }
 

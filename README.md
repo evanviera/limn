@@ -4,6 +4,8 @@ Limn is a local-first Trello-style task board for small trusted teams. Workspace
 
 > **Syncing a workspace via the cloud?** Keep the folder **available offline** so Limn never has to download "online-only" files just to open. See [docs/cloud-sync.md](docs/cloud-sync.md).
 
+Limn is part of [Forme](https://forme.md). Its look follows the shared brand in [evanviera/forme-brand](https://github.com/evanviera/forme-brand).
+
 ## Storage Layout
 
 Each workspace folder contains:
