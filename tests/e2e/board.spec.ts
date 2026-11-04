@@ -67,20 +67,33 @@ test.describe("smoke", () => {
     await expect(submit).toBeEnabled();
   });
 
-  test("theme toggle switches to light mode and persists", async ({ page }) => {
+  test("theme picker switches between color themes and persists", async ({ page }) => {
     await openApp(page);
     await openWorkspace(page);
 
-    await expect(page.locator("html")).toHaveAttribute("data-theme", "dark");
-    await page.getByTestId("theme-toggle").click();
-    await expect(page.locator("html")).toHaveAttribute("data-theme", "light");
-    await expect(page.getByTestId("theme-toggle")).toContainText("Dark mode");
+    const html = page.locator("html");
+    const picker = page.getByTestId("theme-toggle");
+    await expect(html).toHaveAttribute("data-theme", "dark");
+    await expect(picker).toContainText("Dark theme");
+    await picker.click();
+    await expect(page.getByRole("menuitem", { name: "Graphite" })).toBeVisible();
+    await expect(page.getByRole("menuitem", { name: "Storm" })).toBeVisible();
+    await expect(page.getByRole("menuitem", { name: "Fog" })).toBeVisible();
+    await page.getByRole("menuitem", { name: "Ash" }).click();
+    await expect(html).toHaveAttribute("data-theme", "ash");
+    await expect(picker).toContainText("Ash theme");
+    // Mid-grade themes paint the sidebar in their own color instead of ink.
+    await expect.poll(() => page.locator(".sidebar").evaluate((element) => getComputedStyle(element).backgroundColor))
+      .toBe("rgb(142, 146, 152)");
+
+    await picker.click();
+    await page.getByRole("menuitem", { name: "Light" }).click();
+    await expect(html).toHaveAttribute("data-theme", "light");
 
     await openApp(page, { reset: false });
-    await expect(page.locator("html")).toHaveAttribute("data-theme", "light");
+    await expect(html).toHaveAttribute("data-theme", "light");
     await openWorkspace(page);
-    await expect(page.getByTestId("theme-toggle")).toBeVisible();
-    await expect(page.getByTestId("theme-toggle")).toContainText("Dark mode");
+    await expect(page.getByTestId("theme-toggle")).toContainText("Light theme");
   });
 
   test("list width preferences apply to the board and persist per computer", async ({ page }) => {

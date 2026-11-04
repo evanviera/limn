@@ -213,6 +213,7 @@ test.describe("workspace overview", () => {
     expect(listBoxes[0].y).toBe(listBoxes[1].y);
     expect(await page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth)).toBe(true);
     await page.getByTestId("theme-toggle").click();
+    await page.getByRole("menuitem", { name: "Light" }).click();
     await expect(page.locator("html")).toHaveAttribute("data-theme", "light");
     await expect(page.getByTestId("overview-view")).toBeVisible();
   });

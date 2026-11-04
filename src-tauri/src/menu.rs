@@ -116,7 +116,7 @@ pub(crate) fn build_app_menu(app: &AppHandle) -> tauri::Result<Menu<tauri::Wry>>
             &item(
                 app,
                 "limn:toggle-theme",
-                "Toggle Light/Dark Mode",
+                "Next Color Theme",
                 Some("CmdOrCtrl+Shift+L"),
             )?,
             &PredefinedMenuItem::fullscreen(app, None)?,
