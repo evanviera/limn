@@ -230,7 +230,7 @@ test("completed steps can be listed in place instead of folded", async ({ page }
   await expect(card.locator("summary")).toHaveText("1 completed");
   await expect(card.getByTestId("card-subtask-complete-toggle")).toBeHidden();
   await page.getByTestId("board-view-menu-toggle").click();
-  const collapse = page.getByTestId("collapse-completed-steps-toggle");
+  const collapse = page.getByTestId("compact-completed-toggle");
   await expect(collapse).toHaveAttribute("aria-pressed", "true");
   await collapse.click();
   await expect(card.locator("summary")).toHaveCount(0);
@@ -243,4 +243,38 @@ test("completed steps can be listed in place instead of folded", async ({ page }
   await expect(collapse).toHaveAttribute("aria-pressed", "false");
   await collapse.click();
   await expect(card.locator("summary")).toHaveText("1 completed");
+});
+
+test("a long completed link keeps its link mark beside the text", async ({ page }) => {
+  await openApp(page);
+  await openWorkspace(page);
+  await page.getByTestId("create-board").click();
+  await page.getByTestId("text-dialog-input").fill("Shots");
+  await page.getByTestId("text-dialog-submit").click();
+  await page.getByTestId("add-card-todo").click();
+  await page.getByTestId("text-dialog-input").fill("Light motes");
+  await page.getByTestId("text-dialog-submit").click();
+  await page.getByTestId("save-card").click();
+  await expect(page.getByTestId("card-title-input")).toBeHidden();
+  const file = (await snapshot(page)).cards[0];
+  const steps = [
+    { id: "done", title: "SKY_seq205_160_s0100_fx_efx_lightMotes_v002", url: "https://example.com/render", completed: true, items: [] },
+    { id: "next", title: "Review", url: "", completed: false, items: [] }
+  ];
+  await page.evaluate(({ file, steps }) => {
+    window.__LIMN_E2E__!.externalEditCard(file.file_name, file.content
+      .replace(/^subtasks:.*$/m, `subtasks: ${JSON.stringify(steps)}`)
+      .replace(/^updatedAt:.*$/m, 'updatedAt: "2026-12-01T00:00:00.000Z"'));
+  }, { file, steps });
+  const card = page.getByRole("article", { name: "Light motes", exact: true });
+  await card.locator("summary").click();
+  const link = card.getByTestId("card-subtask-done-link");
+  await expect(link).toBeVisible();
+  // The mark lives in the link's padding: the text starts on the same line.
+  const firstLineTop = await link.evaluate((el) => {
+    const range = document.createRange();
+    range.selectNodeContents(el);
+    return range.getClientRects()[0].top - el.getBoundingClientRect().top;
+  });
+  expect(firstLineTop).toBeLessThan(4);
 });

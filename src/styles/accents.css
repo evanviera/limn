@@ -77,9 +77,13 @@
   background: var(--warning-soft);
 }
 
-/* Links: blue, no underline at rest, a small link mark in front. */
+/* Links: blue, no underline at rest, a small link mark in front. The mark sits
+   in the link's left padding, so a long link that wraps keeps the mark beside
+   its first line instead of leaving it alone on a line of its own. */
 :root:not([data-quiet]) .card-subtask-link,
 :root:not([data-quiet]) .card-subtasks-preview .card-subtask-link {
+  position: relative;
+  padding-left: 18px;
   color: var(--accent-link);
   text-decoration-color: transparent;
 }
@@ -92,11 +96,11 @@
 
 :root:not([data-quiet]) .card-subtask-link::before {
   content: "";
-  display: inline-block;
+  position: absolute;
+  top: calc((1lh - 12px) / 2);
+  left: 0;
   width: 12px;
   height: 12px;
-  margin-right: 6px;
-  vertical-align: -1px;
   background: currentColor;
   -webkit-mask: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='black' stroke-width='2.4' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='M10 13a5 5 0 0 0 7.07 0l2.12-2.12a5 5 0 0 0-7.07-7.07L10.9 5.03'/%3E%3Cpath d='M14 11a5 5 0 0 0-7.07 0L4.81 13.12a5 5 0 0 0 7.07 7.07l1.22-1.22'/%3E%3C/svg%3E") center / contain no-repeat;
   mask: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='black' stroke-width='2.4' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='M10 13a5 5 0 0 0 7.07 0l2.12-2.12a5 5 0 0 0-7.07-7.07L10.9 5.03'/%3E%3Cpath d='M14 11a5 5 0 0 0-7.07 0L4.81 13.12a5 5 0 0 0 7.07 7.07l1.22-1.22'/%3E%3C/svg%3E") center / contain no-repeat;

@@ -387,7 +387,7 @@ test.describe("workspace overview", () => {
     await a.getByTestId("compact-board-toggle").click();
     await expect(page.getByTestId("overview-view").locator(".task-card.compact")).toHaveCount(2);
     await a.getByTestId("compact-board-toggle").click();
-    await a.getByTestId("compact-completed-toggle").click();
+    await a.getByTestId("compact-done-cards-toggle").click();
     await b.locator(".task-card").click({ button: "right" });
     await page.getByRole("menuitem", { name: "Mark complete", exact: true }).click();
     await expect(b.locator(".task-card")).toHaveClass(/compact.*completed/);
