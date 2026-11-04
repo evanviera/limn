@@ -13,18 +13,10 @@ export const RELEASE_NOTES: ReleaseNote[] = [
   {
     version: "0.9.6",
     items: [
-      "After an update, Limn now shows what changed, once. Reopen it any time from Help > What's New in Limn.",
-      "Compact completed in the View menu now does what it says: it folds done steps into “N completed” on each card. Turn it off to keep them in place. The old setting that shrinks whole cards is now called Compact done cards.",
-      "Long links in a card's step list no longer push their link mark onto a line of its own."
-    ]
-  },
-  {
-    version: "0.9.5",
-    items: [
-      "Color is back: people, due dates, links and step progress each have their own color, so cards are easier to scan.",
-      "Prefer the calm look? Turn on Quiet mode in the board's View menu.",
-      "Four new themes between Dark and Light: Graphite, Storm, Ash and Fog. Pick one from the theme button in the sidebar.",
-      "Done steps fold into “N completed” on each card."
+      "A fresh look: a cleaner, calmer design with a new blue accent and app icon.",
+      "Six color themes: Dark, Graphite, Storm, Ash, Fog and Light. Pick one from the theme button in the sidebar.",
+      "Quiet mode: prefer a calmer board? Turn it on in View.",
+      "Compact completed: fold finished steps into “N completed” on each card, or turn it off to keep them in place (View)."
     ]
   }
 ];
