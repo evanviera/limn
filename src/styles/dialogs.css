@@ -76,3 +76,11 @@
 .text-dialog footer {
   justify-content: flex-end;
 }
+
+/* What's new: release notes shown once after an update. */
+.whats-new { width: min(480px, 100%); }
+.whats-new-body { display: grid; gap: var(--space-6); max-height: min(60vh, 480px); overflow-y: auto; }
+.whats-new-body h3 { margin: 0 0 var(--space-3); color: var(--text-muted); font-size: var(--text-sm); font-weight: var(--weight-medium); }
+.whats-new-body ul { display: grid; gap: var(--space-4); margin: 0; padding-left: 18px; }
+.whats-new-body li { color: var(--text); font-size: var(--text-base); line-height: 1.5; }
+.whats-new-body li::marker { color: var(--text-faint); }

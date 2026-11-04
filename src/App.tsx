@@ -61,6 +61,8 @@ import {
 import { BoardView } from "./components/BoardView";
 import { useQuietMode } from "./lib/useQuietMode.js";
 import { THEMES, nextTheme, themeLabel, themeTone } from "./lib/themes.js";
+import { useWhatsNew } from "./lib/useWhatsNew.js";
+import { WhatsNewDialog } from "./components/WhatsNewDialog.js";
 import { OverviewView } from "./components/OverviewView.js";
 import { BoardNameDialog, type BoardNameRequest } from "./components/BoardNameDialog.js";
 import { boardCategoryMoveError, boardChoices, boardNameError, effectiveBoardGroupId } from "./lib/boardNames.js";
@@ -377,6 +379,7 @@ export default function App() {
   }, []);
 
   useQuietMode();
+  const whatsNew = useWhatsNew(__APP_VERSION__);
 
   useLayoutEffect(() => {
     document.documentElement.dataset.theme = themeMode;
@@ -2243,6 +2246,7 @@ export default function App() {
         { label: "Create category", icon: "tag", onSelect: () => void createBoardGroup() },
         { label: "Members", icon: "users", onSelect: () => setView("members") },
         { label: "Settings", icon: "settings", onSelect: () => setView("settings") },
+        { label: "What's new", icon: "chat", onSelect: () => whatsNew.showAll() },
         {
           label: `Next theme (${themeLabel(nextTheme(themeMode))})`,
           icon: themeTone(themeMode) === "dark" ? "sun" : "moon",
@@ -2441,6 +2445,9 @@ export default function App() {
           return;
         case "toggle-theme":
           setThemeMode((current) => nextTheme(current));
+          return;
+        case "show-whats-new":
+          whatsNew.showAll();
           return;
         case "check-updates":
           await checkForUpdates(true);
@@ -2793,6 +2800,7 @@ export default function App() {
           />
         )}
         {archiveToast && <ArchiveToast toast={archiveToast} onDismiss={() => setArchiveToast(null)} />}
+        {whatsNew.notes && whatsNew.notes.length > 0 && <WhatsNewDialog notes={whatsNew.notes} onClose={whatsNew.close} />}
         {contextMenu && (
           <ContextMenu
             menu={contextMenu}

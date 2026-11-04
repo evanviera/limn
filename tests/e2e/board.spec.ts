@@ -1,5 +1,5 @@
 import { test, expect, type Page } from "@playwright/test";
-import { openApp, openWorkspace, setUpdaterMode, snapshot, queueAttachmentPick } from "./harness";
+import { emitMenuCommand, openApp, openWorkspace, setUpdaterMode, snapshot, queueAttachmentPick } from "./harness";
 
 test.describe("smoke", () => {
   test("welcome screen renders", async ({ page }) => {
@@ -94,6 +94,32 @@ test.describe("smoke", () => {
     await expect(html).toHaveAttribute("data-theme", "light");
     await openWorkspace(page);
     await expect(page.getByTestId("theme-toggle")).toContainText("Light theme");
+  });
+
+  test("what's new shows once after an update and reopens from the Help menu", async ({ page }) => {
+    await openApp(page);
+    await openWorkspace(page);
+    const dialog = page.getByTestId("whats-new-dialog");
+    // A fresh install doesn't show it.
+    await expect(dialog).toHaveCount(0);
+
+    // Pretend the last version this computer opened was older.
+    await page.evaluate(() => localStorage.setItem("limn-last-seen-version", "0.9.4"));
+    await openApp(page, { reset: false });
+    await openWorkspace(page);
+    await expect(dialog).toBeVisible();
+    await expect(dialog).toContainText("Quiet mode");
+    await page.getByTestId("whats-new-close").click();
+    await expect(dialog).toHaveCount(0);
+
+    await openApp(page, { reset: false });
+    await openWorkspace(page);
+    await expect(dialog).toHaveCount(0);
+
+    await emitMenuCommand(page, "show-whats-new");
+    await expect(dialog).toBeVisible();
+    await page.keyboard.press("Escape");
+    await expect(dialog).toHaveCount(0);
   });
 
   test("list width preferences apply to the board and persist per computer", async ({ page }) => {
