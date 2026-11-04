@@ -210,14 +210,26 @@ export function BoardView(props: BoardViewProps) {
                   <span className="board-view-switch" aria-hidden="true" />
                 </button>
                 <button
-                  aria-pressed={autoCompactCompletedCards}
+                  aria-pressed={collapseCompletedSteps}
                   className="board-view-option"
                   data-testid="compact-completed-toggle"
+                  onClick={() => setCollapseCompletedSteps((current) => !current)}
+                >
+                  <span className="board-view-option-copy">
+                    <Icon name="chevron-down" />
+                    <span><strong>Compact completed</strong><small>Fold done steps into “N completed”</small></span>
+                  </span>
+                  <span className="board-view-switch" aria-hidden="true" />
+                </button>
+                <button
+                  aria-pressed={autoCompactCompletedCards}
+                  className="board-view-option"
+                  data-testid="compact-done-cards-toggle"
                   onClick={() => setAutoCompactCompletedCards((current) => !current)}
                 >
                   <span className="board-view-option-copy">
                     <Icon name="check" />
-                    <span><strong>Compact completed</strong><small>Reduce cards when work is done</small></span>
+                    <span><strong>Compact done cards</strong><small>Shrink cards marked complete</small></span>
                   </span>
                   <span className="board-view-switch" aria-hidden="true" />
                 </button>
@@ -230,18 +242,6 @@ export function BoardView(props: BoardViewProps) {
                   <span className="board-view-option-copy">
                     <Icon name="plus" />
                     <span><strong>Compact steps</strong><small>Show one step with “+ more steps”</small></span>
-                  </span>
-                  <span className="board-view-switch" aria-hidden="true" />
-                </button>
-                <button
-                  aria-pressed={collapseCompletedSteps}
-                  className="board-view-option"
-                  data-testid="collapse-completed-steps-toggle"
-                  onClick={() => setCollapseCompletedSteps((current) => !current)}
-                >
-                  <span className="board-view-option-copy">
-                    <Icon name="chevron-down" />
-                    <span><strong>Collapse completed steps</strong><small>Fold done steps away</small></span>
                   </span>
                   <span className="board-view-switch" aria-hidden="true" />
                 </button>

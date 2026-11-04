@@ -33,6 +33,7 @@ test.describe("smoke", () => {
     await expect(page.getByRole("group", { name: "Card display" })).toBeVisible();
     await expect(page.getByTestId("compact-board-toggle")).toContainText("Compact cards");
     await expect(page.getByTestId("compact-completed-toggle")).toContainText("Compact completed");
+    await expect(page.getByTestId("compact-done-cards-toggle")).toContainText("Compact done cards");
 
     await page.getByTestId("board-more-menu").click();
     await expect(page.getByTestId("context-menu").getByRole("menuitem", { name: "Rename board" })).toBeVisible();
@@ -359,8 +360,8 @@ test.describe("smoke", () => {
 
     // Selective mode reacts to completion state without shrinking active cards.
     await page.getByTestId("board-view-menu-toggle").click();
-    await page.getByTestId("compact-completed-toggle").click();
-    await expect(page.getByTestId("compact-completed-toggle")).toHaveAttribute("aria-pressed", "true");
+    await page.getByTestId("compact-done-cards-toggle").click();
+    await expect(page.getByTestId("compact-done-cards-toggle")).toHaveAttribute("aria-pressed", "true");
     await expect(card).not.toHaveClass(/compact/);
     await card.getByTestId(/card-open-/).click();
     await page.getByTestId("card-view-complete").click();
@@ -371,8 +372,8 @@ test.describe("smoke", () => {
     await openApp(page, { reset: false });
     await expect(card).toHaveClass(/compact/);
     await page.getByTestId("board-view-menu-toggle").click();
-    await expect(page.getByTestId("compact-completed-toggle")).toHaveAttribute("aria-pressed", "true");
-    await page.getByTestId("compact-completed-toggle").click();
+    await expect(page.getByTestId("compact-done-cards-toggle")).toHaveAttribute("aria-pressed", "true");
+    await page.getByTestId("compact-done-cards-toggle").click();
     await expect(card).not.toHaveClass(/compact/);
     await expect(card.locator(".label-row")).toContainText("Planning");
 
