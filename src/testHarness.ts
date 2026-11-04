@@ -692,6 +692,7 @@ function applyCommand(
     | { type: "setUpdaterMode"; mode: UpdaterMode }
     | { type: "resetSlack" }
     | { type: "emitDeepLink"; url: string }
+    | { type: "emitMenuCommand"; command: string }
 ) {
 
   if (!detail) {
@@ -736,6 +737,10 @@ function applyCommand(
     case "emitDeepLink":
       // Stand in for the OS handing the app a limn://card/<id> link.
       emit("deep-link", detail.url);
+      break;
+    case "emitMenuCommand":
+      // Stand in for a native menu item (ids are "limn:<command>").
+      emit("menu-command", detail.command);
       break;
   }
 }

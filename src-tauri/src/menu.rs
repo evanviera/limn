@@ -182,6 +182,12 @@ pub(crate) fn build_app_menu(app: &AppHandle) -> tauri::Result<Menu<tauri::Wry>>
         )?)
         .item(&item(
             app,
+            "limn:show-whats-new",
+            "What's New in Limn",
+            None,
+        )?)
+        .item(&item(
+            app,
             "limn:check-updates",
             "Check for Updates...",
             None,

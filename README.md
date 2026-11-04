@@ -54,6 +54,8 @@ Limn uses Tauri's updater with GitHub Releases. Release builds run on macOS and 
 
 The app asks `forme.md/update/limn/...` first. That route adds 1 to an anonymous per-day count of update checks (platform and version only: no IP, no identifier) and redirects to the same GitHub `latest.json`. GitHub stays listed as the second endpoint, so updates keep working if forme.md is unreachable. See the forme-website README for reading the counts.
 
+Before a release, add the new version's notes to `src/lib/releaseNotes.ts`. Limn shows them once in a "What's new" window after people update, and from Help > What's New in Limn. Keep them short and user-facing.
+
 Before tagging a release, update all version fields:
 
 ```sh

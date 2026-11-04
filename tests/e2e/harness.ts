@@ -125,3 +125,12 @@ export async function emitDeepLink(page: Page, url: string): Promise<void> {
     }));
   }, url);
 }
+
+/** Stand in for choosing a native menu item, e.g. "show-whats-new". */
+export async function emitMenuCommand(page: Page, command: string): Promise<void> {
+  await page.evaluate((nextCommand) => {
+    document.dispatchEvent(new CustomEvent("limn-e2e-command", {
+      detail: { type: "emitMenuCommand", command: nextCommand }
+    }));
+  }, command);
+}
