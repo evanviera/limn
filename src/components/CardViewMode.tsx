@@ -217,7 +217,7 @@ export function CardViewMode({
             <div className="card-view-people">
               {assignedMembers.map((member) => (
                 <span className="card-view-person" key={member.id}>
-                  <Avatar name={member.name} small />
+                  <Avatar name={member.name} color={member.color} small />
                   <span>{member.name}</span>
                 </span>
               ))}

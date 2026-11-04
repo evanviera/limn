@@ -178,7 +178,7 @@ export function CardComments({
                   onOpenContextMenu(event, commentContextItems(comment, isOwn), authorName);
                 }}
               >
-                <Avatar name={authorName} small />
+                <Avatar name={authorName} color={authorMember?.color} small />
                 <div className="comment-content">
                   <div className="comment-meta">
                     <span className="comment-author">{authorName}</span>
@@ -243,7 +243,7 @@ export function CardComments({
 
       {activeMember && (
         <form className="comment-composer" data-testid="comment-composer" onSubmit={submitComment}>
-          <Avatar name={activeMember.name} small />
+          <Avatar name={activeMember.name} color={activeMember.color} small />
           <div className="comment-composer-main">
             <MentionTextarea
               className="comment-textarea"
@@ -277,7 +277,7 @@ export function CardComments({
                 type="button"
                 onClick={() => onSelectActiveMember(member.id)}
               >
-                <Avatar name={member.name} small />
+                <Avatar name={member.name} color={member.color} small />
                 <span className="comment-identity-name">{member.name}</span>
               </button>
             ))}

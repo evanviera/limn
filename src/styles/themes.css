@@ -1,0 +1,304 @@
+/* Mid-grade color themes, between Dark and Light: Graphite and Storm (dark
+   text tone) and Ash and Fog (light tone). They change colors only, and each
+   has its own sidebar color instead of ink. Values mirror forme-brand's
+   tokens.json (color.theme.<name>). Quiet mode and the color-by-type accents
+   (accents.css) work in every theme. */
+
+:root[data-theme="graphite"] {
+  /* Mid-dark neutral. Graphite sidebar, lifted text and status colors. */
+  --app-bg: #38393d;
+  --sidebar-bg: #2a2b2e;
+  --pane-bg: #414347;
+  --pane-bg-2: #46484c;
+  --pane-bg-3: #4c4e53;
+  --board-bg: #38393d;
+  --list-bg: #414347;
+  --list-hover-bg: #5a5c61;
+  --card-bg: #4c4e53;
+  --card-hover-bg: #525459;
+  --card-shadow: 0 0 0 1px #575a5f;
+  --card-shadow-hover: 0 0 0 1px #64676d;
+  --editor-bg: #414347;
+  --editor-chrome-bg: rgba(65, 67, 71, 0.94);
+  --editor-footer-bg: rgba(65, 67, 71, 0.96);
+  --surface: #4c4e53;
+  --surface-raised: #525459;
+  --surface-hover: #5a5c61;
+  --border: #64676d;
+  --border-soft: #575a5f;
+  --text: #e2e3e6;
+  --text-strong: #f7f7f8;
+  --text-muted: #c8cacd;
+  --text-faint: #babcc0;
+  --accent-soft: rgba(156, 195, 255, 0.16);
+  --accent-border: rgba(156, 195, 255, 0.45);
+  --accent-link: currentColor;
+  --accent-link-hover: #9cc3ff;
+  --accent-link-border: rgba(255, 255, 255, 0.3);
+  --avatar-bg: #65686e;
+  --avatar-text: #f2f3f4;
+  --avatar-ring: rgba(255, 255, 255, 0.08);
+  --success: #8fd0b0;
+  --success-soft: rgba(143, 208, 176, 0.16);
+  --success-border: rgba(143, 208, 176, 0.4);
+  --warning: #ecc07e;
+  --warning-soft: rgba(236, 192, 126, 0.18);
+  --warning-border: rgba(236, 192, 126, 0.4);
+  --danger: #f0a39c;
+  --danger-text: var(--ui-ink);
+  --danger-soft: rgba(240, 163, 156, 0.2);
+  --danger-border: rgba(240, 163, 156, 0.45);
+  --input-bg: #333438;
+  --overlay-bg: rgba(9, 9, 9, 0.6);
+  --button-border: rgba(255, 255, 255, 0.12);
+  --empty-overlay: rgba(56, 57, 61, 0.7);
+  --welcome-sheen: rgba(59, 140, 255, 0.04);
+  --active-line: rgba(255, 255, 255, 0.05);
+  --row-hover: rgba(255, 255, 255, 0.07);
+  --subtle-bg: rgba(255, 255, 255, 0.06);
+  --subtask-focus-bg: rgba(255, 255, 255, 0.04);
+  --column-bg: rgba(255, 255, 255, 0.03);
+  --column-hover-border: rgba(156, 195, 255, 0.4);
+  --card-hover-border: #64676d;
+  --chip-bg: rgba(255, 255, 255, 0.09);
+  --chip-remove-hover-bg: rgba(255, 255, 255, 0.14);
+  --drag-shadow: 0 18px 42px rgba(0, 0, 0, 0.3), 0 0 0 1px var(--accent-border);
+  --focus-color: #9cc3ff;
+  --focus-soft: rgba(156, 195, 255, 0.22);
+  --focus: 0 0 0 3px var(--focus-soft), 0 0 0 1px var(--focus-color);
+  --code-bg: #46484c;
+  --shadow: 0 24px 80px rgba(0, 0, 0, 0.4);
+  --nav-active-bg: #3a3c40;
+  --nav-active-text: #f7f7f8;
+  --color-scheme: dark;
+}
+
+:root[data-theme="storm"] {
+  /* Mid-dark cool. Slate sidebar and blue-grey surfaces. */
+  --app-bg: #36404c;
+  --sidebar-bg: #283039;
+  --pane-bg: #3f4a57;
+  --pane-bg-2: #44505e;
+  --pane-bg-3: #4a5664;
+  --board-bg: #36404c;
+  --list-bg: #3f4a57;
+  --list-hover-bg: #586575;
+  --card-bg: #4a5664;
+  --card-hover-bg: #505d6c;
+  --card-shadow: 0 0 0 1px #55616f;
+  --card-shadow-hover: 0 0 0 1px #626f7e;
+  --editor-bg: #3f4a57;
+  --editor-chrome-bg: rgba(63, 74, 87, 0.94);
+  --editor-footer-bg: rgba(63, 74, 87, 0.96);
+  --surface: #4a5664;
+  --surface-raised: #505d6c;
+  --surface-hover: #586575;
+  --border: #626f7e;
+  --border-soft: #55616f;
+  --text: #dfe5ec;
+  --text-strong: #f6f8fa;
+  --text-muted: #c3ccd6;
+  --text-faint: #b3bdc9;
+  --accent-soft: rgba(163, 200, 255, 0.16);
+  --accent-border: rgba(163, 200, 255, 0.45);
+  --accent-link: currentColor;
+  --accent-link-hover: #a3c8ff;
+  --accent-link-border: rgba(255, 255, 255, 0.3);
+  --avatar-bg: #626f7e;
+  --avatar-text: #eef2f6;
+  --avatar-ring: rgba(255, 255, 255, 0.08);
+  --success: #8fd0b0;
+  --success-soft: rgba(143, 208, 176, 0.16);
+  --success-border: rgba(143, 208, 176, 0.4);
+  --warning: #ecc07e;
+  --warning-soft: rgba(236, 192, 126, 0.18);
+  --warning-border: rgba(236, 192, 126, 0.4);
+  --danger: #f0a39c;
+  --danger-text: var(--ui-ink);
+  --danger-soft: rgba(240, 163, 156, 0.2);
+  --danger-border: rgba(240, 163, 156, 0.45);
+  --input-bg: #313a45;
+  --overlay-bg: rgba(9, 9, 9, 0.6);
+  --button-border: rgba(255, 255, 255, 0.12);
+  --empty-overlay: rgba(54, 64, 76, 0.7);
+  --welcome-sheen: rgba(59, 140, 255, 0.04);
+  --active-line: rgba(255, 255, 255, 0.05);
+  --row-hover: rgba(255, 255, 255, 0.07);
+  --subtle-bg: rgba(255, 255, 255, 0.06);
+  --subtask-focus-bg: rgba(255, 255, 255, 0.04);
+  --column-bg: rgba(255, 255, 255, 0.03);
+  --column-hover-border: rgba(163, 200, 255, 0.4);
+  --card-hover-border: #626f7e;
+  --chip-bg: rgba(255, 255, 255, 0.09);
+  --chip-remove-hover-bg: rgba(255, 255, 255, 0.14);
+  --drag-shadow: 0 18px 42px rgba(0, 0, 0, 0.3), 0 0 0 1px var(--accent-border);
+  --focus-color: #a3c8ff;
+  --focus-soft: rgba(163, 200, 255, 0.22);
+  --focus: 0 0 0 3px var(--focus-soft), 0 0 0 1px var(--focus-color);
+  --code-bg: #44505e;
+  --shadow: 0 24px 80px rgba(0, 0, 0, 0.4);
+  --nav-active-bg: #38424e;
+  --nav-active-text: #f6f8fa;
+  --color-scheme: dark;
+}
+
+:root[data-theme="ash"] {
+  /* Mid-light neutral. Dark text on grey, a darker grey sidebar, no white. */
+  --app-bg: #b3b7bc;
+  --sidebar-bg: #8e9298;
+  --pane-bg: #c9ccd0;
+  --pane-bg-2: #bcc0c4;
+  --pane-bg-3: #a6aab0;
+  --board-bg: #b3b7bc;
+  --list-bg: #a6aab0;
+  --list-hover-bg: #bfc3c7;
+  --card-bg: #c9ccd0;
+  --card-hover-bg: #d3d6d9;
+  --card-shadow: 0 0 0 1px #999da3;
+  --card-shadow-hover: 0 0 0 1px #85898f;
+  --editor-bg: #c9ccd0;
+  --editor-chrome-bg: rgba(201, 204, 208, 0.94);
+  --editor-footer-bg: rgba(201, 204, 208, 0.96);
+  --surface: #a6aab0;
+  --surface-raised: #d3d6d9;
+  --surface-hover: #bfc3c7;
+  --border: #85898f;
+  --border-soft: #999da3;
+  --text: #1e2023;
+  --text-strong: #0e0f11;
+  --text-muted: #33363a;
+  --text-faint: #3f4246;
+  --accent-soft: rgba(18, 63, 140, 0.16);
+  --accent-border: rgba(18, 63, 140, 0.45);
+  --accent-link: currentColor;
+  --accent-link-hover: #123f8c;
+  --accent-link-border: rgba(23, 23, 23, 0.3);
+  --avatar-bg: #a3a7ad;
+  --avatar-text: #1e2023;
+  --avatar-ring: rgba(23, 23, 23, 0.08);
+  --success: #1a5039;
+  --success-soft: rgba(26, 80, 57, 0.16);
+  --success-border: rgba(26, 80, 57, 0.4);
+  --warning: #5f3a09;
+  --warning-soft: rgba(95, 58, 9, 0.18);
+  --warning-border: rgba(95, 58, 9, 0.4);
+  --danger: #7d2620;
+  --danger-text: #ffffff;
+  --danger-soft: rgba(125, 38, 32, 0.16);
+  --danger-border: rgba(125, 38, 32, 0.45);
+  --input-bg: #d3d6d9;
+  --overlay-bg: rgba(9, 9, 9, 0.38);
+  --button-border: rgba(23, 23, 23, 0.12);
+  --empty-overlay: rgba(179, 183, 188, 0.7);
+  --welcome-sheen: rgba(59, 140, 255, 0.04);
+  --active-line: rgba(23, 23, 23, 0.05);
+  --row-hover: rgba(23, 23, 23, 0.07);
+  --subtle-bg: rgba(23, 23, 23, 0.06);
+  --subtask-focus-bg: rgba(23, 23, 23, 0.04);
+  --column-bg: rgba(23, 23, 23, 0.03);
+  --column-hover-border: rgba(18, 63, 140, 0.4);
+  --card-hover-border: #85898f;
+  --chip-bg: rgba(23, 23, 23, 0.09);
+  --chip-remove-hover-bg: rgba(23, 23, 23, 0.14);
+  --drag-shadow: 0 18px 42px rgba(0, 0, 0, 0.3), 0 0 0 1px var(--accent-border);
+  --focus-color: #123f8c;
+  --focus-soft: rgba(18, 63, 140, 0.22);
+  --focus: 0 0 0 3px var(--focus-soft), 0 0 0 1px var(--focus-color);
+  --code-bg: #bcc0c4;
+  --shadow: 0 24px 80px rgba(0, 0, 0, 0.22);
+  --nav-active-bg: #a3a7ad;
+  --nav-active-text: #0e0f11;
+  --color-scheme: light;
+}
+
+:root[data-theme="fog"] {
+  /* Mid-light cool. Ash with a blue-grey cast, sidebar included. */
+  --app-bg: #b2bcc8;
+  --sidebar-bg: #8d99a7;
+  --pane-bg: #c8d0d9;
+  --pane-bg-2: #bcc5cf;
+  --pane-bg-3: #a5b0bd;
+  --board-bg: #b2bcc8;
+  --list-bg: #a5b0bd;
+  --list-hover-bg: #b9c2cc;
+  --card-bg: #c8d0d9;
+  --card-hover-bg: #d2d9e0;
+  --card-shadow: 0 0 0 1px #97a2af;
+  --card-shadow-hover: 0 0 0 1px #838e9b;
+  --editor-bg: #c8d0d9;
+  --editor-chrome-bg: rgba(200, 208, 217, 0.94);
+  --editor-footer-bg: rgba(200, 208, 217, 0.96);
+  --surface: #a5b0bd;
+  --surface-raised: #d2d9e0;
+  --surface-hover: #b9c2cc;
+  --border: #838e9b;
+  --border-soft: #97a2af;
+  --text: #1b222b;
+  --text-strong: #0b0f15;
+  --text-muted: #303945;
+  --text-faint: #3b4551;
+  --accent-soft: rgba(18, 63, 140, 0.16);
+  --accent-border: rgba(18, 63, 140, 0.45);
+  --accent-link: currentColor;
+  --accent-link-hover: #123f8c;
+  --accent-link-border: rgba(23, 23, 23, 0.3);
+  --avatar-bg: #a2adba;
+  --avatar-text: #1b222b;
+  --avatar-ring: rgba(23, 23, 23, 0.08);
+  --success: #1a5039;
+  --success-soft: rgba(26, 80, 57, 0.16);
+  --success-border: rgba(26, 80, 57, 0.4);
+  --warning: #5f3a09;
+  --warning-soft: rgba(95, 58, 9, 0.18);
+  --warning-border: rgba(95, 58, 9, 0.4);
+  --danger: #7d2620;
+  --danger-text: #ffffff;
+  --danger-soft: rgba(125, 38, 32, 0.16);
+  --danger-border: rgba(125, 38, 32, 0.45);
+  --input-bg: #d2d9e0;
+  --overlay-bg: rgba(9, 9, 9, 0.38);
+  --button-border: rgba(23, 23, 23, 0.12);
+  --empty-overlay: rgba(178, 188, 200, 0.7);
+  --welcome-sheen: rgba(59, 140, 255, 0.04);
+  --active-line: rgba(23, 23, 23, 0.05);
+  --row-hover: rgba(23, 23, 23, 0.07);
+  --subtle-bg: rgba(23, 23, 23, 0.06);
+  --subtask-focus-bg: rgba(23, 23, 23, 0.04);
+  --column-bg: rgba(23, 23, 23, 0.03);
+  --column-hover-border: rgba(18, 63, 140, 0.4);
+  --card-hover-border: #838e9b;
+  --chip-bg: rgba(23, 23, 23, 0.09);
+  --chip-remove-hover-bg: rgba(23, 23, 23, 0.14);
+  --drag-shadow: 0 18px 42px rgba(0, 0, 0, 0.3), 0 0 0 1px var(--accent-border);
+  --focus-color: #123f8c;
+  --focus-soft: rgba(18, 63, 140, 0.22);
+  --focus: 0 0 0 3px var(--focus-soft), 0 0 0 1px var(--focus-color);
+  --code-bg: #bcc5cf;
+  --shadow: 0 24px 80px rgba(0, 0, 0, 0.22);
+  --nav-active-bg: #a2adba;
+  --nav-active-text: #0b0f15;
+  --color-scheme: light;
+}
+
+/* Color by element type (accents.css) on the mid-grade themes: links use the
+   theme's own accent text color. */
+:root[data-theme="graphite"]:not([data-quiet]) {
+  --accent-link: #9cc3ff;
+  --accent-link-hover: var(--text-strong);
+  --accent-link-border: rgba(156, 195, 255, 0.4);
+}
+:root[data-theme="storm"]:not([data-quiet]) {
+  --accent-link: #a3c8ff;
+  --accent-link-hover: var(--text-strong);
+  --accent-link-border: rgba(163, 200, 255, 0.4);
+}
+:root[data-theme="ash"]:not([data-quiet]) {
+  --accent-link: #123f8c;
+  --accent-link-hover: var(--text-strong);
+  --accent-link-border: rgba(18, 63, 140, 0.4);
+}
+:root[data-theme="fog"]:not([data-quiet]) {
+  --accent-link: #123f8c;
+  --accent-link-hover: var(--text-strong);
+  --accent-link-border: rgba(18, 63, 140, 0.4);
+}

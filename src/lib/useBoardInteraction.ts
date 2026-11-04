@@ -53,6 +53,8 @@ export function useBoardInteraction(props: BoardViewProps) {
   const [compactCards, setCompactCards] = useState(() => readBoardDisplayPreference("compactCards"));
   const [autoCompactCompletedCards, setAutoCompactCompletedCards] = useState(() => readBoardDisplayPreference("compactCompleted"));
   const [compactSteps, setCompactSteps] = useState(() => readBoardDisplayPreference("compactSteps"));
+  const [quietMode, setQuietMode] = useState(() => readBoardDisplayPreference("quietMode"));
+  const [collapseCompletedSteps, setCollapseCompletedSteps] = useState(() => readBoardDisplayPreference("collapseCompletedSteps"));
   const [viewMenuOpen, setViewMenuOpen] = useState(false);
   const viewMenuRef = useRef<HTMLDivElement | null>(null);
   const viewMenuToggleRef = useRef<HTMLButtonElement | null>(null);
@@ -82,6 +84,14 @@ export function useBoardInteraction(props: BoardViewProps) {
   useEffect(() => {
     writeBoardDisplayPreference("compactSteps", compactSteps);
   }, [compactSteps]);
+
+  useEffect(() => {
+    writeBoardDisplayPreference("quietMode", quietMode);
+  }, [quietMode]);
+
+  useEffect(() => {
+    writeBoardDisplayPreference("collapseCompletedSteps", collapseCompletedSteps);
+  }, [collapseCompletedSteps]);
 
   useEffect(() => {
     if (!viewMenuOpen) {
@@ -115,6 +125,8 @@ export function useBoardInteraction(props: BoardViewProps) {
       if (preference === "compactCards") setCompactCards(enabled);
       if (preference === "compactCompleted") setAutoCompactCompletedCards(enabled);
       if (preference === "compactSteps") setCompactSteps(enabled);
+      if (preference === "quietMode") setQuietMode(enabled);
+      if (preference === "collapseCompletedSteps") setCollapseCompletedSteps(enabled);
     }
     window.addEventListener(BOARD_DISPLAY_CHANGE_EVENT, syncDisplay);
     return () => window.removeEventListener(BOARD_DISPLAY_CHANGE_EVENT, syncDisplay);
@@ -509,6 +521,8 @@ export function useBoardInteraction(props: BoardViewProps) {
     columnsRef, dragPreview, dropTarget, draggingListId, listDropTarget,
     compactCards, setCompactCards, autoCompactCompletedCards, setAutoCompactCompletedCards,
     compactSteps, setCompactSteps,
+    quietMode, setQuietMode,
+    collapseCompletedSteps, setCollapseCompletedSteps,
     viewMenuOpen, setViewMenuOpen, viewMenuRef, viewMenuToggleRef, openCard,
     beginPointerDrag, updatePointerDrag, finishPointerDrag, cancelPointerDrag, beginMouseDrag,
     beginListPointerDrag, updateListPointerDrag, finishListPointerDrag, cancelListPointerDrag, beginListMouseDrag

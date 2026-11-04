@@ -105,7 +105,7 @@ export function MembersView({
               ], member.name);
             }}
           >
-            <Avatar name={member.name} />
+            <Avatar name={member.name} color={member.color} />
             <input
               value={member.name}
               onChange={(event) => void onSave({ ...member, name: event.target.value })}

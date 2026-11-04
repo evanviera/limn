@@ -199,3 +199,48 @@ test("the small due reminder follows identity and completion while assignee name
   await expect(page.getByTestId("board-due-reminder")).toHaveCount(0);
   await expect(page.getByTestId("due-reminder-count")).toHaveCount(0);
 });
+
+test("quiet mode is a remembered view option that turns off color accents", async ({ page }) => {
+  const card = await createPreviewCard(page);
+  const link = card.getByTestId("card-subtask-next-link");
+  const root = page.locator("html");
+  await expect(root).not.toHaveAttribute("data-quiet", /.*/);
+  const colorful = await link.evaluate((element) => getComputedStyle(element).color);
+  await test.info().attach("color-by-type", { body: await card.screenshot(), contentType: "image/png" });
+
+  await page.getByTestId("board-view-menu-toggle").click();
+  const quiet = page.getByTestId("quiet-mode-toggle");
+  await expect(quiet).toHaveAttribute("aria-pressed", "false");
+  await quiet.click();
+  await expect(root).toHaveAttribute("data-quiet", "true");
+  await expect.poll(() => link.evaluate((element) => getComputedStyle(element).color)).not.toBe(colorful);
+  await page.getByTestId("board-view-menu-toggle").click();
+  await test.info().attach("quiet-mode", { body: await card.screenshot(), contentType: "image/png" });
+
+  await openApp(page, { reset: false });
+  await expect(root).toHaveAttribute("data-quiet", "true");
+  await page.getByTestId("board-view-menu-toggle").click();
+  await expect(quiet).toHaveAttribute("aria-pressed", "true");
+  await quiet.click();
+  await expect(root).not.toHaveAttribute("data-quiet", /.*/);
+});
+
+test("completed steps can be listed in place instead of folded", async ({ page }) => {
+  const card = await createPreviewCard(page);
+  await expect(card.locator("summary")).toHaveText("1 completed");
+  await expect(card.getByTestId("card-subtask-complete-toggle")).toBeHidden();
+  await page.getByTestId("board-view-menu-toggle").click();
+  const collapse = page.getByTestId("collapse-completed-steps-toggle");
+  await expect(collapse).toHaveAttribute("aria-pressed", "true");
+  await collapse.click();
+  await expect(card.locator("summary")).toHaveCount(0);
+  await expect(card.getByRole("checkbox")).toHaveCount(3);
+  await expect(card.getByTestId("card-subtask-complete-toggle")).toBeChecked();
+
+  await openApp(page, { reset: false });
+  await expect(card.getByRole("checkbox")).toHaveCount(3);
+  await page.getByTestId("board-view-menu-toggle").click();
+  await expect(collapse).toHaveAttribute("aria-pressed", "false");
+  await collapse.click();
+  await expect(card.locator("summary")).toHaveText("1 completed");
+});

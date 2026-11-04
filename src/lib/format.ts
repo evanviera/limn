@@ -1,4 +1,5 @@
 import type { Board } from "../types";
+import { isThemeMode } from "./themes.js";
 import {
   DEFAULT_LIST_WIDTH,
   DEFAULT_SIDEBAR_WIDTH,
@@ -22,7 +23,8 @@ export function readStoredThemeMode(): ThemeMode {
   if (isE2eReset()) {
     localStorage.removeItem(THEME_STORAGE_KEY);
   }
-  return localStorage.getItem(THEME_STORAGE_KEY) === "light" ? "light" : "dark";
+  const stored = localStorage.getItem(THEME_STORAGE_KEY);
+  return isThemeMode(stored) ? stored : "dark";
 }
 
 // Clamp a list-width value to the supported range, falling back to the default

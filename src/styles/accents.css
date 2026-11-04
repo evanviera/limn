@@ -1,0 +1,134 @@
+/* Color by element type: the default look. Each kind of thing on a card owns
+   one color so a column can be scanned for who, when and where:
+   people are their member color, dates are tinted chips, links are blue with
+   a link mark, step progress is green. Quiet mode (View > Quiet mode, sets
+   <html data-quiet>) turns all of this off and falls back to the neutral rules
+   in the other partials. Everything here is scoped to :not([data-quiet]). */
+
+:root:not([data-quiet]) {
+  --accent-link: var(--ui-accent-text-dark);
+  --accent-link-hover: var(--text-strong);
+  --accent-link-border: rgba(138, 184, 255, 0.4);
+}
+
+:root[data-theme="light"]:not([data-quiet]) {
+  --accent-link: var(--ui-accent-text-light);
+  --accent-link-hover: var(--text-strong);
+  --accent-link-border: rgba(26, 91, 199, 0.4);
+}
+
+/* People: the member's own color with white initials. Member colors are user
+   content (picked per person), not interface colors. */
+:root:not([data-quiet]) .avatar.has-color {
+  color: #ffffff; /* brand-ignore: initials on a member color */
+  background: var(--member-color);
+}
+
+/* Workspace mark: the one blue tile in the sidebar. */
+:root:not([data-quiet]) .sidebar-workspace-mark {
+  color: var(--accent-text);
+  background: var(--accent);
+  border-color: transparent;
+}
+
+/* Filter's due count asks for action: red dot and red number. */
+:root:not([data-quiet]) [data-testid="due-reminder-count"] {
+  color: var(--danger);
+}
+
+:root:not([data-quiet]) [data-testid="due-reminder-count"]::before {
+  content: "";
+  width: 6px;
+  height: 6px;
+  background: var(--danger);
+  border-radius: 50%;
+}
+
+/* Dates: a tinted chip with a calendar mark instead of a dot. */
+.task-card footer .due-badge .icon { display: none; }
+
+:root:not([data-quiet]) .task-card footer .due-badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  flex: 0 0 auto;
+  margin-right: auto;
+  padding: 1px 8px;
+  color: var(--text-muted);
+  background: var(--chip-bg);
+  border-radius: var(--radius-sm);
+}
+
+:root:not([data-quiet]) .task-card footer .due-badge .icon {
+  display: block;
+  width: 12px;
+  height: 12px;
+}
+
+:root:not([data-quiet]) .task-card footer .due-badge::before { display: none; }
+
+:root:not([data-quiet]) .task-card footer .due-badge.due-overdue {
+  color: var(--danger);
+  background: var(--danger-soft);
+}
+
+:root:not([data-quiet]) .task-card footer .due-badge.due-today {
+  color: var(--warning);
+  background: var(--warning-soft);
+}
+
+/* Links: blue, no underline at rest, a small link mark in front. */
+:root:not([data-quiet]) .card-subtask-link,
+:root:not([data-quiet]) .card-subtasks-preview .card-subtask-link {
+  color: var(--accent-link);
+  text-decoration-color: transparent;
+}
+
+:root:not([data-quiet]) .card-subtask-link:hover,
+:root:not([data-quiet]) .card-subtask-link:focus-visible {
+  color: var(--accent-link-hover);
+  text-decoration-color: currentColor;
+}
+
+:root:not([data-quiet]) .card-subtask-link::before {
+  content: "";
+  display: inline-block;
+  width: 12px;
+  height: 12px;
+  margin-right: 6px;
+  vertical-align: -1px;
+  background: currentColor;
+  -webkit-mask: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='black' stroke-width='2.4' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='M10 13a5 5 0 0 0 7.07 0l2.12-2.12a5 5 0 0 0-7.07-7.07L10.9 5.03'/%3E%3Cpath d='M14 11a5 5 0 0 0-7.07 0L4.81 13.12a5 5 0 0 0 7.07 7.07l1.22-1.22'/%3E%3C/svg%3E") center / contain no-repeat;
+  mask: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='black' stroke-width='2.4' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='M10 13a5 5 0 0 0 7.07 0l2.12-2.12a5 5 0 0 0-7.07-7.07L10.9 5.03'/%3E%3Cpath d='M14 11a5 5 0 0 0-7.07 0L4.81 13.12a5 5 0 0 0 7.07 7.07l1.22-1.22'/%3E%3C/svg%3E") center / contain no-repeat;
+}
+
+/* Steps: green checkboxes and a small progress bar before the count. */
+:root:not([data-quiet]) .card-subtask-main input[type="checkbox"] { border-color: var(--success-border); }
+
+:root:not([data-quiet]) .card-subtask-main input[type="checkbox"]:checked {
+  background: var(--success);
+  border-color: var(--success);
+}
+
+.subtask-progress { display: none; }
+
+:root:not([data-quiet]) .task-card .subtask-badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+}
+
+:root:not([data-quiet]) .subtask-progress {
+  display: inline-block;
+  width: 28px;
+  height: 4px;
+  overflow: hidden;
+  background: var(--border);
+  border-radius: var(--radius-pill);
+}
+
+:root:not([data-quiet]) .subtask-progress > span {
+  display: block;
+  height: 100%;
+  background: var(--success);
+}

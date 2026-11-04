@@ -2,6 +2,7 @@
    cascade order. Keep each partial focused; when one gets large, split
    it further rather than letting it grow unbounded. See docs/architecture.md. */
 @import "./styles/tokens.css";
+@import "./styles/themes.css";
 @import "./styles/base.css";
 @import "./styles/shell.css";
 @import "./styles/board.css";
@@ -20,4 +21,5 @@
 @import "./styles/card-view.css";
 @import "./styles/comments.css";
 @import "./styles/editorial.css";
+@import "./styles/accents.css";
 @import "./styles/responsive.css";

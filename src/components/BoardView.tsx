@@ -59,6 +59,8 @@ export function BoardView(props: BoardViewProps) {
     columnsRef, dragPreview, dropTarget, draggingListId, listDropTarget,
     compactCards, setCompactCards, autoCompactCompletedCards, setAutoCompactCompletedCards,
     compactSteps, setCompactSteps,
+    quietMode, setQuietMode,
+    collapseCompletedSteps, setCollapseCompletedSteps,
     viewMenuOpen, setViewMenuOpen, viewMenuRef, viewMenuToggleRef, openCard,
     beginPointerDrag, updatePointerDrag, finishPointerDrag, cancelPointerDrag, beginMouseDrag,
     beginListPointerDrag, updateListPointerDrag, finishListPointerDrag, cancelListPointerDrag, beginListMouseDrag
@@ -184,6 +186,18 @@ export function BoardView(props: BoardViewProps) {
               <div className="board-view-popover" id={viewOptionsId} role="group" aria-label="Card display">
                 <p>Card display</p>
                 <button
+                  aria-pressed={quietMode}
+                  className="board-view-option"
+                  data-testid="quiet-mode-toggle"
+                  onClick={() => setQuietMode((current) => !current)}
+                >
+                  <span className="board-view-option-copy">
+                    <Icon name="moon" />
+                    <span><strong>Quiet mode</strong><small>Grey avatars, status as dots</small></span>
+                  </span>
+                  <span className="board-view-switch" aria-hidden="true" />
+                </button>
+                <button
                   aria-pressed={compactCards}
                   className="board-view-option"
                   data-testid="compact-board-toggle"
@@ -216,6 +230,18 @@ export function BoardView(props: BoardViewProps) {
                   <span className="board-view-option-copy">
                     <Icon name="plus" />
                     <span><strong>Compact steps</strong><small>Show one step with “+ more steps”</small></span>
+                  </span>
+                  <span className="board-view-switch" aria-hidden="true" />
+                </button>
+                <button
+                  aria-pressed={collapseCompletedSteps}
+                  className="board-view-option"
+                  data-testid="collapse-completed-steps-toggle"
+                  onClick={() => setCollapseCompletedSteps((current) => !current)}
+                >
+                  <span className="board-view-option-copy">
+                    <Icon name="chevron-down" />
+                    <span><strong>Collapse completed steps</strong><small>Fold done steps away</small></span>
                   </span>
                   <span className="board-view-switch" aria-hidden="true" />
                 </button>
@@ -387,6 +413,7 @@ export function BoardView(props: BoardViewProps) {
                           card={card}
                           compact={isCompact}
                           compactSteps={compactSteps}
+                          collapseCompletedSteps={collapseCompletedSteps}
                           members={props.members}
                           workspacePath={props.workspacePath}
                           onOpen={openCard}
@@ -419,7 +446,7 @@ export function BoardView(props: BoardViewProps) {
             width: dragPreview.width
           }}
         >
-          <TaskCardBody key={compactSteps ? "compact-steps" : "full-steps"} card={dragPreviewCard} compact={cardIsCompact(dragPreviewCard)} compactSteps={compactSteps} members={props.members} workspacePath={props.workspacePath} />
+          <TaskCardBody key={compactSteps ? "compact-steps" : "full-steps"} card={dragPreviewCard} compact={cardIsCompact(dragPreviewCard)} compactSteps={compactSteps} collapseCompletedSteps={collapseCompletedSteps} members={props.members} workspacePath={props.workspacePath} />
         </article>
       )}
     </section>

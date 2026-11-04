@@ -59,6 +59,8 @@ import {
 } from "./updater";
 
 import { BoardView } from "./components/BoardView";
+import { useQuietMode } from "./lib/useQuietMode.js";
+import { THEMES, nextTheme, themeLabel, themeTone } from "./lib/themes.js";
 import { OverviewView } from "./components/OverviewView.js";
 import { BoardNameDialog, type BoardNameRequest } from "./components/BoardNameDialog.js";
 import { boardCategoryMoveError, boardChoices, boardNameError, effectiveBoardGroupId } from "./lib/boardNames.js";
@@ -373,6 +375,8 @@ export default function App() {
       .catch(() => undefined)
       .finally(() => setIsLoading(false));
   }, []);
+
+  useQuietMode();
 
   useLayoutEffect(() => {
     document.documentElement.dataset.theme = themeMode;
@@ -2240,9 +2244,9 @@ export default function App() {
         { label: "Members", icon: "users", onSelect: () => setView("members") },
         { label: "Settings", icon: "settings", onSelect: () => setView("settings") },
         {
-          label: themeMode === "dark" ? "Switch to light mode" : "Switch to dark mode",
-          icon: themeMode === "dark" ? "sun" : "moon",
-          onSelect: () => setThemeMode((current) => (current === "dark" ? "light" : "dark"))
+          label: `Next theme (${themeLabel(nextTheme(themeMode))})`,
+          icon: themeTone(themeMode) === "dark" ? "sun" : "moon",
+          onSelect: () => setThemeMode((current) => nextTheme(current))
         }
       );
     }
@@ -2436,7 +2440,7 @@ export default function App() {
           setView("settings");
           return;
         case "toggle-theme":
-          setThemeMode((current) => (current === "dark" ? "light" : "dark"));
+          setThemeMode((current) => nextTheme(current));
           return;
         case "check-updates":
           await checkForUpdates(true);
@@ -2572,7 +2576,11 @@ export default function App() {
           onCreateBoard={() => void addBoard()}
           onCreateGroup={() => void createBoardGroup()}
           onIdentityContextMenu={(event) => openContextMenu(event, identityContextItems(), "You are")}
-          onToggleTheme={() => setThemeMode((current) => (current === "dark" ? "light" : "dark"))}
+          onChooseTheme={(event) => openContextMenu(event, THEMES.map((theme) => ({
+            label: theme.label,
+            icon: theme.id === themeMode ? "check" : undefined,
+            onSelect: () => setThemeMode(theme.id)
+          })), "Theme")}
           onOpenDueReminderFilter={openDueReminderFilter}
           onSetView={setView}
         />

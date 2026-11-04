@@ -20,6 +20,6 @@ export const DEFAULT_SIDEBAR_WIDTH = 224;
 export const MIN_SIDEBAR_WIDTH = 200;
 export const MAX_SIDEBAR_WIDTH = 480;
 
-export type ThemeMode = "dark" | "light";
+export type ThemeMode = "dark" | "graphite" | "storm" | "ash" | "fog" | "light";
 export type ListWidthMode = "fixed" | "flexible";
 export type SlackNotificationKey = keyof WorkspaceSettings["slackNotifications"];

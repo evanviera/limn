@@ -3,6 +3,7 @@ import type { Board, BoardGroup, Member, View } from "../types";
 import type { ThemeMode } from "../lib/constants";
 import type { UpdateStatus } from "../lib/updateMessages";
 import { countLabel } from "../lib/format.js";
+import { themeLabel, themeTone } from "../lib/themes.js";
 import { BoardNav } from "./BoardNav.js";
 import { Icon, Spinner } from "./icons.js";
 import { Avatar } from "./Avatar.js";
@@ -94,7 +95,7 @@ interface WorkspaceSidebarProps {
   onOpenWorkspace: () => void;
   onSelectBoard: (boardId: string) => void;
   onSetView: (view: View) => void;
-  onToggleTheme: () => void;
+  onChooseTheme: (event: ReactMouseEvent<HTMLElement>) => void;
 }
 
 export function WorkspaceSidebar({
@@ -122,7 +123,7 @@ export function WorkspaceSidebar({
   onOpenWorkspace,
   onSelectBoard,
   onSetView,
-  onToggleTheme
+  onChooseTheme
 }: WorkspaceSidebarProps) {
   return (
     <aside className="sidebar" aria-label="Workspace navigation">
@@ -169,7 +170,7 @@ export function WorkspaceSidebar({
         >
           {activeMember ? (
             <>
-              <Avatar name={activeMember.name} small />
+              <Avatar name={activeMember.name} color={activeMember.color} small />
               <span className="identity-select-text">
                 <span className="identity-select-label">You</span>
                 <span className="identity-select-name">{activeMember.name}</span>
@@ -184,10 +185,11 @@ export function WorkspaceSidebar({
         </button>
         <button
           data-testid="theme-toggle"
-          title={`Switch to ${themeMode === "dark" ? "light" : "dark"} mode`}
-          onClick={onToggleTheme}
+          title="Choose a color theme"
+          aria-haspopup="menu"
+          onClick={onChooseTheme}
         >
-          <Icon name={themeMode === "dark" ? "sun" : "moon"} /> {themeMode === "dark" ? "Light mode" : "Dark mode"}
+          <Icon name={themeTone(themeMode) === "dark" ? "moon" : "sun"} /> {themeLabel(themeMode)} theme
         </button>
         <button
           className={view === "inbox" ? "active" : ""}

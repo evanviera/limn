@@ -538,7 +538,7 @@ export function CardEditorSidePanel({
                 type="checkbox"
                 onChange={(event) => onUpdateAssignee(member.id, event.target.checked)}
               />
-              <Avatar name={member.name} small />
+              <Avatar name={member.name} color={member.color} small />
               <span className="assignee-name">{member.name}</span>
             </label>
           ))}
