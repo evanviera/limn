@@ -1,15 +1,20 @@
 // Device-local display preferences. These affect how Limn is laid out, not the
 // shared workspace data, so localStorage keeps each person's setup independent.
 
-type BoardDisplayPreference = "compactCards" | "compactCompleted" | "compactSteps";
+export type BoardDisplayPreference = "compactCards" | "compactCompleted" | "compactSteps" | "quietMode" | "collapseCompletedSteps";
 export const BOARD_DISPLAY_CHANGE_EVENT = "limn-board-display-change";
 
 const BOARD_DISPLAY_KEYS: Record<BoardDisplayPreference, string> = {
   compactCards: "limn-board-compact-cards",
   compactCompleted: "limn-board-compact-completed",
   // Retain the existing setting: on means one step plus the remaining count.
-  compactSteps: "limn-board-show-more-steps"
+  compactSteps: "limn-board-show-more-steps",
+  // Quiet mode: neutral avatars, status as small dots, links as plain text.
+  quietMode: "limn-quiet-mode",
+  // On by default: done steps fold into a "N completed" group on each card.
+  collapseCompletedSteps: "limn-board-collapse-completed-steps"
 };
+const BOARD_DISPLAY_DEFAULTS: Partial<Record<BoardDisplayPreference, boolean>> = { collapseCompletedSteps: true };
 const COLLAPSED_BOARD_GROUPS_KEY_PREFIX = "limn-collapsed-board-groups:";
 const CARD_EDITOR_SIDE_WIDTH_KEY = "limn-card-editor-side-width";
 
@@ -37,7 +42,8 @@ function writeItem(key: string, value: string): void {
 }
 
 export function readBoardDisplayPreference(preference: BoardDisplayPreference): boolean {
-  return readItem(BOARD_DISPLAY_KEYS[preference]) === "true";
+  const raw = readItem(BOARD_DISPLAY_KEYS[preference]);
+  return raw === null ? BOARD_DISPLAY_DEFAULTS[preference] ?? false : raw === "true";
 }
 
 export function writeBoardDisplayPreference(preference: BoardDisplayPreference, enabled: boolean): void {

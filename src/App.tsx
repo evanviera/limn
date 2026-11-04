@@ -59,6 +59,7 @@ import {
 } from "./updater";
 
 import { BoardView } from "./components/BoardView";
+import { useQuietMode } from "./lib/useQuietMode.js";
 import { OverviewView } from "./components/OverviewView.js";
 import { BoardNameDialog, type BoardNameRequest } from "./components/BoardNameDialog.js";
 import { boardCategoryMoveError, boardChoices, boardNameError, effectiveBoardGroupId } from "./lib/boardNames.js";
@@ -373,6 +374,8 @@ export default function App() {
       .catch(() => undefined)
       .finally(() => setIsLoading(false));
   }, []);
+
+  useQuietMode();
 
   useLayoutEffect(() => {
     document.documentElement.dataset.theme = themeMode;

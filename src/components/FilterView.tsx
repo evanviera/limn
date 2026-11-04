@@ -407,7 +407,7 @@ export function FilterView(props: FilterViewProps) {
                     aria-pressed={selected}
                     onClick={() => patch({ assignees: toggleMembership(filter.assignees, member.id) })}
                   >
-                    <Avatar name={member.name} small />
+                    <Avatar name={member.name} color={member.color} small />
                     {member.name}
                   </button>
                 );

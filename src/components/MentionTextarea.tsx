@@ -130,7 +130,7 @@ export function MentionTextarea({
                 onMouseEnter={() => setHighlight(index)}
                 onClick={() => choose(member)}
               >
-                <Avatar name={member.name} small />
+                <Avatar name={member.name} color={member.color} small />
                 <span className="mention-suggestion-name">{member.name}</span>
               </button>
             </li>

@@ -16,6 +16,7 @@ export function TaskCardBody({
   workspacePath,
   compact = false,
   compactSteps = false,
+  collapseCompletedSteps = true,
   onOpen,
   onToggleSubtask,
   onOpenAttachment,
@@ -28,6 +29,7 @@ export function TaskCardBody({
   workspacePath?: string | null;
   compact?: boolean;
   compactSteps?: boolean;
+  collapseCompletedSteps?: boolean;
   onOpen?: (cardId: string) => void;
   onToggleSubtask?: (cardId: string, subtaskId: string, completed: boolean) => void;
   onOpenAttachment?: (cardId: string, attachment: Attachment) => void;
@@ -110,7 +112,9 @@ export function TaskCardBody({
           </div>
         )}
         {!compact && (
-          <TaskCardChecklist {...checklistProps} subtasks={expanded ? pendingSubtasks : pendingSubtasks.slice(0, 1)} preview={!expanded} />
+          <TaskCardChecklist {...checklistProps}
+            subtasks={!expanded ? pendingSubtasks.slice(0, 1) : collapseCompletedSteps ? pendingSubtasks : card.subtasks}
+            preview={!expanded} />
         )}
         {!compact && !expanded && pendingSubtasks.length > 1 && (
           <button type="button" className="card-more-steps" aria-expanded={false} aria-controls={detailsId}
@@ -131,7 +135,7 @@ export function TaskCardBody({
               className="task-card-cover" testId={`card-${card.id}-image-cover`}
               workspacePath={workspacePath ?? null} />
           )}
-          {expanded && doneCount > 0 && (
+          {expanded && collapseCompletedSteps && doneCount > 0 && (
             <details className="card-completed-steps">
               <summary>{doneCount} completed</summary>
               <TaskCardChecklist {...checklistProps} subtasks={completedSubtasks} />
@@ -188,6 +192,7 @@ export function TaskCardBody({
         <footer>
           {showDue && (
             <span className={dueClass} data-testid={`card-due-${card.id}`} title={due.label} aria-label={due.label}>
+              <Icon name="calendar" />
               {dueLabel}
             </span>
           )}
@@ -195,6 +200,7 @@ export function TaskCardBody({
             {card.attachments.length > 0 && <span className="card-attachment-count" title={`${card.attachments.length} attachments`} aria-label={`${card.attachments.length} attachments`}><Icon name="paperclip" />{card.attachments.length}</span>}
             {hasSubtasks && (
               <span className="subtask-badge" title="Sub-tasks completed" aria-label={`${doneCount} of ${card.subtasks.length} steps complete`}>
+                <span className="subtask-progress" aria-hidden="true"><span style={{ width: `${Math.round((doneCount / card.subtasks.length) * 100)}%` }} /></span>
                 {doneCount}/{card.subtasks.length}
               </span>
             )}
@@ -213,7 +219,7 @@ export function MemberDots({ members, quiet = false }: { members: Member[]; quie
   return (
     <span className={`member-dots${quiet ? " quiet" : ""}`} role="img" aria-label={`Assigned to ${members.map(member => member.name).join(", ")}`} title={members.map(member => member.name).join(", ")}>
       {members.slice(0, quiet ? 1 : 4).map((member) => (
-        <Avatar key={member.id} name={member.name} small title={member.name} />
+        <Avatar key={member.id} name={member.name} color={member.color} small title={member.name} />
       ))}
       {members.length > (quiet ? 1 : 4) && <span className="member-overflow">+{members.length - (quiet ? 1 : 4)}</span>}
     </span>

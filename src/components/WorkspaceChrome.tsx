@@ -169,7 +169,7 @@ export function WorkspaceSidebar({
         >
           {activeMember ? (
             <>
-              <Avatar name={activeMember.name} small />
+              <Avatar name={activeMember.name} color={activeMember.color} small />
               <span className="identity-select-text">
                 <span className="identity-select-label">You</span>
                 <span className="identity-select-name">{activeMember.name}</span>
