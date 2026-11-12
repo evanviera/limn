@@ -353,6 +353,7 @@ export function mergeSettings(base: WorkspaceSettings, ours: WorkspaceSettings, 
       cardCompleted: threeWayScalar(base.slackNotifications.cardCompleted, ours.slackNotifications.cardCompleted, theirs.slackNotifications.cardCompleted).value,
       cardAssigned: threeWayScalar(base.slackNotifications.cardAssigned, ours.slackNotifications.cardAssigned, theirs.slackNotifications.cardAssigned).value,
       subtaskCompleted: threeWayScalar(base.slackNotifications.subtaskCompleted, ours.slackNotifications.subtaskCompleted, theirs.slackNotifications.subtaskCompleted).value,
+      commentMentioned: threeWayScalar(base.slackNotifications.commentMentioned, ours.slackNotifications.commentMentioned, theirs.slackNotifications.commentMentioned).value,
     },
     boardGroups: threeWayListById(base.boardGroups, ours.boardGroups, theirs.boardGroups, {
       id: (item) => item.id,

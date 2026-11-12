@@ -69,7 +69,8 @@ function makeStore(path: string): WorkspaceStore {
       slackNotifications: {
         cardCompleted: true,
         cardAssigned: true,
-        subtaskCompleted: true
+        subtaskCompleted: true,
+        commentMentioned: true
       },
       boardGroups: [],
       savedViews: [],

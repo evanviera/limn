@@ -5,6 +5,7 @@ import { mkdtemp, mkdir, readFile, readdir, rm, unlink, writeFile } from "node:f
 import { join } from "node:path";
 import { tmpdir } from "node:os";
 import { addActivity, attachmentDisplayName, attachmentStoredName, createBoard, createCard, createComment, parseCard, parseWorkspace, serializeCard } from "../.tmp/storage-test/src/storage.js";
+import { cardOpenUrl, commentExcerpt, escapeSlack, mentionedMembers, slackCardMessage } from "../.tmp/storage-test/src/lib/slack.js";
 import { boardNameError, boardCategoryMoveError, boardChoices, effectiveBoardGroupId } from "../.tmp/storage-test/src/lib/boardNames.js";
 import { ORDER_STEP, compareCardsByOrder, nextOrderForList, placeInList } from "../.tmp/storage-test/src/lib/ordering.js";
 import { buildCalendar, describeDue, dueReminderCount } from "../.tmp/storage-test/src/lib/dueDate.js";
@@ -450,7 +451,8 @@ assert.equal(workspace.settings.workspaceName, "Limn Workspace");
 assert.deepEqual(workspace.settings.slackNotifications, {
   cardCompleted: true,
   cardAssigned: true,
-  subtaskCompleted: true
+  subtaskCompleted: true,
+  commentMentioned: true
 });
 assert.equal(workspace.settings.slackMovedToListNames, "Done");
 assert.deepEqual(workspace.settings.boardGroups, []);
@@ -856,7 +858,8 @@ try {
     slackNotifications: {
       cardCompleted: false,
       cardAssigned: true,
-      subtaskCompleted: false
+      subtaskCompleted: false,
+      commentMentioned: false
     },
     boardGroups: [
       {
@@ -1015,4 +1018,19 @@ async function readWorkspaceFiles(root) {
     ),
     warnings: []
   });
+}
+
+// Slack message helpers: escaping, the "Open in Limn" link and comment mentions.
+{
+  assert.equal(escapeSlack("Fix <draft> & ship"), "Fix &lt;draft&gt; &amp; ship");
+  assert.equal(cardOpenUrl("card_a b"), "https://limn.forme.md/open/card/card_a%20b");
+  assert.equal(slackCardMessage("card_1", ["Done: X", "", "Board: B"]), "Done: X\nBoard: B\n<https://limn.forme.md/open/card/card_1|Open in Limn>");
+  const team = [
+    { id: "ada", name: "Ada Lovelace", color: "#888" },
+    { id: "grace", name: "Grace Hopper", color: "#888" }
+  ];
+  assert.deepEqual(mentionedMembers("@Grace and @ada, also @grace again and @nobody", team, undefined).map((m) => m.id), ["grace", "ada"]);
+  assert.deepEqual(mentionedMembers("Note to self @Ada", team, "ada"), []);
+  assert.equal(commentExcerpt("a   b\n c"), "a b c");
+  assert.equal(commentExcerpt("x".repeat(300)).length, 200);
 }

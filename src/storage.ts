@@ -566,7 +566,8 @@ function normalizeSlackNotifications(value: unknown): SlackNotificationSettings 
   return {
     cardCompleted: booleanOrDefault(settings.cardCompleted, DEFAULT_SLACK_NOTIFICATIONS.cardCompleted),
     cardAssigned: booleanOrDefault(settings.cardAssigned, DEFAULT_SLACK_NOTIFICATIONS.cardAssigned),
-    subtaskCompleted: booleanOrDefault(settings.subtaskCompleted, DEFAULT_SLACK_NOTIFICATIONS.subtaskCompleted)
+    subtaskCompleted: booleanOrDefault(settings.subtaskCompleted, DEFAULT_SLACK_NOTIFICATIONS.subtaskCompleted),
+    commentMentioned: booleanOrDefault(settings.commentMentioned, DEFAULT_SLACK_NOTIFICATIONS.commentMentioned)
   };
 }
 

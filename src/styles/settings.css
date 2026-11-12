@@ -64,6 +64,17 @@
   gap: var(--space-3);
 }
 
+.settings-inline-action {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--space-3);
+}
+
+.settings-inline-action span {
+  font-size: var(--text-sm);
+}
+
 .settings-toggle-grid {
   display: grid;
   grid-template-columns: repeat(2, minmax(220px, 1fr));
