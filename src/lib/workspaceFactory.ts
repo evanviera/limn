@@ -5,7 +5,8 @@ export const SCHEMA_VERSION = 1;
 export const DEFAULT_SLACK_NOTIFICATIONS: SlackNotificationSettings = {
   cardCompleted: true,
   cardAssigned: true,
-  subtaskCompleted: true
+  subtaskCompleted: true,
+  commentMentioned: true
 };
 
 // New boards ship with a "Done" list, so defaulting the move-notification

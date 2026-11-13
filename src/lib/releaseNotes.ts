@@ -11,6 +11,14 @@ export interface ReleaseNote {
 
 export const RELEASE_NOTES: ReleaseNote[] = [
   {
+    version: "0.9.7",
+    items: [
+      "Slack messages now include an “Open in Limn” link that jumps straight to the card.",
+      "@mention someone in a comment and Limn pings them in Slack. Turn it off in Settings.",
+      "Send test message: check your Slack webhook from Settings before you rely on it."
+    ]
+  },
+  {
     version: "0.9.6",
     items: [
       "A fresh look: a cleaner, calmer design with a new blue accent and app icon.",

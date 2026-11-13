@@ -113,6 +113,7 @@ import {
 } from "./lib/inbox";
 import { listNameTriggersMoveNotification } from "./lib/notifications";
 import { compareBoardsByOrder, compareCardsByOrder, nextOrderForList, placeInList } from "./lib/ordering";
+import { commentExcerpt, escapeSlack, mentionedMembers, slackCardMessage, SLACK_TEST_MESSAGE } from "./lib/slack.js";
 import { clampListWidth, countLabel, errorText, initials, readStoredListWidth, readStoredListWidthMode, readStoredThemeMode, sameJson, selectActiveBoardId, slackTag, upsertById, workspaceBaseName } from "./lib/format";
 import { readActiveMemberId, resolveActiveMember, writeActiveMemberId } from "./lib/identity";
 import { updateBannerMessage } from "./lib/updateMessages";
@@ -1668,7 +1669,7 @@ export default function App() {
       const movedListName = list?.name ?? "";
       const configuredListNames = settingsRef.current?.slackMovedToListNames ?? "";
       if (result && result.status !== "conflict" && !sameList && listNameTriggersMoveNotification(movedListName, configuredListNames)) {
-        await sendSlack(null, `➡️ Card moved to ${movedListName}: ${moved.title}\nAssigned to: ${assigneeSlackTags(moved)}\nBoard: ${sourceBoard.name}${actorSlackLine()}`);
+        await sendSlack(null, slackCardMessage(moved.id, [`➡️ Card moved to ${escapeSlack(movedListName)}: ${escapeSlack(moved.title)}`, `Assigned to: ${assigneeSlackTags(moved)}`, `Board: ${escapeSlack(sourceBoard.name)}`, actorSlackLine()]));
       }
     } catch (reason) {
       setError(`Move failed: ${errorText(reason)}`);
@@ -1859,7 +1860,7 @@ export default function App() {
     try {
       await persistCard(next, card);
       if (completed && subtask && !subtask.completed) {
-        await sendSlack("subtaskCompleted", `☑️ Step completed: ${subtask.title || "Untitled step"}\nCard: ${card.title}\nAssigned to: ${assigneeSlackTags(card)}\nBoard: ${boardName(card.boardId)}${actorSlackLine()}`);
+        await sendSlack("subtaskCompleted", stepCompletedSlackMessage(subtask.title, card));
       }
     } catch (reason) {
       setError(`Sub-task update failed: ${errorText(reason)}`);
@@ -1954,7 +1955,10 @@ export default function App() {
     try {
       const comment = createComment(author.id, author.name, trimmed);
       const next = { ...card, comments: [...card.comments, comment], updatedAt: timestamp() };
-      await persistCard(next, card);
+      const result = await persistCard(next, card);
+      if (result && result.status !== "conflict") {
+        await notifyCommentMentions(card, author, trimmed);
+      }
     } catch (reason) {
       setError(`Comment failed: ${errorText(reason)}`);
     }
@@ -2040,7 +2044,7 @@ export default function App() {
       withActivity = addActivity(withActivity, "completed", "Marked complete");
       slackMessages.push({
         key: "cardCompleted",
-        message: `✅ Task completed: ${normalized.title}\nAssigned to: ${assigneeSlackTags(normalized)}\nBoard: ${boardName(normalized.boardId)}${actorSlackLine()}`
+        message: cardCompletedSlackMessage(normalized)
       });
     }
 
@@ -2048,7 +2052,7 @@ export default function App() {
       withActivity = addActivity(withActivity, "assigned", `Assigned to ${assigneeNames(normalized)}`);
       slackMessages.push({
         key: "cardAssigned",
-        message: `👤 Card assigned: ${normalized.title}\nAssigned to: ${assigneeSlackTags(normalized)}\nBoard: ${boardName(normalized.boardId)}${actorSlackLine()}`
+        message: slackCardMessage(normalized.id, [`👤 Card assigned: ${escapeSlack(normalized.title)}`, `Assigned to: ${assigneeSlackTags(normalized)}`, `Board: ${escapeSlack(boardName(normalized.boardId))}`, actorSlackLine()])
       });
     }
 
@@ -2058,7 +2062,7 @@ export default function App() {
         if (subtask.completed && previousSubtasks.get(subtask.id)?.completed === false) {
           slackMessages.push({
             key: "subtaskCompleted",
-            message: `☑️ Step completed: ${subtask.title || "Untitled step"}\nCard: ${normalized.title}\nAssigned to: ${assigneeSlackTags(normalized)}\nBoard: ${boardName(normalized.boardId)}${actorSlackLine()}`
+            message: stepCompletedSlackMessage(subtask.title, normalized)
           });
         }
       }
@@ -2166,7 +2170,7 @@ export default function App() {
     }
     return card.assignees.map((id) => {
       const member = members.find((item) => item.id === id);
-      return slackTag(member?.slackHandle) || member?.name || id;
+      return slackTag(member?.slackHandle) || escapeSlack(member?.name || id);
     }).join(", ");
   }
 
@@ -2177,7 +2181,36 @@ export default function App() {
     if (!activeMember) {
       return "";
     }
-    return `\nBy: ${slackTag(activeMember.slackHandle) || activeMember.name}`;
+    return `By: ${slackTag(activeMember.slackHandle) || escapeSlack(activeMember.name)}`;
+  }
+
+  function cardCompletedSlackMessage(card: Card) {
+    return slackCardMessage(card.id, [`✅ Task completed: ${escapeSlack(card.title)}`, `Assigned to: ${assigneeSlackTags(card)}`, `Board: ${escapeSlack(boardName(card.boardId))}`, actorSlackLine()]);
+  }
+
+  function stepCompletedSlackMessage(stepTitle: string, card: Card) {
+    return slackCardMessage(card.id, [`☑️ Step completed: ${escapeSlack(stepTitle || "Untitled step")}`, `Card: ${escapeSlack(card.title)}`, `Assigned to: ${assigneeSlackTags(card)}`, `Board: ${escapeSlack(boardName(card.boardId))}`, actorSlackLine()]);
+  }
+
+  // Ping members @mentioned in a new comment. Uses their Slack member ID when
+  // set (a real ping), otherwise their name.
+  async function notifyCommentMentions(card: Card, author: Member, body: string) {
+    const mentioned = mentionedMembers(body, membersRef.current, author.id);
+    if (mentioned.length === 0) {
+      return;
+    }
+    const tags = mentioned.map((member) => slackTag(member.slackHandle) || escapeSlack(member.name)).join(", ");
+    await sendSlack("commentMentioned", slackCardMessage(card.id, [
+      `💬 ${slackTag(author.slackHandle) || escapeSlack(author.name)} mentioned ${tags} on ${escapeSlack(card.title)}`,
+      `> ${escapeSlack(commentExcerpt(body))}`,
+      `Board: ${escapeSlack(boardName(card.boardId))}`
+    ]));
+  }
+
+  // Settings "Send test message": posts straight to the URL being edited so it
+  // can be checked before saving. Errors go back to the caller to show inline.
+  async function sendSlackTest(webhookUrl: string) {
+    await postSlack(webhookUrl.trim(), SLACK_TEST_MESSAGE);
   }
 
   function boardName(boardId: string) {
@@ -2497,7 +2530,7 @@ export default function App() {
     // shortcut) must notify Slack just like completing it from the editor does.
     if (completed && result && result.status !== "conflict") {
       if (result.status === "written") await ensureRecurringSuccessor(next);
-      await sendSlack("cardCompleted", `✅ Task completed: ${next.title}\nAssigned to: ${assigneeSlackTags(next)}\nBoard: ${boardName(next.boardId)}${actorSlackLine()}`);
+      await sendSlack("cardCompleted", cardCompletedSlackMessage(next));
     }
   }
 
@@ -2716,6 +2749,7 @@ export default function App() {
             onRestartAfterUpdate={restartAfterUpdate}
             onOpenContextMenu={openContextMenu}
             onCopyText={copyText}
+            onSendSlackTest={sendSlackTest}
           />
         )}
         </main>

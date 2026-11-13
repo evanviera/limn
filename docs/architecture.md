@@ -64,6 +64,7 @@ when the last one closes). The open list + active path persist via the
 - `constants.ts` — shared constants and small shared types (`memberColors`, `MAX_NAME_LENGTH`, `ThemeMode`, `SlackNotificationKey`, …).
 - `format.ts` — formatting/util helpers (`countLabel`, `initials`, `slackTag`, `compareCardsByDueDate`, `upsertById`, `readStoredThemeMode`, …).
 - `identity.ts` — the device-local "active member" (who *you* are for comment attribution). Stored in `localStorage` keyed by workspace path, **never** in the synced workspace files, so each person on a shared folder keeps their own identity.
+- `slack.ts` — pure Slack message helpers: mrkdwn escaping, the "Open in Limn" link (`https://limn.forme.md/open/card/<id>`, a limn-website page that forwards to `limn://card/<id>`), comment-mention detection, and the test message.
 - `mentions.ts` — pure @mention matching (`matchMention`, `MENTION_SPLIT_PATTERN`, `mentionToken`) used to highlight member references in comments.
 - `filter.ts` — the pure card-filter engine: `filterCards`, `collectLabels`, `filterIsActive`, `matchesDue`, the `EMPTY_FILTER` default, and the built-in `FILTER_PRESETS`. Drives `FilterView`; saved views persist in `WorkspaceSettings.savedViews`.
 - `boardNames.ts` — category-local board name checks, relocation collision checks, and qualified display names for cross-board views.

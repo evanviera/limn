@@ -25,7 +25,8 @@ export function SettingsView({
   onInstallUpdate,
   onRestartAfterUpdate,
   onOpenContextMenu,
-  onCopyText
+  onCopyText,
+  onSendSlackTest
 }: {
   settings: WorkspaceSettings;
   workspacePath: string;
@@ -45,10 +46,12 @@ export function SettingsView({
   onRestartAfterUpdate: () => Promise<void>;
   onOpenContextMenu: OpenContextMenu;
   onCopyText: (text: string) => Promise<void>;
+  onSendSlackTest: (webhookUrl: string) => Promise<void>;
 }) {
   const [draft, setDraft] = useState(settings);
   const [reloading, setReloading] = useState(false);
   const [saving, setSaving] = useState(false);
+  const [slackTest, setSlackTest] = useState<{ state: "idle" | "sending" | "sent" | "error"; message?: string }>({ state: "idle" });
   // Free-text draft for the width input so the field can be cleared/retyped;
   // committed (clamped) on blur or Enter, and re-synced whenever the applied
   // value changes elsewhere.
@@ -62,6 +65,16 @@ export function SettingsView({
     const next = Number.isFinite(parsed) ? clampListWidth(parsed) : listWidth;
     onChangeListWidth(next);
     setListWidthDraft(String(next));
+  }
+
+  async function sendSlackTest() {
+    setSlackTest({ state: "sending" });
+    try {
+      await onSendSlackTest(draft.slackWebhookUrl);
+      setSlackTest({ state: "sent", message: "Sent. Check your Slack channel." });
+    } catch (reason) {
+      setSlackTest({ state: "error", message: `Couldn't send: ${reason instanceof Error ? reason.message : String(reason)}` });
+    }
   }
 
   function setSlackNotification(key: SlackNotificationKey, enabled: boolean) {
@@ -236,6 +249,12 @@ export function SettingsView({
               icon: "copy",
               disabled: !draft.slackWebhookUrl.trim(),
               onSelect: () => void onCopyText(draft.slackWebhookUrl)
+            },
+            {
+              label: "Send test message",
+              icon: "chat",
+              disabled: !draft.slackWebhookUrl.trim() || slackTest.state === "sending",
+              onSelect: () => void sendSlackTest()
             }
           ], "Slack");
         }}
@@ -250,10 +269,27 @@ export function SettingsView({
             <input
               data-testid="slack-webhook-input"
               value={draft.slackWebhookUrl}
-              onChange={(event) => setDraft({ ...draft, slackWebhookUrl: event.target.value })}
+              onChange={(event) => {
+                setDraft({ ...draft, slackWebhookUrl: event.target.value });
+                setSlackTest({ state: "idle" });
+              }}
               placeholder="https://hooks.slack.com/services/..."
             />
           </label>
+          <div className="settings-inline-action">
+            <button
+              data-testid="slack-send-test"
+              disabled={!draft.slackWebhookUrl.trim() || slackTest.state === "sending"}
+              onClick={() => void sendSlackTest()}
+            >
+              {slackTest.state === "sending" ? <><Spinner /> Sending…</> : "Send test message"}
+            </button>
+            {slackTest.message && (
+              <span className={slackTest.state === "error" ? "error" : "muted"} data-testid="slack-test-status" role="status">
+                {slackTest.message}
+              </span>
+            )}
+          </div>
           <label>
             Notify when a card moves to list
             <input
@@ -291,6 +327,15 @@ export function SettingsView({
                 onChange={(event) => setSlackNotification("subtaskCompleted", event.target.checked)}
               />
               Step marked complete
+            </label>
+            <label className="settings-toggle">
+              <input
+                checked={draft.slackNotifications.commentMentioned}
+                data-testid="slack-notify-comment-mentioned"
+                type="checkbox"
+                onChange={(event) => setSlackNotification("commentMentioned", event.target.checked)}
+              />
+              Someone is @mentioned in a comment
             </label>
           </div>
         </div>

@@ -73,6 +73,7 @@ export interface SlackNotificationSettings {
   cardCompleted: boolean;
   cardAssigned: boolean;
   subtaskCompleted: boolean;
+  commentMentioned: boolean;
 }
 
 export interface BoardGroup {

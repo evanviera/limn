@@ -99,10 +99,14 @@ Limn posts through the Tauri backend so browser CORS does not block incoming web
 ✅ Task completed: <card title>
 Assigned to: <assignees>
 Board: <board name>
+By: <who did it>
+Open in Limn
 ```
 
-It also posts simple alerts when a card is assigned, moved to a list named `Done`, or when a card step is marked complete.
-If an assigned member has a Slack handle configured in Members, Limn uses that handle in the `Assigned to` line so Slack can tag them.
+It also posts simple alerts when a card is assigned, moved to a tracked list (`Done` by default), when a card step is marked complete, and when someone is @mentioned in a comment.
+If a member has a Slack member ID configured in Members, Limn uses it so Slack pings them.
+
+Every message ends with an **Open in Limn** link. Slack won't make `limn://` links clickable, so the link points at `https://limn.forme.md/open/card/<id>`, a page on the Limn website that hands the card id to the app (it carries no card data). Use **Send test message** in Settings to check a webhook before saving it.
 
 ## Known Limitations
 

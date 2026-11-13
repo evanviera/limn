@@ -81,6 +81,52 @@ test.describe("smoke", () => {
     expect(posts[1].message).toContain("➡️ Card moved to Done: Ship it");
   });
 
+  test("Slack messages link to the card, and comment mentions ping members", async ({ page }) => {
+    await openApp(page);
+    await openWorkspace(page);
+
+    await page.getByTestId("nav-members").click();
+    await page.getByTestId("member-name-input").fill("Ada Lovelace");
+    await page.getByTestId("add-member").click();
+    await page.getByTestId("member-name-input").fill("Grace Hopper");
+    await page.getByTestId("add-member").click();
+    await page.getByTestId("member-grace-hopper-slack-handle").fill("U0GRACE01");
+    await expect.poll(async () => ((await snapshot(page)).members.members as Array<{ slackHandle?: string }>).some((m) => m.slackHandle === "U0GRACE01")).toBe(true);
+
+    await page.getByTestId("create-board").click();
+    await page.getByTestId("text-dialog-input").fill("Mention Board");
+    await page.getByTestId("text-dialog-submit").click();
+
+    await page.getByTestId("nav-settings").click();
+    // Send test is disabled until there's a URL, then posts straight away.
+    await expect(page.getByTestId("slack-send-test")).toBeDisabled();
+    await page.getByTestId("slack-webhook-input").fill("https://hooks.slack.com/services/FAKE/fail");
+    await page.getByTestId("slack-send-test").click();
+    await expect(page.getByTestId("slack-test-status")).toContainText("Couldn't send");
+    await page.getByTestId("slack-webhook-input").fill("https://hooks.slack.com/services/FAKE/FAKE/FAKE");
+    await page.getByTestId("slack-send-test").click();
+    await expect(page.getByTestId("slack-test-status")).toContainText("Sent.");
+    await expect.poll(async () => (await snapshot(page)).slack.length).toBe(1);
+    expect((await snapshot(page)).slack[0].message).toContain("Limn is connected");
+    await page.getByTestId("save-settings").click();
+    await expect.poll(async () => (await snapshot(page)).settings.slackWebhookUrl).toBe("https://hooks.slack.com/services/FAKE/FAKE/FAKE");
+
+    await page.locator('[data-testid^="board-nav-"]').first().click();
+    await page.getByTestId("add-card-todo").click();
+    await page.getByTestId("text-dialog-input").fill("Review <copy>");
+    await page.getByTestId("text-dialog-submit").click();
+    await page.getByTestId("comment-identify-ada-lovelace").click();
+    await page.getByTestId("comment-input").fill("@Grace can you check this? Thanks @Ada");
+    await page.getByTestId("add-comment").click();
+
+    await expect.poll(async () => (await snapshot(page)).slack.length).toBe(2);
+    const message = (await snapshot(page)).slack[1].message;
+    // Grace is pinged by member ID; Ada (the author) is not listed as mentioned.
+    expect(message).toContain("💬 Ada Lovelace mentioned <@U0GRACE01> on Review &lt;copy&gt;");
+    expect(message).toContain("> @Grace can you check this? Thanks @Ada");
+    expect(message).toMatch(/<https:\/\/limn\.forme\.md\/open\/card\/card_[^|]+\|Open in Limn>$/);
+  });
+
   test("manual update check reports when Limn is up to date", async ({ page }) => {
     await openApp(page);
     await openWorkspace(page);

@@ -856,7 +856,8 @@ fn default_settings(root: &Path) -> Result<String, String> {
         "slackNotifications": {
             "cardCompleted": true,
             "cardAssigned": true,
-            "subtaskCompleted": true
+            "subtaskCompleted": true,
+            "commentMentioned": true
         },
         "createdAt": now,
         "updatedAt": now
